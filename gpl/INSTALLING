@@ -1,0 +1,2 @@
+Hit 'make' and then 'make install', if you want to make a symlink to /usr/bin.
+Otherwise just run from this directory.
