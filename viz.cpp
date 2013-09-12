@@ -173,7 +173,7 @@ enum e_particle_variables {
 void DrawCircle(float cx, float cy, float r, int num_segments) 
 { 
     //from http://slabode.exofire.net/circle_draw.shtml
-    float theta = 2 * 3.1415926 / float(num_segments); 
+    float theta = 2 * PI / float(num_segments); 
     float c = cosf(theta);//precalculate the sine and cosine
     float s = sinf(theta);
     float t;
@@ -636,18 +636,6 @@ element_t *next_element_frame(FILE *fp, int *num_elements)
     return elements;
 }
 
-//void camera (void) {
-//    glRotatef(xrot,1.0,0.0,0.0);  // x-axis (left and right)
-//    glRotatef(yrot,0.0,1.0,0.0);  // y-axis (up and down)
-//    glTranslated(-xpos,-ypos,-zpos); // translate the screen to the position
-//    SDL_GL_SwapBuffers();
-//}
-
-//void camera (void) {
-//    glTranslated(-0.5f,-0.5f,-zpos); // translate the screen to the position
-//    SDL_GL_SwapBuffers();
-//}
-
 void apply_colormap(cm_t *cm, float val, float *r, float *g, float *b)
 {
     int i,j;
@@ -685,6 +673,11 @@ void apply_colormap(cm_t *cm, float val, float *r, float *g, float *b)
         }
     }
     return;
+}
+
+void matlab_colormap_(float min, float max, float val, rgba_t *rgba)
+{
+    RESTRICT_VALUE(val, min, max);
 }
 
 void matlab_colormap(float h, float *r, float *g, float *b)

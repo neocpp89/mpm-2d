@@ -54,7 +54,7 @@ strip_tabs: $(SRC)
 $(BIN): $(OBJ)
 	$(CC) $(OBJ) -o $@ $(LDFLAGS)
 
-$(VIZBIN): viz.cpp viz_renderer.cpp
+$(VIZBIN): viz.cpp
 	g++ -Wall $< -o $@ -lm -lSDL -lGL -lGLU -lftgl -lpng -lSDL_image
 
 .c.o:
