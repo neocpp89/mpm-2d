@@ -326,7 +326,10 @@ void parse_scene(double **s, int *n, int *mx, int *my, FILE *scene_file)
 
         /* parse camera */
         if (line[0] == 'C') {
-            sscanf(line, "C %lf,%lf,%lf", &(g_state.camera_view[0]), &(g_state.camera_view[1]), &(g_state.camera_view[2]));
+            sscanf(line, "C %lf,%lf,%lf",
+                &(g_state.camera_view[0]),
+                &(g_state.camera_view[1]),
+                &(g_state.camera_view[2]));
         }
 
         /* parse bounding lines */
@@ -425,28 +428,28 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
             RESTRICT_VALUE(cm->anchors[num_colors-1], 0.0, 1.0);
         }
 
-//        if (line[0] == 'H') {
-//            sscanf(line, "H %f,%x", &f, &h);
-//            num_colors++;
-//            old_cm = cm->colors;
-//            old_anchors = cm->anchors;
-//            cm->colors = (rgba_t *)malloc(sizeof(rgba_t) * num_colors);
-//            cm->anchors = (float *)malloc(sizeof(float) * num_colors);
-//            memcpy(cm->colors, old_cm, sizeof(rgba_t) * (num_colors - 1));
-//            memcpy(cm->anchors, old_anchors, sizeof(float) * (num_colors - 1));
-//            free(old_cm);
-//            free(old_anchors);
-//            cm->colors[num_colors-1].r = r / 255.0;
-//            cm->colors[num_colors-1].g = g / 255.0;
-//            cm->colors[num_colors-1].b = b / 255.0;
-//            cm->colors[num_colors-1].a = a / 255.0;
-//            RESTRICT_VALUE(cm->colors[num_colors-1].r, 0.0, 1.0);
-//            RESTRICT_VALUE(cm->colors[num_colors-1].g, 0.0, 1.0);
-//            RESTRICT_VALUE(cm->colors[num_colors-1].b, 0.0, 1.0);
-//            RESTRICT_VALUE(cm->colors[num_colors-1].a, 0.0, 1.0);
-//            cm->anchors[num_colors-1] = f;
-//            RESTRICT_VALUE(cm->anchors[num_colors-1], 0.0, 1.0);
-//        }
+        if (line[0] == 'H') {
+            sscanf(line, "H %f,%x", &f, &h);
+            num_colors++;
+            old_cm = cm->colors;
+            old_anchors = cm->anchors;
+            cm->colors = (rgba_t *)malloc(sizeof(rgba_t) * num_colors);
+            cm->anchors = (float *)malloc(sizeof(float) * num_colors);
+            memcpy(cm->colors, old_cm, sizeof(rgba_t) * (num_colors - 1));
+            memcpy(cm->anchors, old_anchors, sizeof(float) * (num_colors - 1));
+            free(old_cm);
+            free(old_anchors);
+            cm->colors[num_colors-1].r = ((h >> 24) & 0xFF) / 255.0;
+            cm->colors[num_colors-1].g = ((h >> 16) & 0xFF) / 255.0;
+            cm->colors[num_colors-1].b = ((h >> 8) & 0xFF) / 255.0;
+            cm->colors[num_colors-1].a = ((h >> 0) & 0xFF) / 255.0;
+            RESTRICT_VALUE(cm->colors[num_colors-1].r, 0.0, 1.0);
+            RESTRICT_VALUE(cm->colors[num_colors-1].g, 0.0, 1.0);
+            RESTRICT_VALUE(cm->colors[num_colors-1].b, 0.0, 1.0);
+            RESTRICT_VALUE(cm->colors[num_colors-1].a, 0.0, 1.0);
+            cm->anchors[num_colors-1] = f;
+            RESTRICT_VALUE(cm->anchors[num_colors-1], 0.0, 1.0);
+        }
 
     }
 
@@ -669,7 +672,6 @@ void apply_colormap(cm_t *cm, float val, float *r, float *g, float *b)
             *r = (1 - mix) * cm->colors[j].r + mix * cm->colors[i].r;
             *g = (1 - mix) * cm->colors[j].g + mix * cm->colors[i].g;
             *b = (1 - mix) * cm->colors[j].b + mix * cm->colors[i].b;
-//            *a = (1 - mix) * cm->colors[j].a + mix * cm->colors[i].a;
         }
     }
     return;
