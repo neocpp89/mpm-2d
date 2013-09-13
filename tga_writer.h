@@ -5,8 +5,8 @@
  *      Author: Sachith Dunatunga
  */
 
-#ifndef TGA_WRITER_H_
-#define TGA_WRITER_H_
+#ifndef __TGA_WRITER_H__
+#define __TGA_WRITER_H__
 
 typedef struct s_tgaheader {
 	char  idlength;
@@ -28,4 +28,4 @@ void create_tga_header(tgaheader_t *th, int width, int height, int bitdepth);
 void write_tga_header(FILE *fp, tgaheader_t *th);
 void write_tga_image(FILE *fp, tgaheader_t *th, char *tga_pixeldata);
 
-#endif /* TGA_WRITER_H_ */
+#endif /* __TGA_WRITER_H__ */
