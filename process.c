@@ -620,6 +620,10 @@ void update_internal_stress(job_t *job)
     int p;
     int nn[4];
 
+    double sxx, sxy, syy;
+    double pxx, pxy, pyx, pyy;
+    double dudx, dudy, dvdx, dvdy, jdet;
+
     for (i = 0; i < job->vec_len; i++) {
         job->f_int_grid[i] = 0;
     }
@@ -633,14 +637,45 @@ void update_internal_stress(job_t *job)
         nn[2]  = job->elements[p].nodes[2];
         nn[3]  = job->elements[p].nodes[3];
 
-        job->f_int_grid[2*nn[0]+0] += job->particles[i].v*(job->b11[i]*job->particles[i].sxx + job->b21[i]*job->particles[i].sxy);
-        job->f_int_grid[2*nn[0]+1] += job->particles[i].v*(job->b11[i]*job->particles[i].sxy + job->b21[i]*job->particles[i].syy);
-        job->f_int_grid[2*nn[1]+0] += job->particles[i].v*(job->b12[i]*job->particles[i].sxx + job->b22[i]*job->particles[i].sxy);
-        job->f_int_grid[2*nn[1]+1] += job->particles[i].v*(job->b12[i]*job->particles[i].sxy + job->b22[i]*job->particles[i].syy);
-        job->f_int_grid[2*nn[2]+0] += job->particles[i].v*(job->b13[i]*job->particles[i].sxx + job->b23[i]*job->particles[i].sxy);
-        job->f_int_grid[2*nn[2]+1] += job->particles[i].v*(job->b13[i]*job->particles[i].sxy + job->b23[i]*job->particles[i].syy);
-        job->f_int_grid[2*nn[3]+0] += job->particles[i].v*(job->b14[i]*job->particles[i].sxx + job->b24[i]*job->particles[i].sxy);
-        job->f_int_grid[2*nn[3]+1] += job->particles[i].v*(job->b14[i]*job->particles[i].sxy + job->b24[i]*job->particles[i].syy);
+        dudx = job->u_grid[2*nn[0]+0]*job->b11[i];
+        dudx += job->u_grid[2*nn[1]+0]*job->b12[i];
+        dudx += job->u_grid[2*nn[2]+0]*job->b13[i];
+        dudx += job->u_grid[2*nn[3]+0]*job->b14[i];
+
+        dudy = job->u_grid[2*nn[0]+0]*job->b21[i];
+        dudy += job->u_grid[2*nn[1]+0]*job->b22[i];
+        dudy += job->u_grid[2*nn[2]+0]*job->b23[i];
+        dudy += job->u_grid[2*nn[3]+0]*job->b24[i];
+
+        dvdx = job->u_grid[2*nn[0]+1]*job->b11[i];
+        dvdx += job->u_grid[2*nn[1]+1]*job->b12[i];
+        dvdx += job->u_grid[2*nn[2]+1]*job->b13[i];
+        dvdx += job->u_grid[2*nn[3]+1]*job->b14[i];
+
+        dvdy = job->u_grid[2*nn[0]+1]*job->b21[i];
+        dvdy += job->u_grid[2*nn[1]+1]*job->b22[i];
+        dvdy += job->u_grid[2*nn[2]+1]*job->b23[i];
+        dvdy += job->u_grid[2*nn[3]+1]*job->b24[i];
+
+        jdet = 1 + dudx + dvdy;
+
+        sxx = job->particles[i].sxx;
+        sxy = job->particles[i].sxy;
+        syy = job->particles[i].syy;
+
+        pxx = jdet * ((1 - dudx) * sxx - dudy * sxy);
+        pxy = jdet * ((-dvdx) * sxx + (1 - dvdy) * sxy);
+        pyx = jdet * ((1 - dudx) * sxy - dudy * syy);
+        pyy = jdet * ((-dvdx) * sxy + (1 - dvdy) * syy);
+
+        job->f_int_grid[2*nn[0]+0] += job->particles[i].v*(job->b11[i]*pxx + job->b21[i]*pxy);
+        job->f_int_grid[2*nn[0]+1] += job->particles[i].v*(job->b11[i]*pyx + job->b21[i]*pyy);
+        job->f_int_grid[2*nn[1]+0] += job->particles[i].v*(job->b12[i]*pxx + job->b22[i]*pxy);
+        job->f_int_grid[2*nn[1]+1] += job->particles[i].v*(job->b12[i]*pyx + job->b22[i]*pyy);
+        job->f_int_grid[2*nn[2]+0] += job->particles[i].v*(job->b13[i]*pxx + job->b23[i]*pxy);
+        job->f_int_grid[2*nn[2]+1] += job->particles[i].v*(job->b13[i]*pyx + job->b23[i]*pyy);
+        job->f_int_grid[2*nn[3]+0] += job->particles[i].v*(job->b14[i]*pxx + job->b24[i]*pxy);
+        job->f_int_grid[2*nn[3]+1] += job->particles[i].v*(job->b14[i]*pyx + job->b24[i]*pyy);
     }
 
     return;
