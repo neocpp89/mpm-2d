@@ -13,6 +13,9 @@
 #include <getopt.h>
 #include <unistd.h>
 
+#include "viz_colormap.hpp"
+#include "viz_builtin_colormap.hpp"
+
 using namespace FTGL;
 
 #define PI 3.141592653589793238462
@@ -32,20 +35,7 @@ do { \
     } else if ((var) < (lower)) { \
         var = (lower); \
     } \
-} while (0);
-
-typedef struct rgba_s {
-    float r;
-    float g;
-    float b;
-    float a;
-} rgba_t;
-
-typedef struct cm_s {
-    rgba_t *colors;
-    float *anchors;
-    int num_colors;
-} cm_t;
+} while (0)
 
 static struct g_state_s {
     FILE *data_file;        /* which data file */
@@ -90,11 +80,6 @@ static const char* g_optstring = "ab:c:d:m:el:u:p:svw";
 int screen_width = 800;
 int screen_height = 800;
 const int screen_bpp = 32;
-float rotqube = 0.9f;
-float hueshift = 0.0f;
-
-float xpos = 0, ypos = 0, zpos = 0, xrot = 0, yrot = 0, angle=0.0;
-float lastx, lasty;
 
 double current_time;
 int current_frame;
@@ -165,12 +150,12 @@ enum e_particle_variables {
     VAR_X, VAR_Y,
     VAR_VX, VAR_VY,
     VAR_SXX, VAR_SXY, VAR_SYY,
-    NUM_VAR_PARTICLES,
     VAR_TAU, VAR_GAMMAP,
-    VAR_YIELD
+    VAR_YIELD,
+    NUM_VAR_PARTICLES
 };
 
-void DrawCircle(float cx, float cy, float r, int num_segments) 
+void DrawDisc(GLenum mode, float cx, float cy, float r, int num_segments) 
 { 
     //from http://slabode.exofire.net/circle_draw.shtml
     float theta = 2 * PI / float(num_segments); 
@@ -181,7 +166,7 @@ void DrawCircle(float cx, float cy, float r, int num_segments)
     float x = r;//we start at angle = 0 
     float y = 0; 
     
-    glBegin(GL_POLYGON); 
+    glBegin(mode); 
     for(int ii = 0; ii < num_segments; ii++) 
     { 
         glVertex3f(x + cx, y + cy, -1.001f);//output vertex 
@@ -191,7 +176,14 @@ void DrawCircle(float cx, float cy, float r, int num_segments)
         x = c * x - s * y;
         y = s * t + c * y;
     } 
-    glEnd(); 
+    glEnd();
+    return;
+}
+
+void DrawCircle(float cx, float cy, float r, int num_segments) 
+{
+    DrawDisc(GL_LINE_LOOP, cx, cy, r, num_segments);
+    return;
 }
 
 void calc_stress_eigenvalues(aux_particle_t *p)
@@ -366,9 +358,12 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
     int r, g, b, a;
     float rf, gf, bf, af;
     int h;
+    bool set_color = 0;
 
     while (!feof(cm_file)) {
         fgets(line, sizeof(line)/sizeof(line[0]), cm_file);
+
+        /* skip comment lines (starting with #) and blank lines. */
         if (line[0] == '#' || line[0] == '\n') {
             continue;
         }
@@ -381,32 +376,34 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
             line[i] = toupper(line[i]);
         }
 
+        set_color = false;
+
         /* parse anchor/color pairs */
         if (line[0] == 'I') {
             sscanf(line, "I %f,%d,%d,%d,%d", &f, &r, &g, &b, &a);
-            num_colors++;
-            old_cm = cm->colors;
-            old_anchors = cm->anchors;
-            cm->colors = (rgba_t *)malloc(sizeof(rgba_t) * num_colors);
-            cm->anchors = (float *)malloc(sizeof(float) * num_colors);
-            memcpy(cm->colors, old_cm, sizeof(rgba_t) * (num_colors - 1));
-            memcpy(cm->anchors, old_anchors, sizeof(float) * (num_colors - 1));
-            free(old_cm);
-            free(old_anchors);
-            cm->colors[num_colors-1].r = r / 255.0;
-            cm->colors[num_colors-1].g = g / 255.0;
-            cm->colors[num_colors-1].b = b / 255.0;
-            cm->colors[num_colors-1].a = a / 255.0;
-            RESTRICT_VALUE(cm->colors[num_colors-1].r, 0.0, 1.0);
-            RESTRICT_VALUE(cm->colors[num_colors-1].g, 0.0, 1.0);
-            RESTRICT_VALUE(cm->colors[num_colors-1].b, 0.0, 1.0);
-            RESTRICT_VALUE(cm->colors[num_colors-1].a, 0.0, 1.0);
-            cm->anchors[num_colors-1] = f;
-            RESTRICT_VALUE(cm->anchors[num_colors-1], 0.0, 1.0);
+            rf = r / 255.0;
+            gf = g / 255.0;
+            bf = b / 255.0;
+            af = a / 255.0;
+            set_color = true;
         }
         
         if (line[0] == 'F') {
             sscanf(line, "F %f,%f,%f,%f,%f", &f, &rf, &gf, &bf, &af);
+            set_color = true;
+        }
+
+        if (line[0] == 'H') {
+            sscanf(line, "H %f,%x", &f, &h);
+            rf = ((h >> 24) & 0xFF) / 255.0;
+            gf = ((h >> 16) & 0xFF) / 255.0;
+            bf = ((h >> 8) & 0xFF) / 255.0;
+            af = ((h >> 0) & 0xFF) / 255.0;
+            set_color = true;
+        }
+
+        if (set_color) {
+            /* rf, gf, bf, af were set in one of the above blocks. */
             num_colors++;
             old_cm = cm->colors;
             old_anchors = cm->anchors;
@@ -427,30 +424,6 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
             cm->anchors[num_colors-1] = f;
             RESTRICT_VALUE(cm->anchors[num_colors-1], 0.0, 1.0);
         }
-
-        if (line[0] == 'H') {
-            sscanf(line, "H %f,%x", &f, &h);
-            num_colors++;
-            old_cm = cm->colors;
-            old_anchors = cm->anchors;
-            cm->colors = (rgba_t *)malloc(sizeof(rgba_t) * num_colors);
-            cm->anchors = (float *)malloc(sizeof(float) * num_colors);
-            memcpy(cm->colors, old_cm, sizeof(rgba_t) * (num_colors - 1));
-            memcpy(cm->anchors, old_anchors, sizeof(float) * (num_colors - 1));
-            free(old_cm);
-            free(old_anchors);
-            cm->colors[num_colors-1].r = ((h >> 24) & 0xFF) / 255.0;
-            cm->colors[num_colors-1].g = ((h >> 16) & 0xFF) / 255.0;
-            cm->colors[num_colors-1].b = ((h >> 8) & 0xFF) / 255.0;
-            cm->colors[num_colors-1].a = ((h >> 0) & 0xFF) / 255.0;
-            RESTRICT_VALUE(cm->colors[num_colors-1].r, 0.0, 1.0);
-            RESTRICT_VALUE(cm->colors[num_colors-1].g, 0.0, 1.0);
-            RESTRICT_VALUE(cm->colors[num_colors-1].b, 0.0, 1.0);
-            RESTRICT_VALUE(cm->colors[num_colors-1].a, 0.0, 1.0);
-            cm->anchors[num_colors-1] = f;
-            RESTRICT_VALUE(cm->anchors[num_colors-1], 0.0, 1.0);
-        }
-
     }
 
     /* make sure bounds are sensible */
@@ -929,22 +902,25 @@ int draw_particles(void)
 #endif
 //        glVertex3f(particles[i].x, particles[i].y, -1.0f);
 #define NUM_SEGS 20
-        DrawCircle(particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+        DrawDisc(GL_POLYGON, particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
 
         if (g_state.mirror_x) {
 //            glVertex3f(particles[i].x, -particles[i].y, -1.0f);
-            DrawCircle(particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+            DrawDisc(GL_POLYGON, particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
         }
 
         if (g_state.mirror_y) {
 //            glVertex3f(-particles[i].x, particles[i].y, -1.0f);
-            DrawCircle(-particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+            DrawDisc(GL_POLYGON, -particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
         }
 
         if (g_state.mirror_x && g_state.mirror_y) {
 //            glVertex3f(-particles[i].x, -particles[i].y, -1.0f);
-            DrawCircle(-particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+            DrawDisc(GL_POLYGON, -particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
         }
+
+//        glColor3f(1.0 - g_state.bgcolor.r, 1.0 - g_state.bgcolor.g, 1.0 - g_state.bgcolor.b);
+//        DrawCircle(particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
     }
 //    glEnd();
 
@@ -1274,7 +1250,8 @@ static void init_opengl(void)
 
 //    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 
-    glEnable(GL_DEPTH_TEST);
+//    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_DEPTH_TEST);
 }
 
 void heartbeat(void)
