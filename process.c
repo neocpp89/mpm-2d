@@ -153,11 +153,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->num_nodes = N*N;
     job->num_particles = num_particles;
 
-    #ifdef QUAD_ELEMENTS
-        job->num_elements = (N - 1) * (N - 1) / 4;
-    #else
-        job->num_elements = (N - 1) * (N - 1);
-    #endif
+    job->num_elements = (N - 1) * (N - 1);
 
     /* Copy particles from given ICs. */
     job->particles = (particle_t *)malloc(num_particles * sizeof(particle_t));
@@ -193,54 +189,32 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     /* Get node numbering for elements. */
     job->elements = (element_t *)malloc(job->num_elements * sizeof(element_t));
     for (i = 0; i < job->num_elements; i++) {
-        #ifdef QUAD_ELEMENTS
-            n = 2 * ijton(i % ((job->N - 1) / 2), i / ((job->N - 1) / 2), job->N);
+        n = ijton(i % (job->N - 1), i / (job->N - 1), job->N);
 
-            job->elements[i].nodes[0] = n + ijton(0,0,job->N);
-            job->elements[i].nodes[1] = n + ijton(2,0,job->N);
-            job->elements[i].nodes[2] = n + ijton(2,2,job->N);
-            job->elements[i].nodes[3] = n + ijton(0,2,job->N);
-
-            job->elements[i].nodes[4] = n + ijton(1,0,job->N);
-            job->elements[i].nodes[5] = n + ijton(2,1,job->N);
-            job->elements[i].nodes[6] = n + ijton(1,2,job->N);
-            job->elements[i].nodes[7] = n + ijton(0,1,job->N);
-
-            job->elements[i].nodes[8] = n + ijton(1,1,job->N);
-        #else
-            n = ijton(i % (job->N - 1), i / (job->N - 1), job->N);
-
-            job->elements[i].nodes[0] = n + ijton(0,0,job->N);
-            job->elements[i].nodes[1] = n + ijton(1,0,job->N);
-            job->elements[i].nodes[2] = n + ijton(1,1,job->N);
-            job->elements[i].nodes[3] = n + ijton(0,1,job->N);
-        #endif
+        job->elements[i].nodes[0] = n + ijton(0,0,job->N);
+        job->elements[i].nodes[1] = n + ijton(1,0,job->N);
+        job->elements[i].nodes[2] = n + ijton(1,1,job->N);
+        job->elements[i].nodes[3] = n + ijton(0,1,job->N);
     }
 
     /* Find element neighbors -- cartesian grid only! */
     for (i = 0; i < job->num_elements; i++) {
-        #ifdef QUAD_ELEMENTS
-            r = 0;
-            c = 0;
-        #else
-            r = i / (job->N - 1);
-            c = i % (job->N - 1);
+        r = i / (job->N - 1);
+        c = i % (job->N - 1);
 
-            /*
-                Fill neighbor array starting with element to the right and
-               moving in a postive direction (ccw).
-            */
-            FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[0], r, c+1, (job->N - 1));
-            FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[1], r+1, c+1, (job->N - 1));
-            FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[2], r+1, c, (job->N - 1));
-            FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[3], r+1, c-1, (job->N - 1));
-            FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[4], r, c-1, (job->N - 1));
-            FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[5], r-1, c-1, (job->N - 1));
-            FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[6], r-1, c, (job->N - 1));
-            FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[7], r-1, c+1, (job->N - 1));
+        /*
+            Fill neighbor array starting with element to the right and
+           moving in a postive direction (ccw).
+        */
+        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[0], r, c+1, (job->N - 1));
+        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[1], r+1, c+1, (job->N - 1));
+        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[2], r+1, c, (job->N - 1));
+        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[3], r+1, c-1, (job->N - 1));
+        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[4], r, c-1, (job->N - 1));
+        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[5], r-1, c-1, (job->N - 1));
+        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[6], r-1, c, (job->N - 1));
+        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[7], r-1, c+1, (job->N - 1));
 
-/*            printf("elem %d: [%d, %d, %d, %d, %d, %d, %d, %d]\n", i, job->elements[i].neighbors[0], job->elements[i].neighbors[1], job->elements[i].neighbors[2], job->elements[i].neighbors[3], job->elements[i].neighbors[4], job->elements[i].neighbors[5], job->elements[i].neighbors[6], job->elements[i].neighbors[7]);*/
-        #endif
     }
 
     /* Allocate space for tracking element->particle map. */
@@ -329,29 +303,14 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
         /* seems backwards, but only because loader contains
         current particle volume only. */
         job->particles[i].v0 = job->particles[i].v;
-
-/*        job->particles[i].r1x0 = 0.5*sqrt(job->particles[i].v);*/
-/*        job->particles[i].r1y0 = 0;*/
-/*        job->particles[i].r2x0 = 0;*/
-/*        job->particles[i].r2y0 = 0.5*sqrt(job->particles[i].v);*/
-
-/*        job->particles[i].r1xn = job->particles[i].r1x0;*/
-/*        job->particles[i].r1yn = job->particles[i].r1y0;*/
-/*        job->particles[i].r2xn = job->particles[i].r2x0;*/
-/*        job->particles[i].r2yn = job->particles[i].r2y0;*/
     }
 
     /* intialize state variables */
     material_init(job);
 
     /* Set default timestep. */
-/*    job->dt = 1*0.0004*job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));*/
-/*    job->dt = 0.004*job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));*/
-/*    job->dt = 0.04*job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));*/
-    job->dt = job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
-/*    job->dt = 10 * job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));*/
-/*    job->dt = 1 / 240.0;*/
-/*    job->dt = 1 / 480.0;*/
+    job->dt = 0.4 * job->h * sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
+
     /* By default, don't output energy data. */
     job->ke_data = NULL;
 
@@ -495,50 +454,25 @@ void calculate_shapefunctions(job_t *job)
 
     for (i = 0; i < job->num_particles; i++) {
         CHECK_ACTIVE(job, i);
-        #ifdef QUAD_ELEMENTS
-            p = job->in_element[i];
-            n = job->elements[p].nodes[8];
-            xn = job->nodes[n].x;
-            yn = job->nodes[n].y;
-            global_to_local_coords(&xl, &yl,
-                job->particles[i].x, job->particles[i].y, 
-                xn, yn, job->h);
-            paraboloid(&(job->h1[i]), &(job->h2[i]), &(job->h3[i]), &(job->h4[i]),
-                &(job->h5[i]), &(job->h6[i]), &(job->h7[i]), &(job->h8[i]), &(job->h9[i]),
-                xl, yl);
-            grad_paraboloid(
-                &(job->b11[i]), &(job->b12[i]), &(job->b13[i]), &(job->b14[i]),
-                &(job->b15[i]), &(job->b16[i]), &(job->b17[i]), &(job->b18[i]),
-                &(job->b19[i]),
-                &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
-                &(job->b25[i]), &(job->b26[i]), &(job->b27[i]), &(job->b28[i]),
-                &(job->b29[i]),
-                xl, yl, job->h);
-            if (xl < -1.0f || xl > 1.0f || yl < -1.0f || yl > 1.0f) {
-                fprintf(stderr, "Particle %d outside of element %d (%32.32g, %32.32g).\n", i,
-                    p, xl, yl);
-            }
-        #else
-            p = job->in_element[i];
-            n = job->elements[p].nodes[0];
-            xn = job->nodes[n].x;
-            yn = job->nodes[n].y;
-            global_to_local_coords(&xl, &yl,
-                job->particles[i].x, job->particles[i].y, 
-                xn, yn, job->h);
-            tent(&(job->h1[i]), &(job->h2[i]), &(job->h3[i]), &(job->h4[i]),
-                xl, yl);
-            grad_tent(
-                &(job->b11[i]), &(job->b12[i]), &(job->b13[i]), &(job->b14[i]),
-                &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
-                xl, yl, job->h);
-            if (xl < 0.0f || xl > 1.0f || yl < 0.0f || yl > 1.0f) {
-                fprintf(stderr, "Particle %d outside of element %d (%g, %g).\n", i,
-                    p, xl, yl);
-            }
-        #endif
-            job->particles[i].xl = xl;
-            job->particles[i].yl = yl;
+        p = job->in_element[i];
+        n = job->elements[p].nodes[0];
+        xn = job->nodes[n].x;
+        yn = job->nodes[n].y;
+        global_to_local_coords(&xl, &yl,
+            job->particles[i].x, job->particles[i].y, 
+            xn, yn, job->h);
+        tent(&(job->h1[i]), &(job->h2[i]), &(job->h3[i]), &(job->h4[i]),
+            xl, yl);
+        grad_tent(
+            &(job->b11[i]), &(job->b12[i]), &(job->b13[i]), &(job->b14[i]),
+            &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
+            xl, yl, job->h);
+        if (xl < 0.0f || xl > 1.0f || yl < 0.0f || yl > 1.0f) {
+            fprintf(stderr, "Particle %d outside of element %d (%g, %g).\n", i,
+                p, xl, yl);
+        }
+        job->particles[i].xl = xl;
+        job->particles[i].yl = yl;
     }
 
     return;
@@ -913,6 +847,15 @@ start_implicit:
             job->q_grid[i] += (job->f_ext_grid[i] - job->f_int_grid[i]);
 /*            job->q_grid[i] = (job->f_ext_grid[i] - job->f_int_grid[i]);*/
         }
+
+#if 0
+        for (i = 0; i < lda * lda; i++) {
+            job->kku_grid[i] *= (job->dt * job->dt);
+        }
+        for (i = 0; i < lda; i++) {
+            job->q_grid[i] *= (job->dt  * job->dt);
+        }
+#endif
 
         memcpy(A, job->kku_grid, lda * lda * sizeof(double));
         memcpy(b, job->q_grid, lda * sizeof(double));
