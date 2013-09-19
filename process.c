@@ -690,6 +690,8 @@ void build_stiffness_matrix(job_t *job)
     int nn[4];
     int lda = job->vec_len;
     double inv_dt_sq;
+    double m_avg;
+    int m_filled;
 
     /* zero matrix first */
     for (i = 0; i < (job->vec_len * job->vec_len); i++) {
@@ -807,14 +809,28 @@ void build_stiffness_matrix(job_t *job)
     job->kku_grid[lda*(2*nn[3]+1)+2*nn[3]+1] += ( job->particles[i].v*(pow(job->b14[i], 2)*job->particles[i].sxx + 2*job->b14[i]*job->b24[i]*job->particles[i].sxy + pow(job->b24[i], 2)*job->particles[i].syy) );
     }
 
-    inv_dt_sq = 1 / (job->dt * job->dt);
+    inv_dt_sq = 1.0 / (job->dt * job->dt);
+
+    for (i = 0; i < (job->vec_len * job->vec_len); i++) {
+        job->kku_grid[i] *= job->dt * job->dt;
+    }
+
+    m_avg = 0;
+    m_filled = 0;
+    for (i = 0; i < job->vec_len; i++) {
+        if (job->m_grid[i] > TOL) {
+            m_avg += job->m_grid[i];
+            m_filled++;
+        }
+    }
+    m_avg /= m_filled;
 
     /* diagonal mass matrix */
     for (i = 0; i < job->vec_len; i++) {
         if (job->m_grid[i] > TOL) {
-            job->kku_grid[i + lda * i] += 4 * job->m_grid[i] * inv_dt_sq;
+            job->kku_grid[i + lda * i] += 4 * job->m_grid[i];
         } else {
-            job->kku_grid[i + lda * i] += 1e-4;
+            job->kku_grid[i + lda * i] += m_avg;
         }
     }
 
@@ -854,6 +870,10 @@ void implicit_solve(job_t *job)
     cs *triplets;
     cs *smat;
     double *sb;
+
+    /* for small timestep */
+    double inv_dt = 1.0 / job->dt;
+    double inv_dt_sq = inv_dt / job->dt;
 
     /* Timing code */
     struct timespec requestStart, requestEnd;
@@ -909,8 +929,8 @@ start_implicit:
         /* Q = f_ext - f_int - M_g * (4 * u / dt^2 - 4 * v / dt - a) */
         memcpy(job->q_grid, job->m_grid, lda * sizeof(double));
         for (i = 0; i < lda; i++) {
-            job->q_grid[i] *= -(4 * job->u_grid[i] / (job->dt * job->dt) - 4 * v_grid_t[i] / (job->dt) - a_grid_t[i]);
-            job->q_grid[i] += (job->f_ext_grid[i] - job->f_int_grid[i]);
+            job->q_grid[i] *= -(4 * job->u_grid[i] - 4 * v_grid_t[i] * job->dt - a_grid_t[i] * job->dt * job->dt);
+            job->q_grid[i] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
 /*            job->q_grid[i] = (job->f_ext_grid[i] - job->f_int_grid[i]);*/
         }
 
@@ -1046,7 +1066,7 @@ start_implicit:
             job->u_grid[i] += job->du_grid[i];
 
             /* update grid velocity */
-            job->v_grid[i] = 2 * job->u_grid[i] / job->dt - v_grid_t[i];
+            job->v_grid[i] = 2 * job->u_grid[i] * inv_dt - v_grid_t[i];
         }
 
         for (i = 0; i < job->num_nodes; i++) {
@@ -1063,10 +1083,10 @@ start_implicit:
         k++;
 #define UNORM_TOL 1e-1
 #define QNORM_TOL 1e-2
-#define UNORM_CONV 1e-8
+#define UNORM_CONV 1e-10
 
         if (du_norm < UNORM_CONV) {
-            printf("norm of u  = %f: Accepting as converged.\n", du_norm);
+            printf("norm of du  = %e: Accepting as converged.\n", du_norm);
             break;
         }
 
@@ -1098,7 +1118,7 @@ start_implicit:
 
     /* update grid acceleration */
     for (i = 0; i < ldb; i++) {
-        job->a_grid[i] = (4 * job->u_grid[i] / (job->dt * job->dt) - 4 * v_grid_t[i] / (job->dt) - a_grid_t[i]);
+        job->a_grid[i] = (4 * job->u_grid[i] * inv_dt_sq - 4 * v_grid_t[i] * inv_dt - a_grid_t[i]);
     }
 
     /* repackage for use with macros */
