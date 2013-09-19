@@ -348,8 +348,8 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 /*    job->dt = 1*0.0004*job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));*/
 /*    job->dt = 0.004*job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));*/
 /*    job->dt = 0.04*job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));*/
-    job->dt = job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
-/*    job->dt = 10 * job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));*/
+/*    job->dt = job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));*/
+    job->dt = 10 * job->h*sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
 /*    job->dt = 1 / 240.0;*/
 /*    job->dt = 1 / 480.0;*/
     /* By default, don't output energy data. */
@@ -663,10 +663,15 @@ void update_internal_stress(job_t *job)
         sxy = job->particles[i].sxy;
         syy = job->particles[i].syy;
 
-        pxx = jdet * ((1 - dudx) * sxx - dudy * sxy);
-        pxy = jdet * ((-dvdx) * sxx + (1 - dvdy) * sxy);
-        pyx = jdet * ((1 - dudx) * sxy - dudy * syy);
-        pyy = jdet * ((-dvdx) * sxy + (1 - dvdy) * syy);
+/*        pxx = jdet * ((1 - dudx) * sxx - dudy * sxy);*/
+/*        pxy = jdet * ((-dvdx) * sxx + (1 - dvdy) * sxy);*/
+/*        pyx = jdet * ((1 - dudx) * sxy - dudy * syy);*/
+/*        pyy = jdet * ((-dvdx) * sxy + (1 - dvdy) * syy);*/
+
+        pxx = sxx;
+        pxy = sxy;
+        pyx = sxy;
+        pyy = syy;
 
         job->f_int_grid[2*nn[0]+0] += job->particles[i].v*(job->b11[i]*pxx + job->b21[i]*pxy);
         job->f_int_grid[2*nn[0]+1] += job->particles[i].v*(job->b11[i]*pyx + job->b21[i]*pyy);
@@ -775,6 +780,7 @@ void build_stiffness_matrix(job_t *job)
     job->kku_grid[lda*(2*nn[3]+1)+2*nn[3]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*pow(job->b14[i], 2) - 0.5*pow(job->b14[i], 2) - 1.0*pow(job->b24[i], 2))/(pow(NUMOD, 2) - 1) );
 
     /* --- K_geo --- Symmetric? True --- */
+#if 0
     job->kku_grid[lda*(2*nn[0]+0)+2*nn[0]+0] += ( job->particles[i].v*(pow(job->b11[i], 2)*job->particles[i].sxx + 2*job->b11[i]*job->b21[i]*job->particles[i].sxy + pow(job->b21[i], 2)*job->particles[i].syy) );
     job->kku_grid[lda*(2*nn[0]+0)+2*nn[1]+0] += ( job->particles[i].v*(job->b11[i]*job->b12[i]*job->particles[i].sxx + job->b11[i]*job->b22[i]*job->particles[i].sxy + job->b12[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b22[i]*job->particles[i].syy) );
     job->kku_grid[lda*(2*nn[0]+0)+2*nn[2]+0] += ( job->particles[i].v*(job->b11[i]*job->b13[i]*job->particles[i].sxx + job->b11[i]*job->b23[i]*job->particles[i].sxy + job->b13[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b23[i]*job->particles[i].syy) );
@@ -807,30 +813,31 @@ void build_stiffness_matrix(job_t *job)
     job->kku_grid[lda*(2*nn[3]+1)+2*nn[1]+1] += ( job->particles[i].v*(job->b12[i]*job->b14[i]*job->particles[i].sxx + job->b12[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b22[i]*job->particles[i].sxy + job->b22[i]*job->b24[i]*job->particles[i].syy) );
     job->kku_grid[lda*(2*nn[3]+1)+2*nn[2]+1] += ( job->particles[i].v*(job->b13[i]*job->b14[i]*job->particles[i].sxx + job->b13[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b23[i]*job->particles[i].sxy + job->b23[i]*job->b24[i]*job->particles[i].syy) );
     job->kku_grid[lda*(2*nn[3]+1)+2*nn[3]+1] += ( job->particles[i].v*(pow(job->b14[i], 2)*job->particles[i].sxx + 2*job->b14[i]*job->b24[i]*job->particles[i].sxy + pow(job->b24[i], 2)*job->particles[i].syy) );
+#endif
     }
 
     inv_dt_sq = 1.0 / (job->dt * job->dt);
 
     for (i = 0; i < (job->vec_len * job->vec_len); i++) {
-        job->kku_grid[i] *= job->dt * job->dt;
+        job->kku_grid[i] *= (job->dt * job->dt);
     }
 
     m_avg = 0;
     m_filled = 0;
-    for (i = 0; i < job->vec_len; i++) {
-        if (job->m_grid[i] > TOL) {
-            m_avg += job->m_grid[i];
-            m_filled++;
-        }
-    }
-    m_avg /= m_filled;
+/*    for (i = 0; i < job->vec_len; i++) {*/
+/*        if (job->m_grid[i] > TOL) {*/
+/*            m_avg += job->m_grid[i];*/
+/*            m_filled++;*/
+/*        }*/
+/*    }*/
+/*    m_avg = m_avg / m_filled;*/
 
     /* diagonal mass matrix */
     for (i = 0; i < job->vec_len; i++) {
         if (job->m_grid[i] > TOL) {
             job->kku_grid[i + lda * i] += 4 * job->m_grid[i];
         } else {
-            job->kku_grid[i + lda * i] += m_avg;
+            job->kku_grid[i + lda * i] += 4 * m_avg;
         }
     }
 
@@ -931,7 +938,6 @@ start_implicit:
         for (i = 0; i < lda; i++) {
             job->q_grid[i] *= -(4 * job->u_grid[i] - 4 * v_grid_t[i] * job->dt - a_grid_t[i] * job->dt * job->dt);
             job->q_grid[i] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
-/*            job->q_grid[i] = (job->f_ext_grid[i] - job->f_int_grid[i]);*/
         }
 
         memcpy(A, job->kku_grid, lda * lda * sizeof(double));
@@ -1035,6 +1041,13 @@ start_implicit:
 
         if (!cs_lusol(0, smat, sb, 1e-12)) {
             fprintf(stderr, "lusol error!\n");
+            css *S;
+            csn *N;
+            S = cs_sqr(0, smat, 0);
+            N = cs_lu(smat, S, 1e-12);
+            fprintf(stderr, "S = %p, N = %p\n", S, N);
+            cs_print(smat, 0);
+            exit(255);
         }
 
         if (k == 0) {
@@ -1066,7 +1079,7 @@ start_implicit:
             job->u_grid[i] += job->du_grid[i];
 
             /* update grid velocity */
-            job->v_grid[i] = 2 * job->u_grid[i] * inv_dt - v_grid_t[i];
+            job->v_grid[i] = 2 * (job->u_grid[i] / job->dt) - v_grid_t[i];
         }
 
         for (i = 0; i < job->num_nodes; i++) {
