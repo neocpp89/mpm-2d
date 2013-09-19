@@ -311,7 +311,7 @@ void calculate_stress_dp_shearonly_indep(job_t *job)
             job->particles[i].syy = -0.5 * c / m;
             job->particles[i].color = 3;
         } else {
-            fprintf(stderr, "undetermined case\n");
+            fprintf(stderr, "u");
         }
     }
 
