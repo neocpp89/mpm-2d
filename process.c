@@ -1063,6 +1063,12 @@ start_implicit:
         k++;
 #define UNORM_TOL 1e-1
 #define QNORM_TOL 1e-2
+#define UNORM_CONV 1e-8
+
+        if (du_norm < UNORM_CONV) {
+            printf("norm of u  = %f: Accepting as converged.\n", du_norm);
+            break;
+        }
 
         if (q_norm*du_norm > 10*(q0_norm*du0_norm) || du_norm > 10*du0_norm || k > 10) {
             job->dt = job->dt * 0.8;
