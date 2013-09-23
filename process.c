@@ -11,6 +11,7 @@
 #include <math.h>
 #include <time.h>
 #include "interpolate.h"
+#include "element.h"
 #include "particle.h"
 #include "node.h"
 #include "process.h"
@@ -251,23 +252,23 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->b28 = (double *)malloc(job->num_particles * sizeof(double));
     job->b29 = (double *)malloc(job->num_particles * sizeof(double));
 
-    #define DIMENSION 2
-    /* max size of u_grid is dim * N * N. */
-    job->vec_len = DIMENSION * job->N * job->N;
-    job->u_grid = (double *)malloc(DIMENSION * sizeof(double) * job->N * job->N);
-    job->du_grid = (double *)malloc(DIMENSION * sizeof(double) * job->N * job->N);
-    job->v_grid = (double *)malloc(DIMENSION * sizeof(double) * job->N * job->N);
-    job->a_grid = (double *)malloc(DIMENSION * sizeof(double) * job->N * job->N);
-    job->m_grid = (double *)malloc(DIMENSION * sizeof(double) * job->N * job->N);
-    job->f_ext_grid = (double *)malloc(DIMENSION * sizeof(double) * job->N * job->N);
-    job->f_int_grid = (double *)malloc(DIMENSION * sizeof(double) * job->N * job->N);
-    job->q_grid = (double *)malloc(DIMENSION * sizeof(double) * job->N * job->N);
-    job->node_u_map = (int *)malloc(DIMENSION * sizeof(int) * job->N * job->N);
-    job->inv_node_u_map = (int *)malloc(DIMENSION * sizeof(int) * job->N * job->N);
+    /* max size of u_grid is NODAL_DOF * number of nodes. */
+    job->vec_len = NODAL_DOF * job->num_nodes;
+    job->u_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
+    job->du_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
+    job->v_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
+    job->a_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
+    job->m_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
+    job->f_ext_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
+    job->f_int_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
+    job->q_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
+    job->node_u_map = (int *)malloc(NODAL_DOF * sizeof(int) * job->num_nodes);
+    job->inv_node_u_map = (int *)malloc(NODAL_DOF * sizeof(int) * job->num_nodes);
 
     job->kku_grid = (double *)malloc(
-                        (DIMENSION * job->N * job->N) *
-                        (DIMENSION * sizeof(double) * job->N * job->N));
+                        (NODAL_DOF * job->num_nodes) *
+                        (NODAL_DOF * sizeof(double) * job->num_nodes));
+
     for (i = 0; i < job->vec_len; i++) {
         job->u_grid[i] = 0;
         job->du_grid[i] = 0;
@@ -281,7 +282,6 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     for (i = 0; i < (job->vec_len * job->vec_len); i++) {
         job->kku_grid[i] = 0;
     }
-    #undef DIMENSION
 
     for (i = 0; i < job->num_particles; i++) {
         job->in_element[i] = WHICH_ELEMENT(
@@ -370,6 +370,7 @@ void mpm_step(job_t *job)
     /* Calculate node velocity. */
     calculate_node_velocity(job);
 
+    /* matrix solve */
     implicit_solve(job);
 
     /* Update particle position and velocity. */
