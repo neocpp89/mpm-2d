@@ -764,6 +764,9 @@ void implicit_solve(job_t *job)
     double q_norm = 0;
     double q0_norm = 0;
 
+    /* For assembly of elements into global matrix. */
+    int nn[4];
+
     /* iteration count */
     int k = 0;
     static int stable_timestep = 0;
@@ -818,7 +821,43 @@ start_implicit:
     /* Begin newton iterations */
     do {
         update_internal_stress(job);
-        build_stiffness_matrix(job);
+/*        build_stiffness_matrix(job);*/
+        build_elemental_stiffness(job);
+
+        for (i = 0; i < lda; i++) {
+            for (j = 0; j < lda; j++) {
+                job->kku_grid[lda * i + j] = 0;
+            }
+        }
+
+        for (i = 0; i < job->num_elements; i++) {
+            if (job->elements[i].filled != 0) {
+                for (r = 0; r < (NODAL_DOF * NODES_PER_ELEMENT); r++) {
+                    for (s = 0; s < (NODAL_DOF * NODES_PER_ELEMENT); s++) {
+                        job->elements[i].kku_element[r][s] *= (job->dt * job->dt);
+                    }
+                }
+                nn[0] = job->elements[i].nodes[0];
+                nn[1] = job->elements[i].nodes[1];
+                nn[2] = job->elements[i].nodes[2];
+                nn[3] = job->elements[i].nodes[3];
+                for (r = 0; r < NODES_PER_ELEMENT; r++) {
+                    for (s = 0; s < NODES_PER_ELEMENT; s++) {
+                        job->kku_grid[lda * (NODAL_DOF * nn[r] + XDOF_IDX) + (NODAL_DOF * nn[s] + XDOF_IDX)] += job->elements[i].kku_element[NODAL_DOF * r + XDOF_IDX][NODAL_DOF * s + XDOF_IDX];
+                        job->kku_grid[lda * (NODAL_DOF * nn[r] + XDOF_IDX) + (NODAL_DOF * nn[s] + YDOF_IDX)] += job->elements[i].kku_element[NODAL_DOF * r + XDOF_IDX][NODAL_DOF * s + YDOF_IDX];
+                        job->kku_grid[lda * (NODAL_DOF * nn[r] + YDOF_IDX) + (NODAL_DOF * nn[s] + XDOF_IDX)] += job->elements[i].kku_element[NODAL_DOF * r + YDOF_IDX][NODAL_DOF * s + XDOF_IDX];
+                        job->kku_grid[lda * (NODAL_DOF * nn[r] + YDOF_IDX) + (NODAL_DOF * nn[s] + YDOF_IDX)] += job->elements[i].kku_element[NODAL_DOF * r + YDOF_IDX][NODAL_DOF * s + YDOF_IDX];
+                    }
+                }
+            }
+        }
+
+        /* add diagonal mass matrix term */
+        for (i = 0; i < job->vec_len; i++) {
+            if (job->m_grid[i] > TOL) {
+                job->kku_grid[i + lda * i] += 4 * job->m_grid[i];
+            }
+        }
 
         /* reset stress state at beginning of newton iteration */
         for (i = 0; i < job->num_particles; i++) {
