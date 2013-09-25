@@ -265,6 +265,10 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->node_u_map = (int *)malloc(NODAL_DOF * sizeof(int) * job->num_nodes);
     job->inv_node_u_map = (int *)malloc(NODAL_DOF * sizeof(int) * job->num_nodes);
 
+    /* for dirichlet BCs */
+    job->u_dirichlet = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
+    job->u_dirichlet_mask = (int *)malloc(NODAL_DOF * sizeof(int) * job->num_nodes);
+
     job->kku_grid = (double *)malloc(
                         (NODAL_DOF * job->num_nodes) *
                         (NODAL_DOF * sizeof(double) * job->num_nodes));
@@ -414,12 +418,6 @@ void create_particle_to_element_map(job_t *job)
                 job->in_element[i], p);
         }
 
-        /* Update particle element and mark element as occupied. */
-        job->in_element[i] = p;
-        job->elements[job->in_element[i]].filled = 1;
-        job->elements[job->in_element[i]].n++;
-        job->elements[job->in_element[i]].m += job->particles[i].m;
-
         /* XXX ugly hack for domain size... */
         if (job->particles[i].x < 0.0 || job->particles[i].x > 1.0
             || job->particles[i].y < 0.0 || job->particles[i].y > 1.0) {
@@ -427,7 +425,14 @@ void create_particle_to_element_map(job_t *job)
                 "Particle %d outside of grid (%g, %g), marking as inactive.\n",
                 i, job->particles[i].x, job->particles[i].y);
             job->particles[i].active = 0;
+            continue;
         }
+
+        /* Update particle element and mark element as occupied. */
+        job->in_element[i] = p;
+        job->elements[job->in_element[i]].filled = 1;
+        job->elements[job->in_element[i]].n++;
+        job->elements[job->in_element[i]].m += job->particles[i].m;
 
 
 /*        if (job->in_element[i] < 0 || job->in_element[i] >= job->num_elements) {*/
@@ -777,6 +782,7 @@ void build_stiffness_matrix(job_t *job)
 void implicit_solve(job_t *job)
 {
     int i, j;
+    int r, s;
 
     /* lapack related*/
     int N;
@@ -868,19 +874,14 @@ start_implicit:
             job->q_grid[i] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
         }
 
-#if 0
-        for (i = 0; i < lda * lda; i++) {
-            job->kku_grid[i] *= (job->dt * job->dt);
-        }
-        for (i = 0; i < lda; i++) {
-            job->q_grid[i] *= (job->dt  * job->dt);
-        }
-#endif
-
         memcpy(A, job->kku_grid, lda * lda * sizeof(double));
         memcpy(b, job->q_grid, lda * sizeof(double));
 
-        /* apply boundary conditions -- sticky + stiff bottom floor */
+        /* generate and apply boundary conditions:
+            sticky + stiff bottom floor. */
+        generate_dirichlet_bcs(job);
+
+#if 0
         for (i = 0; i < job->N; i++) {
             /* bottom floor */
             b[2 * i] = 0;
@@ -913,7 +914,23 @@ start_implicit:
             A[lda * (2*i*job->N - 2) + (2*i*job->N - 2)] = 1;
 /*            A[lda * (2*i*job->N - 1) + (2*i*job->N - 1)] = 1;*/
             i--;
+        }
+#endif
 
+        for (i = 0; i < job->num_nodes; i++) {
+            for (j = 0; j < NODAL_DOF; j++) {
+                if (job->u_dirichlet_mask[NODAL_DOF * i + j] != 0) {
+                    /*
+                        remember to remove this DOF when building the matrix
+                        later!
+                    */
+                    for (r = 0; r < job->num_nodes; r++) {
+                        for (s = 0; s < NODAL_DOF; s++) {
+                            b[NODAL_DOF * i + j] += (-job->u_dirichlet[NODAL_DOF * i + j] * A[lda * (NODAL_DOF * r + s) + (NODAL_DOF * i + j)]);
+                        }
+                    }
+                }
+            }
         }
 
         /* build node and inverse maps */
@@ -923,7 +940,7 @@ start_implicit:
         }
         j = 0;
         for (i = 0; i < lda; i++) {
-            if (job->m_grid[i] > TOL) {
+            if (job->m_grid[i] > TOL && (job->u_dirichlet_mask[i] == 0)) {
                 job->node_u_map[i] = j;
                 j++;
             }
@@ -939,13 +956,15 @@ start_implicit:
         nnz = 0;
         for (i = 0; i < lda; i++) {
             for (j = 0; j < lda; j++) {
-                if (A[lda * i + j] != 0.0) {
+                if (A[lda * i + j] != 0.0 &&
+                        (job->u_dirichlet_mask[i] == 0 &&
+                        job->u_dirichlet_mask[j] == 0)) {
                     nnz++;
                 }
             }
         }
 
-        fprintf(stderr, "%d nonzeros in K.\n", nnz);
+        fprintf(stderr, "%d nonzeros in K, which is [%d x %d].\n", nnz, slda, slda);
         triplets = cs_spalloc(slda, slda, nnz, 1, 1);
         sb = (double *)malloc(slda * sizeof(double));
         for (i = 0; i < slda; i++) {
@@ -1003,12 +1022,19 @@ start_implicit:
         printf("Iteration[%d]: Norm du: %f Norm q: %f Implicit Solve: %lf s\n", k, du_norm, q_norm, (double)ns/NS_PER_S );
     #undef NS_PER_S
 
-/*        memcpy(job->du_grid, b, lda * sizeof(double));*/
+        /* map solution back to entire grid */
         for (i = 0; i < ldb; i++) {
             if ((j = job->node_u_map[i]) != -1) {
                 job->du_grid[i] = sb[j];
             } else {
                 job->du_grid[i] = 0;
+            }
+        }
+
+        /* apply BCs to solution */
+        for (i = 0; i < ldb; i++) {
+            if (job->u_dirichlet_mask[i] != 0) {
+                job->du_grid[i] = job->u_dirichlet[i];
             }
         }
 

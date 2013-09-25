@@ -83,6 +83,10 @@ typedef struct job_s {
     int *node_u_map;
     int *inv_node_u_map;
 
+    /* saves which dofs are controlled by BCs and their values */
+    double *u_dirichlet;
+    int *u_dirichlet_mask;
+
     int vec_len;
     double *kku_grid;
     /* kku_grid is vec_len*vec_len in size */

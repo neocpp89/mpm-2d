@@ -8,8 +8,11 @@
 #ifndef __ELEMENT_H__
 #define __ELEMENT_H__
 
-#define NODAL_DOF 3
+#define NODAL_DOF 2
 #define NODES_PER_ELEMENT 4
+
+#define XDOF_IDX 0
+#define YDOF_IDX 1
 
 /*
     node numbering

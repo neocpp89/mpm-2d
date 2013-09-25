@@ -13,7 +13,7 @@ else
     echo $JOB_NAME
     LD_PRELOAD=./gprof-helper.so
     mkdir -p jobs/$JOB_NAME
-    make clean; make -j4 && octave gen_particles.m && time ./mpm_2d -o jobs/$JOB_NAME generated_grid.txt generated_particles.txt $1;
+    make clean; make -j4 && octave gen_particles.m && time --verbose ./mpm_2d -o jobs/$JOB_NAME generated_grid.txt generated_particles.txt $1;
     tar --exclude=jobs --exclude-vcs -cvzf jobs/$JOB_NAME.tar.gz ../$(basename `pwd`)
 fi
 
