@@ -313,7 +313,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     material_init(job);
 
     /* Set default timestep. */
-    job->dt = 0.4 * job->h * sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
+    job->dt = 10 * job->h * sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
 
     /* By default, don't output energy data. */
     job->ke_data = NULL;
@@ -433,14 +433,6 @@ void create_particle_to_element_map(job_t *job)
         job->elements[job->in_element[i]].filled = 1;
         job->elements[job->in_element[i]].n++;
         job->elements[job->in_element[i]].m += job->particles[i].m;
-
-
-/*        if (job->in_element[i] < 0 || job->in_element[i] >= job->num_elements) {*/
-/*            fprintf(stderr,*/
-/*                "Particle %d outside of grid (%g, %g), marking as inactive.\n",*/
-/*                i, job->particles[i].x, job->particles[i].y);*/
-/*            job->particles[i].active = 0;*/
-/*        }*/
 
     }
 
@@ -787,8 +779,6 @@ void implicit_solve(job_t *job)
     /* lapack related*/
     int N;
     int lda, ldb;
-    double *A;
-    double *b;
 
     /* dnrm2 */
     int incx = 1;
@@ -823,10 +813,6 @@ void implicit_solve(job_t *job)
     lda = job->vec_len;
     ldb = lda;
     N = lda;
-
-    /* Lapack functions mutate matrices, so copy here first */
-    A = (double *)malloc(lda * lda * sizeof(double));
-    b = (double *)malloc(lda * sizeof(double));
 
     v_grid_t = (double *)malloc(lda * sizeof(double));
     a_grid_t = (double *)malloc(lda * sizeof(double));
@@ -874,48 +860,8 @@ start_implicit:
             job->q_grid[i] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
         }
 
-        memcpy(A, job->kku_grid, lda * lda * sizeof(double));
-        memcpy(b, job->q_grid, lda * sizeof(double));
-
-        /* generate and apply boundary conditions:
-            sticky + stiff bottom floor. */
+        /* Generate and apply dirichlet boundary conditions given in BC file. */
         generate_dirichlet_bcs(job);
-
-#if 0
-        for (i = 0; i < job->N; i++) {
-            /* bottom floor */
-            b[2 * i] = 0;
-            b[2 * i + 1] = 0;
-            for (j = 0; j < lda; j++) {
-                A[lda * (j) + (2*i)] = 0;
-                A[lda * (j) + (2*i + 1)] = 0;
-            }
-            A[lda * (2*i) + (2*i)] = 1;
-            A[lda * (2*i + 1) + (2*i + 1)] = 1;
-
-            /* left wall */
-            b[2 * i * job->N] = 0;
-/*            b[2 * i * job->N + 1] = 0;*/
-            for (j = 0; j < lda; j++) {
-                A[lda * (j) + (2*i*job->N)] = 0;
-/*                A[lda * (j) + (2*i*job->N + 1)] = 0;*/
-            }
-            A[lda * (2*i*job->N) + (2*i*job->N)] = 1;
-/*            A[lda * (2*i*job->N + 1) + (2*i*job->N + 1)] = 1;*/
-
-            i++;
-            /* right wall */
-            b[2 * i * job->N - 2] = 0;
-/*            b[2 * i * job->N - 1] = 0;*/
-            for (j = 0; j < lda; j++) {
-                A[lda * (j) + (2*i*job->N - 2)] = 0;
-/*                A[lda * (j) + (2*i*job->N - 1)] = 0;*/
-            }
-            A[lda * (2*i*job->N - 2) + (2*i*job->N - 2)] = 1;
-/*            A[lda * (2*i*job->N - 1) + (2*i*job->N - 1)] = 1;*/
-            i--;
-        }
-#endif
 
         for (i = 0; i < job->num_nodes; i++) {
             for (j = 0; j < NODAL_DOF; j++) {
@@ -926,7 +872,7 @@ start_implicit:
                     */
                     for (r = 0; r < job->num_nodes; r++) {
                         for (s = 0; s < NODAL_DOF; s++) {
-                            b[NODAL_DOF * i + j] += (-job->u_dirichlet[NODAL_DOF * i + j] * A[lda * (NODAL_DOF * r + s) + (NODAL_DOF * i + j)]);
+                            job->q_grid[NODAL_DOF * i + j] += (-job->u_dirichlet[NODAL_DOF * i + j] * job->kku_grid[lda * (NODAL_DOF * r + s) + (NODAL_DOF * i + j)]);
                         }
                     }
                 }
@@ -956,7 +902,7 @@ start_implicit:
         nnz = 0;
         for (i = 0; i < lda; i++) {
             for (j = 0; j < lda; j++) {
-                if (A[lda * i + j] != 0.0 &&
+                if (job->kku_grid[lda * i + j] != 0.0 &&
                         (job->u_dirichlet_mask[i] == 0 &&
                         job->u_dirichlet_mask[j] == 0)) {
                     nnz++;
@@ -964,18 +910,20 @@ start_implicit:
             }
         }
 
-        fprintf(stderr, "%d nonzeros in K, which is [%d x %d].\n", nnz, slda, slda);
+        fprintf(stderr, "%d nonzeros in K, which has size [%d x %d].\n", nnz, slda, slda);
         triplets = cs_spalloc(slda, slda, nnz, 1, 1);
         sb = (double *)malloc(slda * sizeof(double));
         for (i = 0; i < slda; i++) {
-            sb[i] = b[job->inv_node_u_map[i]];
+            sb[i] = job->q_grid[job->inv_node_u_map[i]];
         }
 
         int res = 0;
         for (j = 0; j < slda; j++) {
             for (i = 0; i < slda; i++) {
-                if (A[lda * job->inv_node_u_map[j] + job->inv_node_u_map[i]] != 0.0) {
-                    res = cs_entry(triplets, i, j, A[lda * job->inv_node_u_map[j] + job->inv_node_u_map[i]]);
+                if (job->kku_grid[lda * job->inv_node_u_map[j] + job->inv_node_u_map[i]] != 0.0) {
+                    res = cs_entry(triplets,
+                            i, j,
+                            job->kku_grid[lda * job->inv_node_u_map[j] + job->inv_node_u_map[i]]);
                     if (res == 0) {
                         fprintf(stderr, "error adding entry\n");
                     }
@@ -1110,8 +1058,6 @@ start_implicit:
         job->nodes[i].uy = job->u_grid[2 * i + 1];
     }
 
-    free(A);
-    free(b);
     free(v_grid_t);
     free(a_grid_t);
 
