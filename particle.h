@@ -75,12 +75,14 @@ typedef struct particle_s {
     /* Material Type */
     int material;
 
+#if 0
     /* Shapefunctions */
     double h[9];
 
     /* Gradient of Shapefunctions */
     double b1[9];
     double b2[9];
+#endif
 
     /* acceleration */
     double x_tt;

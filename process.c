@@ -325,7 +325,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 /*----------------------------------------------------------------------------*/
 void mpm_step(job_t *job)
 {
-    int i;
+    int i, j;
     stask_t task;
 
     /* Clear grid quantites. */
@@ -342,18 +342,12 @@ void mpm_step(job_t *job)
         job->nodes[i].fx = 0;
         job->nodes[i].fy = 0;
 
-        /* first component is x, second is y */
-        job->u_grid[2 * i] = 0;
-        job->u_grid[2 * i + 1] = 0;
-
-        job->du_grid[2 * i] = 0;
-        job->du_grid[2 * i + 1] = 0;
-
-        job->f_int_grid[2 * i] = 0;
-        job->f_int_grid[2 * i + 1] = 0;
-
-        job->f_ext_grid[2 * i] = 0;
-        job->f_ext_grid[2 * i + 1] = 0;
+        for (j = 0; j < NODAL_DOF; j++) {
+            job->u_grid[NODAL_DOF * i + j] = 0;
+            job->du_grid[NODAL_DOF * i + j] = 0;
+            job->f_int_grid[NODAL_DOF * i + j] = 0;
+            job->f_ext_grid[NODAL_DOF * i + j] = 0;
+        }
     }
 
     for (i = 0; i < job->num_elements; i++) {
@@ -430,9 +424,9 @@ void create_particle_to_element_map(job_t *job)
 
         /* Update particle element and mark element as occupied. */
         job->in_element[i] = p;
-        job->elements[job->in_element[i]].filled = 1;
-        job->elements[job->in_element[i]].n++;
-        job->elements[job->in_element[i]].m += job->particles[i].m;
+        job->elements[p].filled = 1;
+        job->elements[p].n++;
+        job->elements[p].m += job->particles[i].m;
 
     }
 
@@ -495,8 +489,8 @@ void calculate_node_velocity(job_t *job)
     }
 
     for (i = 0; i < job->num_nodes; i++) {
-        job->v_grid[2 * i] = job->nodes[i].x_t;
-        job->v_grid[2 * i + 1] = job->nodes[i].y_t;
+        job->v_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].x_t;
+        job->v_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].y_t;
     }
 
     return;
@@ -621,9 +615,6 @@ void build_stiffness_matrix(job_t *job)
     int p;
     int nn[4];
     int lda = job->vec_len;
-    double inv_dt_sq;
-    double m_avg;
-    int m_filled;
 
     /* zero matrix first */
     for (i = 0; i < (job->vec_len * job->vec_len); i++) {
@@ -741,28 +732,14 @@ void build_stiffness_matrix(job_t *job)
     job->kku_grid[lda*(2*nn[3]+1)+2*nn[3]+1] += ( job->particles[i].v*(pow(job->b14[i], 2)*job->particles[i].sxx + 2*job->b14[i]*job->b24[i]*job->particles[i].sxy + pow(job->b24[i], 2)*job->particles[i].syy) );
     }
 
-    inv_dt_sq = 1.0 / (job->dt * job->dt);
-
     for (i = 0; i < (job->vec_len * job->vec_len); i++) {
         job->kku_grid[i] *= (job->dt * job->dt);
     }
-
-    m_avg = 0;
-    m_filled = 0;
-    for (i = 0; i < job->vec_len; i++) {
-        if (job->m_grid[i] > TOL) {
-            m_avg += job->m_grid[i];
-            m_filled++;
-        }
-    }
-    m_avg = m_avg / m_filled;
 
     /* diagonal mass matrix */
     for (i = 0; i < job->vec_len; i++) {
         if (job->m_grid[i] > TOL) {
             job->kku_grid[i + lda * i] += 4 * job->m_grid[i];
-/*        } else {*/
-/*            job->kku_grid[i + lda * i] += 4 * m_avg;*/
         }
     }
 
@@ -863,20 +840,16 @@ start_implicit:
         /* Generate and apply dirichlet boundary conditions given in BC file. */
         generate_dirichlet_bcs(job);
 
-        for (i = 0; i < job->num_nodes; i++) {
-            for (j = 0; j < NODAL_DOF; j++) {
-                if (job->u_dirichlet_mask[NODAL_DOF * i + j] != 0) {
+        for (i = 0; i < lda; i++) {
+                if (job->u_dirichlet_mask[i] != 0) {
                     /*
                         remember to remove this DOF when building the matrix
                         later!
                     */
-                    for (r = 0; r < job->num_nodes; r++) {
-                        for (s = 0; s < NODAL_DOF; s++) {
-                            job->q_grid[NODAL_DOF * i + j] += (-job->u_dirichlet[NODAL_DOF * i + j] * job->kku_grid[lda * (NODAL_DOF * r + s) + (NODAL_DOF * i + j)]);
-                        }
+                    for (j = 0; j < lda; j++) {
+                            job->q_grid[i] += (-job->u_dirichlet[i] * job->kku_grid[lda * j + i]);
                     }
                 }
-            }
         }
 
         /* build node and inverse maps */
