@@ -563,25 +563,25 @@ void update_internal_stress(job_t *job)
         nn[2]  = job->elements[p].nodes[2];
         nn[3]  = job->elements[p].nodes[3];
 
-        dudx = job->u_grid[2*nn[0]+0]*job->b11[i];
-        dudx += job->u_grid[2*nn[1]+0]*job->b12[i];
-        dudx += job->u_grid[2*nn[2]+0]*job->b13[i];
-        dudx += job->u_grid[2*nn[3]+0]*job->b14[i];
+        dudx = job->u_grid[NODAL_DOF * nn[0] + XDOF_IDX]*job->b11[i];
+        dudx += job->u_grid[NODAL_DOF * nn[1] + XDOF_IDX]*job->b12[i];
+        dudx += job->u_grid[NODAL_DOF * nn[2] + XDOF_IDX]*job->b13[i];
+        dudx += job->u_grid[NODAL_DOF * nn[3] + XDOF_IDX]*job->b14[i];
 
-        dudy = job->u_grid[2*nn[0]+0]*job->b21[i];
-        dudy += job->u_grid[2*nn[1]+0]*job->b22[i];
-        dudy += job->u_grid[2*nn[2]+0]*job->b23[i];
-        dudy += job->u_grid[2*nn[3]+0]*job->b24[i];
+        dudy = job->u_grid[NODAL_DOF * nn[0] + XDOF_IDX]*job->b21[i];
+        dudy += job->u_grid[NODAL_DOF * nn[1] + XDOF_IDX]*job->b22[i];
+        dudy += job->u_grid[NODAL_DOF * nn[2] + XDOF_IDX]*job->b23[i];
+        dudy += job->u_grid[NODAL_DOF * nn[3] + XDOF_IDX]*job->b24[i];
 
-        dvdx = job->u_grid[2*nn[0]+1]*job->b11[i];
-        dvdx += job->u_grid[2*nn[1]+1]*job->b12[i];
-        dvdx += job->u_grid[2*nn[2]+1]*job->b13[i];
-        dvdx += job->u_grid[2*nn[3]+1]*job->b14[i];
+        dvdx = job->u_grid[NODAL_DOF * nn[0] + YDOF_IDX]*job->b11[i];
+        dvdx += job->u_grid[NODAL_DOF * nn[1] + YDOF_IDX]*job->b12[i];
+        dvdx += job->u_grid[NODAL_DOF * nn[2] + YDOF_IDX]*job->b13[i];
+        dvdx += job->u_grid[NODAL_DOF * nn[3] + YDOF_IDX]*job->b14[i];
 
-        dvdy = job->u_grid[2*nn[0]+1]*job->b21[i];
-        dvdy += job->u_grid[2*nn[1]+1]*job->b22[i];
-        dvdy += job->u_grid[2*nn[2]+1]*job->b23[i];
-        dvdy += job->u_grid[2*nn[3]+1]*job->b24[i];
+        dvdy = job->u_grid[NODAL_DOF * nn[0] + YDOF_IDX]*job->b21[i];
+        dvdy += job->u_grid[NODAL_DOF * nn[1] + YDOF_IDX]*job->b22[i];
+        dvdy += job->u_grid[NODAL_DOF * nn[2] + YDOF_IDX]*job->b23[i];
+        dvdy += job->u_grid[NODAL_DOF * nn[3] + YDOF_IDX]*job->b24[i];
 
         jdet = 1 + dudx + dvdy;
 
@@ -594,14 +594,14 @@ void update_internal_stress(job_t *job)
         pyx = jdet * ((1 - dudx) * sxy - dudy * syy);
         pyy = jdet * ((-dvdx) * sxy + (1 - dvdy) * syy);
 
-        job->f_int_grid[2*nn[0]+0] += job->particles[i].v*(job->b11[i]*pxx + job->b21[i]*pxy);
-        job->f_int_grid[2*nn[0]+1] += job->particles[i].v*(job->b11[i]*pyx + job->b21[i]*pyy);
-        job->f_int_grid[2*nn[1]+0] += job->particles[i].v*(job->b12[i]*pxx + job->b22[i]*pxy);
-        job->f_int_grid[2*nn[1]+1] += job->particles[i].v*(job->b12[i]*pyx + job->b22[i]*pyy);
-        job->f_int_grid[2*nn[2]+0] += job->particles[i].v*(job->b13[i]*pxx + job->b23[i]*pxy);
-        job->f_int_grid[2*nn[2]+1] += job->particles[i].v*(job->b13[i]*pyx + job->b23[i]*pyy);
-        job->f_int_grid[2*nn[3]+0] += job->particles[i].v*(job->b14[i]*pxx + job->b24[i]*pxy);
-        job->f_int_grid[2*nn[3]+1] += job->particles[i].v*(job->b14[i]*pyx + job->b24[i]*pyy);
+        job->f_int_grid[NODAL_DOF * nn[0] + XDOF_IDX] += job->particles[i].v*(job->b11[i]*pxx + job->b21[i]*pxy);
+        job->f_int_grid[NODAL_DOF * nn[0] + YDOF_IDX] += job->particles[i].v*(job->b11[i]*pyx + job->b21[i]*pyy);
+        job->f_int_grid[NODAL_DOF * nn[1] + XDOF_IDX] += job->particles[i].v*(job->b12[i]*pxx + job->b22[i]*pxy);
+        job->f_int_grid[NODAL_DOF * nn[1] + YDOF_IDX] += job->particles[i].v*(job->b12[i]*pyx + job->b22[i]*pyy);
+        job->f_int_grid[NODAL_DOF * nn[2] + XDOF_IDX] += job->particles[i].v*(job->b13[i]*pxx + job->b23[i]*pxy);
+        job->f_int_grid[NODAL_DOF * nn[2] + YDOF_IDX] += job->particles[i].v*(job->b13[i]*pyx + job->b23[i]*pyy);
+        job->f_int_grid[NODAL_DOF * nn[3] + XDOF_IDX] += job->particles[i].v*(job->b14[i]*pxx + job->b24[i]*pxy);
+        job->f_int_grid[NODAL_DOF * nn[3] + YDOF_IDX] += job->particles[i].v*(job->b14[i]*pyx + job->b24[i]*pyy);
     }
 
     return;
