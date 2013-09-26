@@ -821,15 +821,17 @@ start_implicit:
     /* Begin newton iterations */
     do {
         update_internal_stress(job);
-/*        build_stiffness_matrix(job);*/
         build_elemental_stiffness(job);
 
+        /* starting timer */
+        clock_gettime(CLOCK_REALTIME, &requestStart);
         for (i = 0; i < lda; i++) {
             for (j = 0; j < lda; j++) {
                 job->kku_grid[lda * i + j] = 0;
             }
         }
 
+        /* assemble elements into global stiffness matrix */
         for (i = 0; i < job->num_elements; i++) {
             if (job->elements[i].filled != 0) {
                 for (r = 0; r < (NODAL_DOF * NODES_PER_ELEMENT); r++) {
@@ -858,6 +860,15 @@ start_implicit:
                 job->kku_grid[i + lda * i] += 4 * job->m_grid[i];
             }
         }
+        /* stopping timer */
+        clock_gettime(CLOCK_REALTIME, &requestEnd);
+
+        /* Calculate time it took */
+    #define NS_PER_S 1E9
+        ns = NS_PER_S * (requestEnd.tv_sec - requestStart.tv_sec )
+          + ( requestEnd.tv_nsec - requestStart.tv_nsec );
+        printf("Global Assembly[%d]: %lf s\n", k, (double)ns/NS_PER_S );
+    #undef NS_PER_S
 
         /* reset stress state at beginning of newton iteration */
         for (i = 0; i < job->num_particles; i++) {
@@ -1104,21 +1115,21 @@ void map_to_grid(job_t *job)
     /* for implicit method, map to another array */
     for (i = 0; i < job->num_nodes; i++) {
         /* used lumped mass */
-        job->m_grid[2 * i] = job->nodes[i].m;
-        job->m_grid[2 * i + 1] = job->nodes[i].m;
+        job->m_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].m;
+        job->m_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].m;
 
         /* need previous timestep's acceleration for implicit method */
         if (job->nodes[i].m > TOL) {
-            job->a_grid[2 * i] =  job->nodes[i].mx_tt / job->nodes[i].m;
-            job->a_grid[2 * i + 1] = job->nodes[i].my_tt  / job->nodes[i].m;
+            job->a_grid[NODAL_DOF * i + XDOF_IDX] =  job->nodes[i].mx_tt / job->nodes[i].m;
+            job->a_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].my_tt  / job->nodes[i].m;
         } else {
-            job->a_grid[2 * i] =  0;
-            job->a_grid[2 * i + 1] = 0;
+            job->a_grid[NODAL_DOF * i + XDOF_IDX] = 0;
+            job->a_grid[NODAL_DOF * i + YDOF_IDX] = 0;
         }
 
         /* external forces */
-        job->f_ext_grid[2 * i] = job->nodes[i].fx;
-        job->f_ext_grid[2 * i + 1] = job->nodes[i].fy;
+        job->f_ext_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].fx;
+        job->f_ext_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].fy;
     }
 
     return;
@@ -1151,8 +1162,6 @@ void move_particles(job_t *job)
 
         job->particles[i].x_t += 0.5 * job->dt * (job->particles[i].x_tt + a_x_t);
         job->particles[i].y_t += 0.5 * job->dt * (job->particles[i].y_tt + a_y_t);
-/*        job->particles[i].x_t = 0.5 *(job->particles[i].x_t + (N_TO_P(job, x_t, i)));*/
-/*        job->particles[i].y_t = 0.5 *(job->particles[i].y_t + (N_TO_P(job, y_t, i)));*/
     }
     return;
 }
