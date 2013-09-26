@@ -752,9 +752,9 @@ void implicit_solve(job_t *job)
 {
     int i, j;
     int r, s;
+    int m, n;
 
     /* lapack related*/
-    int N;
     int lda, ldb;
 
     /* dnrm2 */
@@ -777,7 +777,7 @@ void implicit_solve(job_t *job)
 
     /* csparse */
     int nnz;
-    int slda;
+    int slda, sldb;
     cs *triplets;
     cs *smat;
     double *sb;
@@ -792,7 +792,6 @@ void implicit_solve(job_t *job)
 
     lda = job->vec_len;
     ldb = lda;
-    N = lda;
 
     v_grid_t = (double *)malloc(lda * sizeof(double));
     a_grid_t = (double *)malloc(lda * sizeof(double));
@@ -831,6 +830,45 @@ start_implicit:
             }
         }
 
+        /* Generate and apply dirichlet boundary conditions given in BC file. */
+        generate_dirichlet_bcs(job);
+
+        /* build node and inverse maps, taking BCs into account. */
+        for (i = 0; i < lda; i++) {
+            job->node_u_map[i] = -1;
+            job->inv_node_u_map[i] = -1;
+        }
+        j = 0;
+        for (i = 0; i < lda; i++) {
+            if (job->m_grid[i] > TOL && (job->u_dirichlet_mask[i] == 0)) {
+                job->node_u_map[i] = j;
+                j++;
+            }
+        }
+        slda = j;   /* The number of free DOFs gives the sparse matrix size. */
+        for (i = 0; i < lda; i++) {
+            if ((j = job->node_u_map[i]) != -1) {
+                job->inv_node_u_map[j] = i;
+            }
+        }
+
+        /*  calculate number of nonzero elements (before summing duplicates). */
+        nnz = 0;
+        for (i = 0; i < job->num_elements; i++) {
+            if (job->elements[i].filled != 0) {
+                nnz += (NODAL_DOF * NODES_PER_ELEMENT) *
+                        (NODAL_DOF * NODES_PER_ELEMENT);
+            }
+        }
+
+        /* Calculate right hand side (load):
+                Q = f_ext - f_int - M_g * (4 * u / dt^2 - 4 * v / dt - a) */
+        memcpy(job->q_grid, job->m_grid, lda * sizeof(double));
+        for (i = 0; i < lda; i++) {
+            job->q_grid[i] *= -(4 * job->u_grid[i] - 4 * v_grid_t[i] * job->dt - a_grid_t[i] * job->dt * job->dt);
+            job->q_grid[i] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
+        }
+
         /* assemble elements into global stiffness matrix */
         for (i = 0; i < job->num_elements; i++) {
             if (job->elements[i].filled != 0) {
@@ -844,11 +882,12 @@ start_implicit:
                 nn[2] = job->elements[i].nodes[2];
                 nn[3] = job->elements[i].nodes[3];
                 for (r = 0; r < NODES_PER_ELEMENT; r++) {
-                    for (s = 0; s < NODES_PER_ELEMENT; s++) {
-                        job->kku_grid[lda * (NODAL_DOF * nn[r] + XDOF_IDX) + (NODAL_DOF * nn[s] + XDOF_IDX)] += job->elements[i].kku_element[NODAL_DOF * r + XDOF_IDX][NODAL_DOF * s + XDOF_IDX];
-                        job->kku_grid[lda * (NODAL_DOF * nn[r] + XDOF_IDX) + (NODAL_DOF * nn[s] + YDOF_IDX)] += job->elements[i].kku_element[NODAL_DOF * r + XDOF_IDX][NODAL_DOF * s + YDOF_IDX];
-                        job->kku_grid[lda * (NODAL_DOF * nn[r] + YDOF_IDX) + (NODAL_DOF * nn[s] + XDOF_IDX)] += job->elements[i].kku_element[NODAL_DOF * r + YDOF_IDX][NODAL_DOF * s + XDOF_IDX];
-                        job->kku_grid[lda * (NODAL_DOF * nn[r] + YDOF_IDX) + (NODAL_DOF * nn[s] + YDOF_IDX)] += job->elements[i].kku_element[NODAL_DOF * r + YDOF_IDX][NODAL_DOF * s + YDOF_IDX];
+                    for (m = 0; m < NODAL_DOF; m++) {
+                        for (s = 0; s < NODES_PER_ELEMENT; s++) {
+                            for (n = 0; n < NODAL_DOF; n++) {
+                                job->kku_grid[lda * (NODAL_DOF * nn[r] + m) + (NODAL_DOF * nn[s] + n)] += job->elements[i].kku_element[NODAL_DOF * r + m][NODAL_DOF * s + n];
+                            }
+                        }
                     }
                 }
             }
@@ -880,16 +919,6 @@ start_implicit:
             job->particles[i].syy = job->particles[i].real_syy;
         }
 
-        /* Q = f_ext - f_int - M_g * (4 * u / dt^2 - 4 * v / dt - a) */
-        memcpy(job->q_grid, job->m_grid, lda * sizeof(double));
-        for (i = 0; i < lda; i++) {
-            job->q_grid[i] *= -(4 * job->u_grid[i] - 4 * v_grid_t[i] * job->dt - a_grid_t[i] * job->dt * job->dt);
-            job->q_grid[i] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
-        }
-
-        /* Generate and apply dirichlet boundary conditions given in BC file. */
-        generate_dirichlet_bcs(job);
-
         for (i = 0; i < lda; i++) {
                 if (job->u_dirichlet_mask[i] != 0) {
                     /*
@@ -900,25 +929,6 @@ start_implicit:
                             job->q_grid[i] += (-job->u_dirichlet[i] * job->kku_grid[lda * j + i]);
                     }
                 }
-        }
-
-        /* build node and inverse maps */
-        for (i = 0; i < lda; i++) {
-            job->node_u_map[i] = -1;
-            job->inv_node_u_map[i] = -1;
-        }
-        j = 0;
-        for (i = 0; i < lda; i++) {
-            if (job->m_grid[i] > TOL && (job->u_dirichlet_mask[i] == 0)) {
-                job->node_u_map[i] = j;
-                j++;
-            }
-        }
-        slda = j;
-        for (i = 0; i < lda; i++) {
-            if ((j = job->node_u_map[i]) != -1) {
-                job->inv_node_u_map[j] = i;
-            }
         }
 
         /* build sparse matrix version */
@@ -945,7 +955,7 @@ start_implicit:
             for (i = 0; i < slda; i++) {
                 if (job->kku_grid[lda * job->inv_node_u_map[j] + job->inv_node_u_map[i]] != 0.0) {
                     res = cs_entry(triplets,
-                            i, j,
+                            j, i,
                             job->kku_grid[lda * job->inv_node_u_map[j] + job->inv_node_u_map[i]]);
                     if (res == 0) {
                         fprintf(stderr, "error adding entry\n");
@@ -959,19 +969,19 @@ start_implicit:
         /* starting timer */
         clock_gettime(CLOCK_REALTIME, &requestStart);
 
-        N = slda;
+        sldb = slda;
         if (k == 0) {
-            q0_norm = dnrm2_(&N, sb, &incx);
+            q0_norm = dnrm2_(&sldb, sb, &incx);
         }
-        q_norm = dnrm2_(&N, sb, &incx);
+        q_norm = dnrm2_(&sldb, sb, &incx);
 
         if (!cs_lusol(1, smat, sb, 1e-12)) {
             fprintf(stderr, "lusol error!\n");
-            css *S;
-            csn *N;
-            S = cs_sqr(0, smat, 0);
-            N = cs_lu(smat, S, 1e-12);
-            fprintf(stderr, "S = %p, N = %p\n", S, N);
+/*            css *S;*/
+/*            csn *N;*/
+/*            S = cs_sqr(0, smat, 0);*/
+/*            N = cs_lu(smat, S, 1e-12);*/
+/*            fprintf(stderr, "S = %p, N = %p\n", S, N);*/
             if (cs_qrsol(1, smat, sb)) {
                 fprintf(stderr, "qrsol error!\n");
                 exit(255);
@@ -979,9 +989,9 @@ start_implicit:
         }
 
         if (k == 0) {
-            du0_norm = dnrm2_(&N, sb, &incx);
+            du0_norm = dnrm2_(&sldb, sb, &incx);
         }
-        du_norm = dnrm2_(&N, sb, &incx);
+        du_norm = dnrm2_(&sldb, sb, &incx);
 
         /* stopping timer */
         clock_gettime(CLOCK_REALTIME, &requestEnd);
@@ -1018,8 +1028,8 @@ start_implicit:
         }
 
         for (i = 0; i < job->num_nodes; i++) {
-            job->nodes[i].x_t = job->v_grid[2 * i];
-            job->nodes[i].y_t = job->v_grid[2 * i + 1];
+            job->nodes[i].x_t = job->v_grid[NODAL_DOF * i + XDOF_IDX];
+            job->nodes[i].y_t = job->v_grid[NODAL_DOF * i + YDOF_IDX];
         }
 
         calculate_strainrate(job);
@@ -1324,7 +1334,7 @@ void update_particle_densities(job_t *job)
 
     }
 
-        #define GRAD_THRESHOLD 0.5f
+        #define GRAD_THRESHOLD 0.25f
 
     for (i = 0; i < job->num_nodes; i++) {
         job->nodes[i].rho = job->nodes[i].mass_filled_element_neighbors / (job->nodes[i].num_filled_element_neighbors * job->h * job->h);
