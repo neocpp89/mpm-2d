@@ -269,9 +269,9 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->u_dirichlet = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
     job->u_dirichlet_mask = (int *)malloc(NODAL_DOF * sizeof(int) * job->num_nodes);
 
-    job->kku_grid = (double *)malloc(
-                        (NODAL_DOF * job->num_nodes) *
-                        (NODAL_DOF * sizeof(double) * job->num_nodes));
+/*    job->kku_grid = (double *)malloc(*/
+/*                        (NODAL_DOF * job->num_nodes) **/
+/*                        (NODAL_DOF * sizeof(double) * job->num_nodes));*/
 
     for (i = 0; i < job->vec_len; i++) {
         job->u_grid[i] = 0;
@@ -283,9 +283,9 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
         job->q_grid[i] = 0;
         job->f_int_grid[i] = 0;
     }
-    for (i = 0; i < (job->vec_len * job->vec_len); i++) {
-        job->kku_grid[i] = 0;
-    }
+/*    for (i = 0; i < (job->vec_len * job->vec_len); i++) {*/
+/*        job->kku_grid[i] = 0;*/
+/*    }*/
 
     for (i = 0; i < job->num_particles; i++) {
         job->in_element[i] = WHICH_ELEMENT(
@@ -594,6 +594,11 @@ void update_internal_stress(job_t *job)
         pyx = jdet * ((1 - dudx) * sxy - dudy * syy);
         pyy = jdet * ((-dvdx) * sxy + (1 - dvdy) * syy);
 
+/*        pxx = sxx;*/
+/*        pxy = sxy;*/
+/*        pyx = sxy;*/
+/*        pyy = syy;*/
+
         job->f_int_grid[NODAL_DOF * nn[0] + XDOF_IDX] += job->particles[i].v*(job->b11[i]*pxx + job->b21[i]*pxy);
         job->f_int_grid[NODAL_DOF * nn[0] + YDOF_IDX] += job->particles[i].v*(job->b11[i]*pyx + job->b21[i]*pyy);
         job->f_int_grid[NODAL_DOF * nn[1] + XDOF_IDX] += job->particles[i].v*(job->b12[i]*pxx + job->b22[i]*pxy);
@@ -609,150 +614,16 @@ void update_internal_stress(job_t *job)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void build_stiffness_matrix(job_t *job)
-{
-    int i;
-    int p;
-    int nn[4];
-    int lda = job->vec_len;
-
-    /* zero matrix first */
-    for (i = 0; i < (job->vec_len * job->vec_len); i++) {
-        job->kku_grid[i] = 0;
-    }
-
-    /* build with K_geo and K_mat */
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        p = job->in_element[i];
-        nn[0]  = job->elements[p].nodes[0];
-        nn[1]  = job->elements[p].nodes[1];
-        nn[2]  = job->elements[p].nodes[2];
-        nn[3]  = job->elements[p].nodes[3];
-
-    /* --- K_mat --- Symmetric? True --- */
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[0]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*pow(job->b21[i], 2) - 1.0*pow(job->b11[i], 2) - 0.5*pow(job->b21[i], 2))/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[0]+1] += ( 0.5*EMOD*job->b11[i]*job->b21[i]*job->particles[i].v/(-NUMOD + 1) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[1]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b21[i]*job->b22[i] - 1.0*job->b11[i]*job->b12[i] - 0.5*job->b21[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[1]+1] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b11[i]*job->b22[i] + 0.5*NUMOD*job->b12[i]*job->b21[i] - 0.5*job->b12[i]*job->b21[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[2]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b21[i]*job->b23[i] - 1.0*job->b11[i]*job->b13[i] - 0.5*job->b21[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[2]+1] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b11[i]*job->b23[i] + 0.5*NUMOD*job->b13[i]*job->b21[i] - 0.5*job->b13[i]*job->b21[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[3]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b21[i]*job->b24[i] - 1.0*job->b11[i]*job->b14[i] - 0.5*job->b21[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[3]+1] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b11[i]*job->b24[i] + 0.5*NUMOD*job->b14[i]*job->b21[i] - 0.5*job->b14[i]*job->b21[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[0]+0] += ( 0.5*EMOD*job->b11[i]*job->b21[i]*job->particles[i].v/(-NUMOD + 1) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[0]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*pow(job->b11[i], 2) - 0.5*pow(job->b11[i], 2) - 1.0*pow(job->b21[i], 2))/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[1]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b22[i] - 1.0*NUMOD*job->b12[i]*job->b21[i] - 0.5*job->b11[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[1]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b12[i] - 0.5*job->b11[i]*job->b12[i] - 1.0*job->b21[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[2]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b23[i] - 1.0*NUMOD*job->b13[i]*job->b21[i] - 0.5*job->b11[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[2]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b13[i] - 0.5*job->b11[i]*job->b13[i] - 1.0*job->b21[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[3]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b24[i] - 1.0*NUMOD*job->b14[i]*job->b21[i] - 0.5*job->b11[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[3]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b14[i] - 0.5*job->b11[i]*job->b14[i] - 1.0*job->b21[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[0]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b21[i]*job->b22[i] - 1.0*job->b11[i]*job->b12[i] - 0.5*job->b21[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[0]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b22[i] - 1.0*NUMOD*job->b12[i]*job->b21[i] - 0.5*job->b11[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[1]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*pow(job->b22[i], 2) - 1.0*pow(job->b12[i], 2) - 0.5*pow(job->b22[i], 2))/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[1]+1] += ( 0.5*EMOD*job->b12[i]*job->b22[i]*job->particles[i].v/(-NUMOD + 1) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[2]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b22[i]*job->b23[i] - 1.0*job->b12[i]*job->b13[i] - 0.5*job->b22[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[2]+1] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b12[i]*job->b23[i] + 0.5*NUMOD*job->b13[i]*job->b22[i] - 0.5*job->b13[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[3]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b22[i]*job->b24[i] - 1.0*job->b12[i]*job->b14[i] - 0.5*job->b22[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[3]+1] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b12[i]*job->b24[i] + 0.5*NUMOD*job->b14[i]*job->b22[i] - 0.5*job->b14[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[0]+0] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b11[i]*job->b22[i] + 0.5*NUMOD*job->b12[i]*job->b21[i] - 0.5*job->b12[i]*job->b21[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[0]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b12[i] - 0.5*job->b11[i]*job->b12[i] - 1.0*job->b21[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[1]+0] += ( 0.5*EMOD*job->b12[i]*job->b22[i]*job->particles[i].v/(-NUMOD + 1) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[1]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*pow(job->b12[i], 2) - 0.5*pow(job->b12[i], 2) - 1.0*pow(job->b22[i], 2))/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[2]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b12[i]*job->b23[i] - 1.0*NUMOD*job->b13[i]*job->b22[i] - 0.5*job->b12[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[2]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b12[i]*job->b13[i] - 0.5*job->b12[i]*job->b13[i] - 1.0*job->b22[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[3]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b12[i]*job->b24[i] - 1.0*NUMOD*job->b14[i]*job->b22[i] - 0.5*job->b12[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[3]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b12[i]*job->b14[i] - 0.5*job->b12[i]*job->b14[i] - 1.0*job->b22[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[0]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b21[i]*job->b23[i] - 1.0*job->b11[i]*job->b13[i] - 0.5*job->b21[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[0]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b23[i] - 1.0*NUMOD*job->b13[i]*job->b21[i] - 0.5*job->b11[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[1]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b22[i]*job->b23[i] - 1.0*job->b12[i]*job->b13[i] - 0.5*job->b22[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[1]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b12[i]*job->b23[i] - 1.0*NUMOD*job->b13[i]*job->b22[i] - 0.5*job->b12[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[2]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*pow(job->b23[i], 2) - 1.0*pow(job->b13[i], 2) - 0.5*pow(job->b23[i], 2))/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[2]+1] += ( 0.5*EMOD*job->b13[i]*job->b23[i]*job->particles[i].v/(-NUMOD + 1) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[3]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b23[i]*job->b24[i] - 1.0*job->b13[i]*job->b14[i] - 0.5*job->b23[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[3]+1] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b13[i]*job->b24[i] + 0.5*NUMOD*job->b14[i]*job->b23[i] - 0.5*job->b14[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[0]+0] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b11[i]*job->b23[i] + 0.5*NUMOD*job->b13[i]*job->b21[i] - 0.5*job->b13[i]*job->b21[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[0]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b13[i] - 0.5*job->b11[i]*job->b13[i] - 1.0*job->b21[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[1]+0] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b12[i]*job->b23[i] + 0.5*NUMOD*job->b13[i]*job->b22[i] - 0.5*job->b13[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[1]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b12[i]*job->b13[i] - 0.5*job->b12[i]*job->b13[i] - 1.0*job->b22[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[2]+0] += ( 0.5*EMOD*job->b13[i]*job->b23[i]*job->particles[i].v/(-NUMOD + 1) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[2]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*pow(job->b13[i], 2) - 0.5*pow(job->b13[i], 2) - 1.0*pow(job->b23[i], 2))/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[3]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b13[i]*job->b24[i] - 1.0*NUMOD*job->b14[i]*job->b23[i] - 0.5*job->b13[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[3]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b13[i]*job->b14[i] - 0.5*job->b13[i]*job->b14[i] - 1.0*job->b23[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[0]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b21[i]*job->b24[i] - 1.0*job->b11[i]*job->b14[i] - 0.5*job->b21[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[0]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b24[i] - 1.0*NUMOD*job->b14[i]*job->b21[i] - 0.5*job->b11[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[1]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b22[i]*job->b24[i] - 1.0*job->b12[i]*job->b14[i] - 0.5*job->b22[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[1]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b12[i]*job->b24[i] - 1.0*NUMOD*job->b14[i]*job->b22[i] - 0.5*job->b12[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[2]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b23[i]*job->b24[i] - 1.0*job->b13[i]*job->b14[i] - 0.5*job->b23[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[2]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b13[i]*job->b24[i] - 1.0*NUMOD*job->b14[i]*job->b23[i] - 0.5*job->b13[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[3]+0] += ( EMOD*job->particles[i].v*(0.5*NUMOD*pow(job->b24[i], 2) - 1.0*pow(job->b14[i], 2) - 0.5*pow(job->b24[i], 2))/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[3]+1] += ( 0.5*EMOD*job->b14[i]*job->b24[i]*job->particles[i].v/(-NUMOD + 1) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[0]+0] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b11[i]*job->b24[i] + 0.5*NUMOD*job->b14[i]*job->b21[i] - 0.5*job->b14[i]*job->b21[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[0]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b11[i]*job->b14[i] - 0.5*job->b11[i]*job->b14[i] - 1.0*job->b21[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[1]+0] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b12[i]*job->b24[i] + 0.5*NUMOD*job->b14[i]*job->b22[i] - 0.5*job->b14[i]*job->b22[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[1]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b12[i]*job->b14[i] - 0.5*job->b12[i]*job->b14[i] - 1.0*job->b22[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[2]+0] += ( EMOD*job->particles[i].v*(-1.0*NUMOD*job->b13[i]*job->b24[i] + 0.5*NUMOD*job->b14[i]*job->b23[i] - 0.5*job->b14[i]*job->b23[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[2]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*job->b13[i]*job->b14[i] - 0.5*job->b13[i]*job->b14[i] - 1.0*job->b23[i]*job->b24[i])/(pow(NUMOD, 2) - 1) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[3]+0] += ( 0.5*EMOD*job->b14[i]*job->b24[i]*job->particles[i].v/(-NUMOD + 1) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[3]+1] += ( EMOD*job->particles[i].v*(0.5*NUMOD*pow(job->b14[i], 2) - 0.5*pow(job->b14[i], 2) - 1.0*pow(job->b24[i], 2))/(pow(NUMOD, 2) - 1) );
-
-    /* --- K_geo --- Symmetric? True --- */
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[0]+0] += ( job->particles[i].v*(pow(job->b11[i], 2)*job->particles[i].sxx + 2*job->b11[i]*job->b21[i]*job->particles[i].sxy + pow(job->b21[i], 2)*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[1]+0] += ( job->particles[i].v*(job->b11[i]*job->b12[i]*job->particles[i].sxx + job->b11[i]*job->b22[i]*job->particles[i].sxy + job->b12[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b22[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[2]+0] += ( job->particles[i].v*(job->b11[i]*job->b13[i]*job->particles[i].sxx + job->b11[i]*job->b23[i]*job->particles[i].sxy + job->b13[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b23[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[0]+0)+2*nn[3]+0] += ( job->particles[i].v*(job->b11[i]*job->b14[i]*job->particles[i].sxx + job->b11[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[0]+1] += ( job->particles[i].v*(pow(job->b11[i], 2)*job->particles[i].sxx + 2*job->b11[i]*job->b21[i]*job->particles[i].sxy + pow(job->b21[i], 2)*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[1]+1] += ( job->particles[i].v*(job->b11[i]*job->b12[i]*job->particles[i].sxx + job->b11[i]*job->b22[i]*job->particles[i].sxy + job->b12[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b22[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[2]+1] += ( job->particles[i].v*(job->b11[i]*job->b13[i]*job->particles[i].sxx + job->b11[i]*job->b23[i]*job->particles[i].sxy + job->b13[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b23[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[0]+1)+2*nn[3]+1] += ( job->particles[i].v*(job->b11[i]*job->b14[i]*job->particles[i].sxx + job->b11[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[0]+0] += ( job->particles[i].v*(job->b11[i]*job->b12[i]*job->particles[i].sxx + job->b11[i]*job->b22[i]*job->particles[i].sxy + job->b12[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b22[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[1]+0] += ( job->particles[i].v*(pow(job->b12[i], 2)*job->particles[i].sxx + 2*job->b12[i]*job->b22[i]*job->particles[i].sxy + pow(job->b22[i], 2)*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[2]+0] += ( job->particles[i].v*(job->b12[i]*job->b13[i]*job->particles[i].sxx + job->b12[i]*job->b23[i]*job->particles[i].sxy + job->b13[i]*job->b22[i]*job->particles[i].sxy + job->b22[i]*job->b23[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[1]+0)+2*nn[3]+0] += ( job->particles[i].v*(job->b12[i]*job->b14[i]*job->particles[i].sxx + job->b12[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b22[i]*job->particles[i].sxy + job->b22[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[0]+1] += ( job->particles[i].v*(job->b11[i]*job->b12[i]*job->particles[i].sxx + job->b11[i]*job->b22[i]*job->particles[i].sxy + job->b12[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b22[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[1]+1] += ( job->particles[i].v*(pow(job->b12[i], 2)*job->particles[i].sxx + 2*job->b12[i]*job->b22[i]*job->particles[i].sxy + pow(job->b22[i], 2)*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[2]+1] += ( job->particles[i].v*(job->b12[i]*job->b13[i]*job->particles[i].sxx + job->b12[i]*job->b23[i]*job->particles[i].sxy + job->b13[i]*job->b22[i]*job->particles[i].sxy + job->b22[i]*job->b23[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[1]+1)+2*nn[3]+1] += ( job->particles[i].v*(job->b12[i]*job->b14[i]*job->particles[i].sxx + job->b12[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b22[i]*job->particles[i].sxy + job->b22[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[0]+0] += ( job->particles[i].v*(job->b11[i]*job->b13[i]*job->particles[i].sxx + job->b11[i]*job->b23[i]*job->particles[i].sxy + job->b13[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b23[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[1]+0] += ( job->particles[i].v*(job->b12[i]*job->b13[i]*job->particles[i].sxx + job->b12[i]*job->b23[i]*job->particles[i].sxy + job->b13[i]*job->b22[i]*job->particles[i].sxy + job->b22[i]*job->b23[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[2]+0] += ( job->particles[i].v*(pow(job->b13[i], 2)*job->particles[i].sxx + 2*job->b13[i]*job->b23[i]*job->particles[i].sxy + pow(job->b23[i], 2)*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[2]+0)+2*nn[3]+0] += ( job->particles[i].v*(job->b13[i]*job->b14[i]*job->particles[i].sxx + job->b13[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b23[i]*job->particles[i].sxy + job->b23[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[0]+1] += ( job->particles[i].v*(job->b11[i]*job->b13[i]*job->particles[i].sxx + job->b11[i]*job->b23[i]*job->particles[i].sxy + job->b13[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b23[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[1]+1] += ( job->particles[i].v*(job->b12[i]*job->b13[i]*job->particles[i].sxx + job->b12[i]*job->b23[i]*job->particles[i].sxy + job->b13[i]*job->b22[i]*job->particles[i].sxy + job->b22[i]*job->b23[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[2]+1] += ( job->particles[i].v*(pow(job->b13[i], 2)*job->particles[i].sxx + 2*job->b13[i]*job->b23[i]*job->particles[i].sxy + pow(job->b23[i], 2)*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[2]+1)+2*nn[3]+1] += ( job->particles[i].v*(job->b13[i]*job->b14[i]*job->particles[i].sxx + job->b13[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b23[i]*job->particles[i].sxy + job->b23[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[0]+0] += ( job->particles[i].v*(job->b11[i]*job->b14[i]*job->particles[i].sxx + job->b11[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[1]+0] += ( job->particles[i].v*(job->b12[i]*job->b14[i]*job->particles[i].sxx + job->b12[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b22[i]*job->particles[i].sxy + job->b22[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[2]+0] += ( job->particles[i].v*(job->b13[i]*job->b14[i]*job->particles[i].sxx + job->b13[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b23[i]*job->particles[i].sxy + job->b23[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[3]+0)+2*nn[3]+0] += ( job->particles[i].v*(pow(job->b14[i], 2)*job->particles[i].sxx + 2*job->b14[i]*job->b24[i]*job->particles[i].sxy + pow(job->b24[i], 2)*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[0]+1] += ( job->particles[i].v*(job->b11[i]*job->b14[i]*job->particles[i].sxx + job->b11[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b21[i]*job->particles[i].sxy + job->b21[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[1]+1] += ( job->particles[i].v*(job->b12[i]*job->b14[i]*job->particles[i].sxx + job->b12[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b22[i]*job->particles[i].sxy + job->b22[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[2]+1] += ( job->particles[i].v*(job->b13[i]*job->b14[i]*job->particles[i].sxx + job->b13[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b23[i]*job->particles[i].sxy + job->b23[i]*job->b24[i]*job->particles[i].syy) );
-    job->kku_grid[lda*(2*nn[3]+1)+2*nn[3]+1] += ( job->particles[i].v*(pow(job->b14[i], 2)*job->particles[i].sxx + 2*job->b14[i]*job->b24[i]*job->particles[i].sxy + pow(job->b24[i], 2)*job->particles[i].syy) );
-    }
-
-    for (i = 0; i < (job->vec_len * job->vec_len); i++) {
-        job->kku_grid[i] *= (job->dt * job->dt);
-    }
-
-    /* diagonal mass matrix */
-    for (i = 0; i < job->vec_len; i++) {
-        if (job->m_grid[i] > TOL) {
-            job->kku_grid[i + lda * i] += 4 * job->m_grid[i];
-        }
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
 void implicit_solve(job_t *job)
 {
     int i, j;
     int r, s;
     int m, n;
+
+    /* global and elemental indicies */
+    int gi, gj;
+    int ei, ej;
+    double ke;
 
     /* lapack related*/
     int lda, ldb;
@@ -781,6 +652,7 @@ void implicit_solve(job_t *job)
     cs *triplets;
     cs *smat;
     double *sb;
+    int res = 0;
 
     /* for small timestep */
     double inv_dt = 1.0 / job->dt;
@@ -824,11 +696,6 @@ start_implicit:
 
         /* starting timer */
         clock_gettime(CLOCK_REALTIME, &requestStart);
-        for (i = 0; i < lda; i++) {
-            for (j = 0; j < lda; j++) {
-                job->kku_grid[lda * i + j] = 0;
-            }
-        }
 
         /* Generate and apply dirichlet boundary conditions given in BC file. */
         generate_dirichlet_bcs(job);
@@ -858,8 +725,13 @@ start_implicit:
             if (job->elements[i].filled != 0) {
                 nnz += (NODAL_DOF * NODES_PER_ELEMENT) *
                         (NODAL_DOF * NODES_PER_ELEMENT);
+                nnz += NODAL_DOF; /* for diagonal mass matrix entries. */
             }
         }
+
+        /* allocate triplet array. */
+        fprintf(stderr, "%d nonzeros (including duplicates) in K, which has size [%d x %d].\n", nnz, slda, slda);
+        triplets = cs_spalloc(slda, slda, nnz, 1, 1);
 
         /* Calculate right hand side (load):
                 Q = f_ext - f_int - M_g * (4 * u / dt^2 - 4 * v / dt - a) */
@@ -881,11 +753,44 @@ start_implicit:
                 nn[1] = job->elements[i].nodes[1];
                 nn[2] = job->elements[i].nodes[2];
                 nn[3] = job->elements[i].nodes[3];
+                /*
+                    This presumes that the element level stiffness matrices are
+                    written as (x1, y1, c1, .... , x4, y4, c4) where the
+                    numbers indicate local node and the variable names are
+                    nodal degrees of freedom.
+                */
                 for (r = 0; r < NODES_PER_ELEMENT; r++) {
                     for (m = 0; m < NODAL_DOF; m++) {
                         for (s = 0; s < NODES_PER_ELEMENT; s++) {
                             for (n = 0; n < NODAL_DOF; n++) {
-                                job->kku_grid[lda * (NODAL_DOF * nn[r] + m) + (NODAL_DOF * nn[s] + n)] += job->elements[i].kku_element[NODAL_DOF * r + m][NODAL_DOF * s + n];
+                                gi = NODAL_DOF * nn[r] + m;
+                                gj = NODAL_DOF * nn[s] + n;
+                                ei = NODAL_DOF * r + m;
+                                ej = NODAL_DOF * s + n;
+                                ke = job->elements[i].kku_element[ei][ej];
+
+                                /*
+                                    If the global index is masked, don't add it
+                                    to the sparse matrix.
+                                */
+                                if (job->u_dirichlet_mask[gi] != 0) {
+                                    continue;
+                                }
+
+                                /* adjust load for dirichlet bcs. */
+                                if (job->u_dirichlet_mask[gj] != 0) {
+                                    job->q_grid[gi] += (-job->u_dirichlet[gj] * ke);
+                                    continue;
+                                }
+
+                                res = cs_entry(triplets,
+                                        job->node_u_map[gi],
+                                        job->node_u_map[gj],
+                                        ke);
+
+                                if (res == 0) {
+                                    fprintf(stderr, "error adding stiffness entry\n");
+                                }
                             }
                         }
                     }
@@ -893,12 +798,22 @@ start_implicit:
             }
         }
 
-        /* add diagonal mass matrix term */
-        for (i = 0; i < job->vec_len; i++) {
-            if (job->m_grid[i] > TOL) {
-                job->kku_grid[i + lda * i] += 4 * job->m_grid[i];
+        for (i = 0; i < lda; i++) {
+            if (job->node_u_map[i] != -1) {
+                /* add diagonal mass matrix entries to
+                    displacement dofs. */
+
+                res = cs_entry(triplets,
+                        job->node_u_map[i],
+                        job->node_u_map[i],
+                        4 * job->m_grid[i]);
+
+                if (res == 0) {
+                    fprintf(stderr, "error adding mass entry\n");
+                }
             }
         }
+
         /* stopping timer */
         clock_gettime(CLOCK_REALTIME, &requestEnd);
 
@@ -919,52 +834,21 @@ start_implicit:
             job->particles[i].syy = job->particles[i].real_syy;
         }
 
-        for (i = 0; i < lda; i++) {
-                if (job->u_dirichlet_mask[i] != 0) {
-                    /*
-                        remember to remove this DOF when building the matrix
-                        later!
-                    */
-                    for (j = 0; j < lda; j++) {
-                            job->q_grid[i] += (-job->u_dirichlet[i] * job->kku_grid[lda * j + i]);
-                    }
-                }
-        }
-
-        /* build sparse matrix version */
-        nnz = 0;
-        for (i = 0; i < lda; i++) {
-            for (j = 0; j < lda; j++) {
-                if (job->kku_grid[lda * i + j] != 0.0 &&
-                        (job->u_dirichlet_mask[i] == 0 &&
-                        job->u_dirichlet_mask[j] == 0)) {
-                    nnz++;
-                }
-            }
-        }
-
-        fprintf(stderr, "%d nonzeros in K, which has size [%d x %d].\n", nnz, slda, slda);
-        triplets = cs_spalloc(slda, slda, nnz, 1, 1);
         sb = (double *)malloc(slda * sizeof(double));
         for (i = 0; i < slda; i++) {
             sb[i] = job->q_grid[job->inv_node_u_map[i]];
         }
 
-        int res = 0;
-        for (j = 0; j < slda; j++) {
-            for (i = 0; i < slda; i++) {
-                if (job->kku_grid[lda * job->inv_node_u_map[j] + job->inv_node_u_map[i]] != 0.0) {
-                    res = cs_entry(triplets,
-                            j, i,
-                            job->kku_grid[lda * job->inv_node_u_map[j] + job->inv_node_u_map[i]]);
-                    if (res == 0) {
-                        fprintf(stderr, "error adding entry\n");
-                    }
-                }
-            }
-        }
-
+        /* change to compressed format to sum up entries. */
         smat = cs_compress(triplets);
+
+        /* sum entries with same indicies. */
+        res = cs_dupl(smat);
+
+        if (res == 0) {
+            fprintf(stderr, "error summing entries\n");
+            exit(255);
+        }
 
         /* starting timer */
         clock_gettime(CLOCK_REALTIME, &requestStart);
@@ -977,11 +861,6 @@ start_implicit:
 
         if (!cs_lusol(1, smat, sb, 1e-12)) {
             fprintf(stderr, "lusol error!\n");
-/*            css *S;*/
-/*            csn *N;*/
-/*            S = cs_sqr(0, smat, 0);*/
-/*            N = cs_lu(smat, S, 1e-12);*/
-/*            fprintf(stderr, "S = %p, N = %p\n", S, N);*/
             if (cs_qrsol(1, smat, sb)) {
                 fprintf(stderr, "qrsol error!\n");
                 exit(255);
@@ -1081,14 +960,14 @@ start_implicit:
 
     /* repackage for use with macros */
     for (i = 0; i < job->num_nodes; i++) {
-        job->nodes[i].x_tt = job->a_grid[2 * i];
-        job->nodes[i].y_tt = job->a_grid[2 * i + 1];
+        job->nodes[i].x_tt = job->a_grid[NODAL_DOF * i + XDOF_IDX];
+        job->nodes[i].y_tt = job->a_grid[NODAL_DOF * i + YDOF_IDX];
 
-        job->nodes[i].x_t = job->v_grid[2 * i];
-        job->nodes[i].y_t = job->v_grid[2 * i + 1];
+        job->nodes[i].x_t = job->v_grid[NODAL_DOF * i + XDOF_IDX];
+        job->nodes[i].y_t = job->v_grid[NODAL_DOF * i + YDOF_IDX];
 
-        job->nodes[i].ux = job->u_grid[2 * i];
-        job->nodes[i].uy = job->u_grid[2 * i + 1];
+        job->nodes[i].ux = job->u_grid[NODAL_DOF * i + XDOF_IDX];
+        job->nodes[i].uy = job->u_grid[NODAL_DOF * i + YDOF_IDX];
     }
 
     free(v_grid_t);
