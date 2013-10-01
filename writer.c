@@ -283,6 +283,9 @@ void write_element_frame(FILE *fd, int frame, double time, job_t *job)
     }
 
     for (i = 0; i < job->num_particles; i++) {
+        if (job->particles[i].active == 0) {
+            continue;
+        }
         e = job->in_element[i];
         sxx_acc[e] += job->particles[i].v * job->particles[i].sxx;
         sxy_acc[e] += job->particles[i].v * job->particles[i].sxy;

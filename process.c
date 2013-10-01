@@ -21,7 +21,7 @@
 /*#include <omp.h>*/
 #include <signal.h>
 
-#define TOL 1e-10
+#define TOL 1e-16
 
 #define signum(x) ((int)((0 < x) - (x < 0)))
 
@@ -398,11 +398,6 @@ void create_particle_to_element_map(job_t *job)
 
     for (i = 0; i < job->num_particles; i++) {
         CHECK_ACTIVE(job, i);
-        
-    }
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
         p = WHICH_ELEMENT(
             job->particles[i].x, job->particles[i].y, job->N, job->h);
 
@@ -594,10 +589,10 @@ void update_internal_stress(job_t *job)
         pyx = jdet * ((1 - dudx) * sxy - dudy * syy);
         pyy = jdet * ((-dvdx) * sxy + (1 - dvdy) * syy);
 
-/*        pxx = sxx;*/
-/*        pxy = sxy;*/
-/*        pyx = sxy;*/
-/*        pyy = syy;*/
+        pxx = sxx;
+        pxy = sxy;
+        pyx = sxy;
+        pyy = syy;
 
         job->f_int_grid[NODAL_DOF * nn[0] + XDOF_IDX] += job->particles[i].v*(job->b11[i]*pxx + job->b21[i]*pxy);
         job->f_int_grid[NODAL_DOF * nn[0] + YDOF_IDX] += job->particles[i].v*(job->b11[i]*pyx + job->b21[i]*pyy);
@@ -1009,7 +1004,7 @@ void map_to_grid(job_t *job)
 
         /* need previous timestep's acceleration for implicit method */
         if (job->nodes[i].m > TOL) {
-            job->a_grid[NODAL_DOF * i + XDOF_IDX] =  job->nodes[i].mx_tt / job->nodes[i].m;
+            job->a_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].mx_tt / job->nodes[i].m;
             job->a_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].my_tt  / job->nodes[i].m;
         } else {
             job->a_grid[NODAL_DOF * i + XDOF_IDX] = 0;
@@ -1213,7 +1208,7 @@ void update_particle_densities(job_t *job)
 
     }
 
-        #define GRAD_THRESHOLD 0.25f
+        #define GRAD_THRESHOLD 0.50f
 
     for (i = 0; i < job->num_nodes; i++) {
         job->nodes[i].rho = job->nodes[i].mass_filled_element_neighbors / (job->nodes[i].num_filled_element_neighbors * job->h * job->h);
@@ -1221,12 +1216,13 @@ void update_particle_densities(job_t *job)
 
     for (i = 0; i < job->num_particles; i++) {
         CHECK_ACTIVE(job, i);
-    /* XXX: Trololololol. Can't believe this looks so good :O
-        -- not correct though, fix soon! */
-/*        job->particles[i].v = job->h * job->h / (2 * job->elements[job->in_element[i]].n);*/
 
         /* Fixed version */
-        job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);
+/*        if (job->elements[job->in_element[i]].grad_mag > GRAD_THRESHOLD) {*/
+/*            job->particles[i].v = job->particles[i].v * exp (job->dt * (job->particles[i].exx_t + job->particles[i].eyy_t));*/
+/*        } else {*/
+            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);
+/*        }*/
     }
 
     return;

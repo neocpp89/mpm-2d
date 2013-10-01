@@ -11,6 +11,8 @@
 #include "process.h"
 #include "material.h"
 
+#define CHECK_ACTIVE(j,i) if (j->particles[i].active == 0) { continue; }
+
 void build_elemental_stiffness(job_t *job);
 void add_particle_stiffness(int idx, job_t *job);
 
@@ -36,8 +38,12 @@ void build_elemental_stiffness(job_t *job)
 {
     int i, j, k;
 
-    /* clear all elements */
+    /* clear all filled elements */
     for (i = 0; i < job->num_elements; i++) {
+        if (job->elements[i].filled == 0) {
+            continue;
+        }
+
         for (j = 0; j < (NODAL_DOF * NODES_PER_ELEMENT); j++) {
             for (k = 0; k < (NODAL_DOF * NODES_PER_ELEMENT); k++) {
                 job->elements[i].kku_element[j][k] = 0;
@@ -47,6 +53,7 @@ void build_elemental_stiffness(job_t *job)
     }
 
     for (i = 0; i < job->num_particles; i++) {
+        CHECK_ACTIVE(job, i);
         add_particle_stiffness(i, job);
     }
 
