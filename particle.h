@@ -10,6 +10,10 @@
 
 #define DEPVAR 11
 
+/* shape function related indicies in arrays */
+#define S_XIDX 0
+#define S_YIDX 1
+
 typedef struct particle_s {
     /* Position */
     double x;
@@ -69,14 +73,14 @@ typedef struct particle_s {
     /* Material Type */
     int material;
 
-#if 0
-    /* Shapefunctions */
-    double h[9];
+    /* Shapefunctions (follows same nodal numbering as element) */
+    double s[4];
 
     /* Gradient of Shapefunctions */
-    double b1[9];
-    double b2[9];
-#endif
+    double grad_s[4][2];
+
+    /* which element is the particle in? */
+    int element;
 
     /* acceleration */
     double x_tt;
@@ -100,9 +104,17 @@ typedef struct particle_s {
     /* matrix of corner positions c[corner#][x or y] */
     double corners[4][2];
 
+    /* matrix of corner positions in local coordinates in appropriate element */
+    double cornersl[4][2];
+
+    /* shapefunctions for corner points sc[corner#][node#] */
+    double sc[4][4];
+
+    /* gradient of shapefunctions for corner points sc[corner#][node#][x or y] */
+    double grad_sc[4][4][2];
+
     /* which elements are the corners in? */
     int corner_elements[4];
-
 } particle_t;
 
 /*

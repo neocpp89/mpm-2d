@@ -44,17 +44,6 @@
 
 /*#define QUAD_ELEMENTS*/
 
-/* trololololol */
-#define h1(j,i) j->particles[i].h[0]
-#define h2(j,i) j->particles[i].h[1]
-#define h3(j,i) j->particles[i].h[2]
-#define h4(j,i) j->particles[i].h[3]
-#define h5(j,i) j->particles[i].h[4]
-#define h6(j,i) j->particles[i].h[5]
-#define h7(j,i) j->particles[i].h[6]
-#define h8(j,i) j->particles[i].h[7]
-#define h9(j,i) j->particles[i].h[8]
-
 #define SMEAR SMEAR4
 #define ACCUMULATE ACCUMULATE4
 #define ACCUMULATE_WITH_MUL ACCUMULATE_WITH_MUL4
@@ -65,8 +54,14 @@
 #define __N(j,p,n) j->elements[__E(j,p)].nodes[n]
 #define __NE(j,e,n) j->elements[e].nodes[n]
 
+#if 0
 #define WHICH_ELEMENT4(xp,yp,N,h) \
     (floor(xp/h) + floor(yp/h)*(N-1))
+#endif
+
+/* XXX: ugly, fix soon */
+#define WHICH_ELEMENT4(xp,yp,N,h) \
+    
 
 #define ACCUMULATE4(acc_tok,j,tok,i,n,s) \
     j->nodes[__N(j,i,0)].acc_tok += j->s ## 1[i] * j->particles[i].tok; \
@@ -1115,35 +1110,35 @@ void update_particle_vectors(job_t *job)
 void update_corner_positions(job_t *job)
 {
     int i, j;
-#define XIDX 0
-#define YIDX 1
     for (i = 0; i < job->num_particles; i++) {
-        job->particles[i].corners[0][XIDX] = job->particles[i].x +
-            job->particles[i].r1[XIDX] + job->particles[i].r2[XIDX];
-        job->particles[i].corners[0][YIDX] = job->particles[i].y +
-            job->particles[i].r1[YIDX] + job->particles[i].r2[YIDX];
+        /* Find corner positions from (adjusted) vectors. */
+        job->particles[i].corners[0][S_XIDX] = job->particles[i].x +
+            job->particles[i].r1[S_XIDX] + job->particles[i].r2[S_XIDX];
+        job->particles[i].corners[0][S_YIDX] = job->particles[i].y +
+            job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX];
 
-        job->particles[i].corners[1][XIDX] = job->particles[i].x -
-            job->particles[i].r1[XIDX] + job->particles[i].r2[XIDX];
-        job->particles[i].corners[1][YIDX] = job->particles[i].y -
-            job->particles[i].r1[YIDX] + job->particles[i].r2[YIDX];
+        job->particles[i].corners[1][S_XIDX] = job->particles[i].x -
+            job->particles[i].r1[S_XIDX] + job->particles[i].r2[S_XIDX];
+        job->particles[i].corners[1][S_YIDX] = job->particles[i].y -
+            job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX];
 
-        job->particles[i].corners[2][XIDX] = job->particles[i].x -
-            job->particles[i].r1[XIDX] - job->particles[i].r2[XIDX];
-        job->particles[i].corners[2][YIDX] = job->particles[i].y -
-            job->particles[i].r1[YIDX] - job->particles[i].r2[YIDX];
+        job->particles[i].corners[2][S_XIDX] = job->particles[i].x -
+            job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX];
+        job->particles[i].corners[2][S_YIDX] = job->particles[i].y -
+            job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX];
 
-        job->particles[i].corners[3][XIDX] = job->particles[i].x +
-            job->particles[i].r1[XIDX] - job->particles[i].r2[XIDX];
-        job->particles[i].corners[3][YIDX] = job->particles[i].y +
-            job->particles[i].r1[YIDX] - job->particles[i].r2[YIDX];
+        job->particles[i].corners[3][S_XIDX] = job->particles[i].x +
+            job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX];
+        job->particles[i].corners[3][S_YIDX] = job->particles[i].y +
+            job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX];
 
         for (j = 0; j < 4; j++) {
-            job->particles[i].corner_elements[j] = WHICH_ELEMENT(job->particles[i].corners[j][XIDX], job->particles[i].corners[j][YIDX], job->N, job->h);
+            /* Figure out which element each corner is in. */
+            job->particles[i].corner_elements[j] = WHICH_ELEMENT(job->particles[i].corners[j][S_XIDX], job->particles[i].corners[j][S_YIDX], job->N, job->h);
+
+            /* calculate local coordinates of  */
         }
     }
-#undef XIDX
-#undef YIDX
 
     return;
 }
