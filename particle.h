@@ -37,12 +37,6 @@ typedef struct particle_s {
     double sxy;
     double syy;
 
-    /* Stress deviator (shares sxy). */
-    /*double sdevxx;
-    double sdevxy;
-    double sdevyy;
-    double sdevmag;*/
-
     /* Strain rate */
     double exx_t;
     double exy_t;
@@ -94,6 +88,21 @@ typedef struct particle_s {
     double real_syy;
     double real_state[DEPVAR];
 
+    /* inital 'vertical' and 'horizontal' vectors.
+        initial volume should be given by magnitude (r_v cross r_h). */
+    double r1_initial[2];
+    double r2_initial[2];
+
+    /* current vertical and horizontal vectors. */
+    double r1[2];
+    double r2[2];
+
+    /* matrix of corner positions c[corner#][x or y] */
+    double corners[4][2];
+
+    /* which elements are the corners in? */
+    int corner_elements[4];
+
 } particle_t;
 
 /*
@@ -103,10 +112,5 @@ typedef struct particle_s {
 void global_to_local_coords(double *x_local, double *y_local, 
     double x, double y, 
     double x_ref, double y_ref, double h);
-
-/*
-    Determine which element a particle is currently in.
-*/
-int which_element(double x_particle, double y_particle, int N, double h);
 #endif
 

@@ -26,7 +26,6 @@
 #define signum(x) ((int)((0 < x) - (x < 0)))
 
 #define ijton(i,j,N) ((j)*N + (i))
-#define linidx_fortran(i,j,C) ((i)*C + (j))
 #define N_TO_P(j,tok,i) SMEAR(j,tok,i,h)
 #define DX_N_TO_P(j,tok,c,i) (c) * SMEAR(j,tok,i,b1)
 #define DY_N_TO_P(j,tok,c,i) (c) * SMEAR(j,tok,i,b2)
@@ -35,11 +34,13 @@
     (((r) < (N)) && ((r) >= 0) && ((c) < (N)) && ((c) >= 0))
 
 #define FILL_ELEMENT_NEIGHBOR(en,r,c,N) \
-    if (IS_VALID_ELEMENT_COORD((r),(c),(N))) { \
-        en = (r)*(N) + (c); \
-    } else { \
-        en = -1; \
-    }
+    do { \
+        if (IS_VALID_ELEMENT_COORD((r),(c),(N))) { \
+            en = (r)*(N) + (c); \
+        } else { \
+            en = -1; \
+        } \
+    } while(0)
 
 /*#define QUAD_ELEMENTS*/
 
@@ -54,18 +55,11 @@
 #define h8(j,i) j->particles[i].h[7]
 #define h9(j,i) j->particles[i].h[8]
 
-#ifdef QUAD_ELEMENTS
-    #define SMEAR SMEAR9
-    #define ACCUMULATE ACCUMULATE9
-    #define ACCUMULATE_WITH_MUL ACCUMULATE_WITH_MUL9
-    #define WHICH_ELEMENT WHICH_ELEMENT9
-#else
-    #define SMEAR SMEAR4
-    #define ACCUMULATE ACCUMULATE4
-    #define ACCUMULATE_WITH_MUL ACCUMULATE_WITH_MUL4
-    #define WHICH_ELEMENT WHICH_ELEMENT4
-    #define IS_VALID_ELEMENT_COORD IS_VALID_ELEMENT_COORD4
-#endif
+#define SMEAR SMEAR4
+#define ACCUMULATE ACCUMULATE4
+#define ACCUMULATE_WITH_MUL ACCUMULATE_WITH_MUL4
+#define WHICH_ELEMENT WHICH_ELEMENT4
+#define IS_VALID_ELEMENT_COORD IS_VALID_ELEMENT_COORD4
 
 #define __E(j,p) j->in_element[p]
 #define __N(j,p,n) j->elements[__E(j,p)].nodes[n]
@@ -74,22 +68,11 @@
 #define WHICH_ELEMENT4(xp,yp,N,h) \
     (floor(xp/h) + floor(yp/h)*(N-1))
 
-#define WHICH_ELEMENT9(xp,yp,N,h) \
-    (floor(xp/(2*h)) + floor(yp/(2*h))*(N-1)/2)
-
 #define ACCUMULATE4(acc_tok,j,tok,i,n,s) \
     j->nodes[__N(j,i,0)].acc_tok += j->s ## 1[i] * j->particles[i].tok; \
     j->nodes[__N(j,i,1)].acc_tok += j->s ## 2[i] * j->particles[i].tok; \
     j->nodes[__N(j,i,2)].acc_tok += j->s ## 3[i] * j->particles[i].tok; \
     j->nodes[__N(j,i,3)].acc_tok += j->s ## 4[i] * j->particles[i].tok;
-
-#define ACCUMULATE9(acc_tok,j,tok,i,n,s) \
-    ACCUMULATE4(acc_tok,j,tok,i,n,s); \
-    j->nodes[__N(j,i,4)].acc_tok += j->s ## 5[i] * j->particles[i].tok; \
-    j->nodes[__N(j,i,5)].acc_tok += j->s ## 6[i] * j->particles[i].tok; \
-    j->nodes[__N(j,i,6)].acc_tok += j->s ## 7[i] * j->particles[i].tok; \
-    j->nodes[__N(j,i,7)].acc_tok += j->s ## 8[i] * j->particles[i].tok; \
-    j->nodes[__N(j,i,8)].acc_tok += j->s ## 9[i] * j->particles[i].tok;
 
 #define ACCUMULATE_WITH_MUL4(acc_tok,j,tok,i,n,s,c) \
     j->nodes[__N(j,i,0)].acc_tok += j->s ## 1[i] * j->particles[i].tok * (c); \
@@ -97,28 +80,11 @@
     j->nodes[__N(j,i,2)].acc_tok += j->s ## 3[i] * j->particles[i].tok * (c); \
     j->nodes[__N(j,i,3)].acc_tok += j->s ## 4[i] * j->particles[i].tok * (c);
 
-#define ACCUMULATE_WITH_MUL9(acc_tok,j,tok,i,n,s,c) \
-    ACCUMULATE_WITH_MUL4(acc_tok,j,tok,i,n,s,c); \
-    j->nodes[__N(j,i,4)].acc_tok += j->s ## 5[i] * j->particles[i].tok * (c); \
-    j->nodes[__N(j,i,5)].acc_tok += j->s ## 6[i] * j->particles[i].tok * (c); \
-    j->nodes[__N(j,i,6)].acc_tok += j->s ## 7[i] * j->particles[i].tok * (c); \
-    j->nodes[__N(j,i,7)].acc_tok += j->s ## 8[i] * j->particles[i].tok * (c); \
-    j->nodes[__N(j,i,8)].acc_tok += j->s ## 9[i] * j->particles[i].tok * (c);
-
 #define SMEAR4(j,tok,i,s) ( \
     j->s ## 1[i] * j->nodes[__N(j,i,0)].tok + \
     j->s ## 2[i] * j->nodes[__N(j,i,1)].tok + \
     j->s ## 3[i] * j->nodes[__N(j,i,2)].tok + \
     j->s ## 4[i] * j->nodes[__N(j,i,3)].tok \
-)
-
-#define SMEAR9(j,tok,i,s) ( \
-    SMEAR4(j,tok,i,s) + \
-    j->s ## 5[i] * j->nodes[__N(j,i,4)].tok + \
-    j->s ## 6[i] * j->nodes[__N(j,i,5)].tok + \
-    j->s ## 7[i] * j->nodes[__N(j,i,6)].tok + \
-    j->s ## 8[i] * j->nodes[__N(j,i,7)].tok + \
-    j->s ## 9[i] * j->nodes[__N(j,i,8)].tok \
 )
 
 #define CHECK_ACTIVE(j,i) if (j->particles[i].active == 0) { continue; }
@@ -307,6 +273,10 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
         /* seems backwards, but only because loader contains
         current particle volume only. */
         job->particles[i].v0 = job->particles[i].v;
+        job->particles[i].r1_initial[0] = 0.5 * sqrt(job->particles[i].v0);
+        job->particles[i].r1_initial[1] = 0;
+        job->particles[i].r2_initial[0] = 0;
+        job->particles[i].r2_initial[1] = 0.5 * sqrt(job->particles[i].v0);
     }
 
     /* intialize state variables */
@@ -373,6 +343,11 @@ void mpm_step(job_t *job)
 
     /* Update particle position and velocity. */
     move_particles(job);
+
+    /* update deformation gradient, vectors and corners. */
+    update_deformation_gradient(job);
+    update_particle_vectors(job);
+    update_corner_positions(job);
 
     /* update volume */
     update_particle_densities(job);
@@ -1054,65 +1029,121 @@ void move_particles(job_t *job)
 /*----------------------------------------------------------------------------*/
 void update_deformation_gradient(job_t *job)
 {
-/*    #pragma omp parallel*/
-/*    {*/
-        int i;
+    int i;
 
-        double delta;
-        double delta_inv;
-        double m11, m12, m21, m22;
-        double a, b, c, d;
-        double cd, sd, f;
-        double dsq;
-        double tmp_Fxx;
-        double tmp_Fxy;
-        double tmp_Fyx;
-        double tmp_Fyy;
+    double delta;
+    double delta_inv;
+    double m11, m12, m21, m22;
+    double a, b, c, d;
+    double cd, sd, f;
+    double dsq;
+    double tmp_Fxx;
+    double tmp_Fxy;
+    double tmp_Fyx;
+    double tmp_Fyy;
 
-/*        #pragma omp for*/
-        for (i = 0; i < job->num_particles; i++) {
-            CHECK_ACTIVE(job, i);
+    for (i = 0; i < job->num_particles; i++) {
+        CHECK_ACTIVE(job, i);
 
-            a = job->dt * DX_N_TO_P(job, x_t, 1, i);
-            b = job->dt * DY_N_TO_P(job, x_t, 1, i);
-            c = job->dt * DX_N_TO_P(job, y_t, 1, i);
-            d = job->dt * DY_N_TO_P(job, y_t, 1, i);
+        a = job->dt * DX_N_TO_P(job, x_t, 1, i);
+        b = job->dt * DY_N_TO_P(job, x_t, 1, i);
+        c = job->dt * DX_N_TO_P(job, y_t, 1, i);
+        d = job->dt * DY_N_TO_P(job, y_t, 1, i);
 
-            dsq = (a - d) * (a - d) + 4 * b * c;
-            delta = 0.5 * sqrt(abs(dsq));
-            delta_inv = (1.0f / delta);
-            if (dsq == 0 || delta < 1e-15) {
-                cd = 1;
-                sd = 1;
-                delta_inv = 1;
-            } else if (dsq > 0) {
-                cd = cosh(delta);
-                sd = sinh(delta);
-            } else {
-                cd = cos(delta);
-                sd = sin(delta);
-            }
-
-            m11 = cd + 0.5 * (a - d) * sd * delta_inv;
-            m12 = b * sd * delta_inv;
-            m21 = c * sd * delta_inv;
-            m22 = cd - 0.5 * (a - d) * sd * delta_inv;
-
-            f = exp(0.5 * (a + d));
-            tmp_Fxx = f * (m11);
-            tmp_Fxy = f * (m12);
-            tmp_Fyx = f * (m21);
-            tmp_Fyy = f * (m22);
-
-            job->particles[i].Fxx = job->particles[i].Fxx * tmp_Fxx + job->particles[i].Fyx * tmp_Fxy;
-            job->particles[i].Fxy = job->particles[i].Fxy * tmp_Fxx + job->particles[i].Fyy * tmp_Fxy;
-            job->particles[i].Fyx = job->particles[i].Fxx * tmp_Fyx + job->particles[i].Fyx * tmp_Fyy;
-            job->particles[i].Fyy = job->particles[i].Fxy * tmp_Fyx + job->particles[i].Fyy * tmp_Fyy;
-
-            /* also update particle volume */
-            job->particles[i].v = (job->particles[i].Fxx * job->particles[i].Fyy - job->particles[i].Fxy * job->particles[i].Fyx) * job->particles[i].v0;
+        dsq = (a - d) * (a - d) + 4 * b * c;
+        delta = 0.5 * sqrt(abs(dsq));
+        delta_inv = (1.0f / delta);
+        if (dsq == 0 || delta < 1e-15) {
+            cd = 1;
+            sd = 1;
+            delta_inv = 1;
+        } else if (dsq > 0) {
+            cd = cosh(delta);
+            sd = sinh(delta);
+        } else {
+            cd = cos(delta);
+            sd = sin(delta);
         }
-/*    }*/
+
+        m11 = cd + 0.5 * (a - d) * sd * delta_inv;
+        m12 = b * sd * delta_inv;
+        m21 = c * sd * delta_inv;
+        m22 = cd - 0.5 * (a - d) * sd * delta_inv;
+
+        f = exp(0.5 * (a + d));
+        tmp_Fxx = f * (m11);
+        tmp_Fxy = f * (m12);
+        tmp_Fyx = f * (m21);
+        tmp_Fyy = f * (m22);
+
+        job->particles[i].Fxx = job->particles[i].Fxx * tmp_Fxx + job->particles[i].Fyx * tmp_Fxy;
+        job->particles[i].Fxy = job->particles[i].Fxy * tmp_Fxx + job->particles[i].Fyy * tmp_Fxy;
+        job->particles[i].Fyx = job->particles[i].Fxx * tmp_Fyx + job->particles[i].Fyx * tmp_Fyy;
+        job->particles[i].Fyy = job->particles[i].Fxy * tmp_Fyx + job->particles[i].Fyy * tmp_Fyy;
+
+/*            job->particles[i].v = (job->particles[i].Fxx * job->particles[i].Fyy - job->particles[i].Fxy * job->particles[i].Fyx) * job->particles[i].v0;*/
+    }
+
+    return;
+}
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
+void update_particle_vectors(job_t *job)
+{
+    int i;
+    for (i = 0; i < job->num_particles; i++) {
+        job->particles[i].r1[0] =
+            job->particles[i].Fxx * job->particles[i].r1_initial[0] +
+            job->particles[i].Fxy * job->particles[i].r1_initial[1];
+        job->particles[i].r1[1] =
+            job->particles[i].Fyx * job->particles[i].r1_initial[0] +
+            job->particles[i].Fyy * job->particles[i].r1_initial[1];
+        job->particles[i].r2[0] =
+            job->particles[i].Fxx * job->particles[i].r2_initial[0] +
+            job->particles[i].Fxy * job->particles[i].r2_initial[1];
+        job->particles[i].r2[1] =
+            job->particles[i].Fyx * job->particles[i].r2_initial[0] +
+            job->particles[i].Fyy * job->particles[i].r2_initial[1];
+    }
+
+    return;
+}
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
+void update_corner_positions(job_t *job)
+{
+    int i, j;
+#define XIDX 0
+#define YIDX 1
+    for (i = 0; i < job->num_particles; i++) {
+        job->particles[i].corners[0][XIDX] = job->particles[i].x +
+            job->particles[i].r1[XIDX] + job->particles[i].r2[XIDX];
+        job->particles[i].corners[0][YIDX] = job->particles[i].y +
+            job->particles[i].r1[YIDX] + job->particles[i].r2[YIDX];
+
+        job->particles[i].corners[1][XIDX] = job->particles[i].x -
+            job->particles[i].r1[XIDX] + job->particles[i].r2[XIDX];
+        job->particles[i].corners[1][YIDX] = job->particles[i].y -
+            job->particles[i].r1[YIDX] + job->particles[i].r2[YIDX];
+
+        job->particles[i].corners[2][XIDX] = job->particles[i].x -
+            job->particles[i].r1[XIDX] - job->particles[i].r2[XIDX];
+        job->particles[i].corners[2][YIDX] = job->particles[i].y -
+            job->particles[i].r1[YIDX] - job->particles[i].r2[YIDX];
+
+        job->particles[i].corners[3][XIDX] = job->particles[i].x +
+            job->particles[i].r1[XIDX] - job->particles[i].r2[XIDX];
+        job->particles[i].corners[3][YIDX] = job->particles[i].y +
+            job->particles[i].r1[YIDX] - job->particles[i].r2[YIDX];
+
+        for (j = 0; j < 4; j++) {
+            job->particles[i].corner_elements[j] = WHICH_ELEMENT(job->particles[i].corners[j][XIDX], job->particles[i].corners[j][YIDX], job->N, job->h);
+        }
+    }
+#undef XIDX
+#undef YIDX
 
     return;
 }
