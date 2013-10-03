@@ -54,14 +54,12 @@
 #define __N(j,p,n) j->elements[__E(j,p)].nodes[n]
 #define __NE(j,e,n) j->elements[e].nodes[n]
 
-#if 0
-#define WHICH_ELEMENT4(xp,yp,N,h) \
-    (floor(xp/h) + floor(yp/h)*(N-1))
-#endif
+/*#define WHICH_ELEMENT4(xp,yp,N,h) \*/
+/*    (floor(xp/h) + floor(yp/h)*(N-1))*/
 
 /* XXX: ugly, fix soon */
 #define WHICH_ELEMENT4(xp,yp,N,h) \
-    
+    (((xp)<=1.0 && (xp)>=0.0 && (yp)<=1.0 && (yp)>=0.0)?((floor((xp)/(h)) + floor((yp)/(h))*((N)-1))):(-1))
 
 #define ACCUMULATE4(acc_tok,j,tok,i,n,s) \
     j->nodes[__N(j,i,0)].acc_tok += j->s ## 1[i] * j->particles[i].tok; \
@@ -213,6 +211,8 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->b28 = (double *)malloc(job->num_particles * sizeof(double));
     job->b29 = (double *)malloc(job->num_particles * sizeof(double));
 
+    job->phi = (double *)malloc(job->num_particles * job->num_nodes * sizeof(double));
+
     /* max size of u_grid is NODAL_DOF * number of nodes. */
     job->vec_len = NODAL_DOF * job->num_nodes;
     job->u_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
@@ -282,6 +282,12 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 
     /* By default, don't output energy data. */
     job->ke_data = NULL;
+
+    /* make sure corners know where the are on first step */
+    update_particle_vectors(job);
+    update_corner_positions(job);
+
+    job->use_cpdi = 1;
 
     return job;
 }
@@ -465,22 +471,62 @@ void calculate_node_velocity(job_t *job)
 /*----------------------------------------------------------------------------*/
 void calculate_strainrate(job_t *job)
 {
-    int i;
+    int i, j, k;
+    int ce, nn[4];
+/*    int method;*/
     double dx_tdy;
     double dy_tdx;
+    char fname[] = "tmpx_sr.txt";
+
+/*    FILE *fd;*/
+
+/*    for (method = 0; method < 2; method++) { */ /* begin method loop */
+/*    fname[3] = method + '0';*/
+/*    fd = fopen(fname, "a");*/
+/*    job->use_cpdi = method;*/
+/*    fprintf(fd, "%g %d\n", job->t, job->use_cpdi);*/
 
     for (i = 0; i < job->num_particles; i++) {
         CHECK_ACTIVE(job, i);
+        job->particles[i].exx_t = 0;
+        job->particles[i].exy_t = 0;
+        job->particles[i].eyy_t = 0;
+        job->particles[i].wxy_t = 0;
 
-        job->particles[i].exx_t = DX_N_TO_P(job, x_t, 1.0, i);
-        job->particles[i].eyy_t = DY_N_TO_P(job, y_t, 1.0, i);
+        if (job->use_cpdi) {
+            /* loop over corners */
+            for (j = 0; j < 4; j++) {
+                ce = job->particles[i].corner_elements[j];
+                /* corner is outside of particle domain. should probably deal with this better... */
+                if (ce == -1) {
+                    continue;
+                }
+                for (k = 0; k < 4; k++) {
+                    nn[k] = job->elements[ce].nodes[k];
 
-        dx_tdy = DY_N_TO_P(job, x_t, 1.0, i);
-        dy_tdx = DX_N_TO_P(job, y_t, 1.0, i);
+                    /* actual volume of particle here (not averaging volume) */
+                    job->particles[i].exx_t += job->nodes[nn[k]].x_t * job->particles[i].grad_sc[j][k][S_XIDX];
+                    job->particles[i].exy_t += 0.5 * (job->nodes[nn[k]].x_t * job->particles[i].grad_sc[j][k][S_YIDX] + job->nodes[nn[k]].y_t * job->particles[i].grad_sc[j][k][S_XIDX]);
+                    job->particles[i].eyy_t += job->nodes[nn[k]].y_t * job->particles[i].grad_sc[j][k][S_YIDX];
+                    job->particles[i].wxy_t += 0.5 * (job->nodes[nn[k]].x_t * job->particles[i].grad_sc[j][k][S_YIDX] - job->nodes[nn[k]].y_t * job->particles[i].grad_sc[j][k][S_XIDX]);
+                }
+            }
+        } else {
+            job->particles[i].exx_t = DX_N_TO_P(job, x_t, 1.0, i);
+            job->particles[i].eyy_t = DY_N_TO_P(job, y_t, 1.0, i);
 
-        job->particles[i].exy_t = 0.5 * (dx_tdy + dy_tdx);
-        job->particles[i].wxy_t = 0.5 * (dx_tdy - dy_tdx);
+            dx_tdy = DY_N_TO_P(job, x_t, 1.0, i);
+            dy_tdx = DX_N_TO_P(job, y_t, 1.0, i);
+
+            job->particles[i].exy_t = 0.5 * (dx_tdy + dy_tdx);
+            job->particles[i].wxy_t = 0.5 * (dx_tdy - dy_tdx);
+        }
     }
+/*    fprintf(fd, "%d %d: %g %g %g %g", method, i, job->particles[i].exx_t,*/
+/*        job->particles[i].exy_t, job->particles[i].eyy_t, job->particles[i].wxy_t);*/
+
+/*    fclose(fd);*/
+    /*}*/ /*end method loop*/
 
     return;
 }
@@ -489,15 +535,48 @@ void calculate_strainrate(job_t *job)
 /*----------------------------------------------------------------------------*/
 void update_stress(job_t *job)
 {
-    int i;
+    int i, j, k, method;
+    int ce, nn[4];
+
+    FILE *fd = fopen("tmp.txt", "a");
+
+    for (method = 0; method < 2; method++) {
+
+    job->use_cpdi = method;
+    fprintf(fd, "%g %d\n", job->t, job->use_cpdi);
 
     for (i = 0; i < job->num_particles; i++) {
         CHECK_ACTIVE(job, i);
 
-        ACCUMULATE_WITH_MUL(fx, job, sxx, i, n, b1, -job->particles[i].v);
-        ACCUMULATE_WITH_MUL(fx, job, sxy, i, n, b2, -job->particles[i].v);
-        ACCUMULATE_WITH_MUL(fy, job, sxy, i, n, b1, -job->particles[i].v);
-        ACCUMULATE_WITH_MUL(fy, job, syy, i, n, b2, -job->particles[i].v);
+        if (job->use_cpdi) {
+            /* loop over corners */
+            for (j = 0; j < 4; j++) {
+                ce = job->particles[i].corner_elements[j];
+                for (k = 0; k < 4; k++) {
+                    nn[k] = job->elements[ce].nodes[k];
+                    
+                    /* actual volume of particle here (not averaging volume) */
+                    job->nodes[nn[k]].fx += -job->particles[i].v * (
+                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxx + 
+                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].sxy);
+
+                    job->nodes[nn[k]].fy += -job->particles[i].v * (
+                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxy + 
+                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].syy);
+                }
+            }
+        } else {
+            ACCUMULATE_WITH_MUL(fx, job, sxx, i, n, b1, -job->particles[i].v);
+            ACCUMULATE_WITH_MUL(fx, job, sxy, i, n, b2, -job->particles[i].v);
+            ACCUMULATE_WITH_MUL(fy, job, sxy, i, n, b1, -job->particles[i].v);
+            ACCUMULATE_WITH_MUL(fy, job, syy, i, n, b2, -job->particles[i].v);
+        }
+    }
+
+    for (i = 0; i < job->num_nodes; i++) {
+        fprintf(fd, "f[%d] = [%g %g]^T\n", i, job->nodes[i].fx, job->nodes[i].fy);
+    }
+
     }
 
     return;
@@ -507,13 +586,25 @@ void update_stress(job_t *job)
 /*----------------------------------------------------------------------------*/
 void update_internal_stress(job_t *job)
 {
-    int i;
+    int i, j, k, s;
     int p;
-    int nn[4];
+    int ce, nn[4];
 
     double sxx, sxy, syy;
     double pxx, pxy, pyx, pyy;
     double dudx, dudy, dvdx, dvdy, jdet;
+
+    int method;
+
+/*    char fname[] = "tmpx.txt";*/
+
+/*    FILE *fd;*/
+
+/*    for (method = 0; method < 2; method++) { */ /* begin method loop */
+/*    fname[3] = method + '0';*/
+/*    fd = fopen(fname, "a");*/
+/*    job->use_cpdi = method;*/
+/*    fprintf(fd, "%g %d\n", job->t, job->use_cpdi);*/
 
     for (i = 0; i < job->vec_len; i++) {
         job->f_int_grid[i] = 0;
@@ -523,56 +614,106 @@ void update_internal_stress(job_t *job)
         CHECK_ACTIVE(job, i);
 
         p = job->in_element[i];
-        nn[0]  = job->elements[p].nodes[0];
-        nn[1]  = job->elements[p].nodes[1];
-        nn[2]  = job->elements[p].nodes[2];
-        nn[3]  = job->elements[p].nodes[3];
+        for (j = 0; j < 4; j++) {
+            nn[j]  = job->elements[p].nodes[j];
+        }
 
-        dudx = job->u_grid[NODAL_DOF * nn[0] + XDOF_IDX]*job->b11[i];
-        dudx += job->u_grid[NODAL_DOF * nn[1] + XDOF_IDX]*job->b12[i];
-        dudx += job->u_grid[NODAL_DOF * nn[2] + XDOF_IDX]*job->b13[i];
-        dudx += job->u_grid[NODAL_DOF * nn[3] + XDOF_IDX]*job->b14[i];
+        if (job->use_cpdi) {
+            /* loop over corners */
+            for (j = 0; j < 4; j++) {
+                ce = job->particles[i].corner_elements[j];
+                /* corner is outside of particle domain. should probably deal with this better... */
+                if (ce == -1) {
+                    continue;
+                }
+                for (k = 0; k < 4; k++) {
+                    nn[k] = job->elements[ce].nodes[k];
 
-        dudy = job->u_grid[NODAL_DOF * nn[0] + XDOF_IDX]*job->b21[i];
-        dudy += job->u_grid[NODAL_DOF * nn[1] + XDOF_IDX]*job->b22[i];
-        dudy += job->u_grid[NODAL_DOF * nn[2] + XDOF_IDX]*job->b23[i];
-        dudy += job->u_grid[NODAL_DOF * nn[3] + XDOF_IDX]*job->b24[i];
+                    /* actual volume of particle here (not averaging volume) */
+                    job->f_int_grid[NODAL_DOF * nn[k] + XDOF_IDX] += job->particles[i].v * (
+                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxx + 
+                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].sxy);
 
-        dvdx = job->u_grid[NODAL_DOF * nn[0] + YDOF_IDX]*job->b11[i];
-        dvdx += job->u_grid[NODAL_DOF * nn[1] + YDOF_IDX]*job->b12[i];
-        dvdx += job->u_grid[NODAL_DOF * nn[2] + YDOF_IDX]*job->b13[i];
-        dvdx += job->u_grid[NODAL_DOF * nn[3] + YDOF_IDX]*job->b14[i];
+                    job->f_int_grid[NODAL_DOF * nn[k] + YDOF_IDX] += job->particles[i].v * (
+                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxy + 
+                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].syy);
 
-        dvdy = job->u_grid[NODAL_DOF * nn[0] + YDOF_IDX]*job->b21[i];
-        dvdy += job->u_grid[NODAL_DOF * nn[1] + YDOF_IDX]*job->b22[i];
-        dvdy += job->u_grid[NODAL_DOF * nn[2] + YDOF_IDX]*job->b23[i];
-        dvdy += job->u_grid[NODAL_DOF * nn[3] + YDOF_IDX]*job->b24[i];
 
-        jdet = 1 + dudx + dvdy;
+/*                    printf("update_stress: %d\n", nn[k]);*/
+/*                    printf("vol %g\ngrad_sc [%g %g]\ns [%g %g %g]\n", job->particles[i].v,*/
+/*                     job->particles[i].grad_sc[j][k][S_XIDX], job->particles[i].grad_sc[j][k][S_YIDX], job->particles[i].sxx, job->particles[i].sxy, job->particles[i].syy);*/
 
-        sxx = job->particles[i].sxx;
-        sxy = job->particles[i].sxy;
-        syy = job->particles[i].syy;
+/*                    for (s = 0; s < job->num_nodes; s++) {*/
+/*                        printf("f[%d] = [%g %g]^T\n", s,*/
+/*                            job->f_int_grid[NODAL_DOF * s + XDOF_IDX],*/
+/*                            job->f_int_grid[NODAL_DOF * s + YDOF_IDX]);*/
+/*                    }*/
 
-        pxx = jdet * ((1 - dudx) * sxx - dudy * sxy);
-        pxy = jdet * ((-dvdx) * sxx + (1 - dvdy) * sxy);
-        pyx = jdet * ((1 - dudx) * sxy - dudy * syy);
-        pyy = jdet * ((-dvdx) * sxy + (1 - dvdy) * syy);
+                }
+/*                exit(254);*/
+            }
+        } else {
+#if 0
+            dudx = job->u_grid[NODAL_DOF * nn[0] + XDOF_IDX]*job->b11[i];
+            dudx += job->u_grid[NODAL_DOF * nn[1] + XDOF_IDX]*job->b12[i];
+            dudx += job->u_grid[NODAL_DOF * nn[2] + XDOF_IDX]*job->b13[i];
+            dudx += job->u_grid[NODAL_DOF * nn[3] + XDOF_IDX]*job->b14[i];
 
-        pxx = sxx;
-        pxy = sxy;
-        pyx = sxy;
-        pyy = syy;
+            dudy = job->u_grid[NODAL_DOF * nn[0] + XDOF_IDX]*job->b21[i];
+            dudy += job->u_grid[NODAL_DOF * nn[1] + XDOF_IDX]*job->b22[i];
+            dudy += job->u_grid[NODAL_DOF * nn[2] + XDOF_IDX]*job->b23[i];
+            dudy += job->u_grid[NODAL_DOF * nn[3] + XDOF_IDX]*job->b24[i];
 
-        job->f_int_grid[NODAL_DOF * nn[0] + XDOF_IDX] += job->particles[i].v*(job->b11[i]*pxx + job->b21[i]*pxy);
-        job->f_int_grid[NODAL_DOF * nn[0] + YDOF_IDX] += job->particles[i].v*(job->b11[i]*pyx + job->b21[i]*pyy);
-        job->f_int_grid[NODAL_DOF * nn[1] + XDOF_IDX] += job->particles[i].v*(job->b12[i]*pxx + job->b22[i]*pxy);
-        job->f_int_grid[NODAL_DOF * nn[1] + YDOF_IDX] += job->particles[i].v*(job->b12[i]*pyx + job->b22[i]*pyy);
-        job->f_int_grid[NODAL_DOF * nn[2] + XDOF_IDX] += job->particles[i].v*(job->b13[i]*pxx + job->b23[i]*pxy);
-        job->f_int_grid[NODAL_DOF * nn[2] + YDOF_IDX] += job->particles[i].v*(job->b13[i]*pyx + job->b23[i]*pyy);
-        job->f_int_grid[NODAL_DOF * nn[3] + XDOF_IDX] += job->particles[i].v*(job->b14[i]*pxx + job->b24[i]*pxy);
-        job->f_int_grid[NODAL_DOF * nn[3] + YDOF_IDX] += job->particles[i].v*(job->b14[i]*pyx + job->b24[i]*pyy);
+            dvdx = job->u_grid[NODAL_DOF * nn[0] + YDOF_IDX]*job->b11[i];
+            dvdx += job->u_grid[NODAL_DOF * nn[1] + YDOF_IDX]*job->b12[i];
+            dvdx += job->u_grid[NODAL_DOF * nn[2] + YDOF_IDX]*job->b13[i];
+            dvdx += job->u_grid[NODAL_DOF * nn[3] + YDOF_IDX]*job->b14[i];
+
+            dvdy = job->u_grid[NODAL_DOF * nn[0] + YDOF_IDX]*job->b21[i];
+            dvdy += job->u_grid[NODAL_DOF * nn[1] + YDOF_IDX]*job->b22[i];
+            dvdy += job->u_grid[NODAL_DOF * nn[2] + YDOF_IDX]*job->b23[i];
+            dvdy += job->u_grid[NODAL_DOF * nn[3] + YDOF_IDX]*job->b24[i];
+
+            jdet = 1 + dudx + dvdy;
+
+            sxx = job->particles[i].sxx;
+            sxy = job->particles[i].sxy;
+            syy = job->particles[i].syy;
+
+            pxx = jdet * ((1 - dudx) * sxx - dudy * sxy);
+            pxy = jdet * ((-dvdx) * sxx + (1 - dvdy) * sxy);
+            pyx = jdet * ((1 - dudx) * sxy - dudy * syy);
+            pyy = jdet * ((-dvdx) * sxy + (1 - dvdy) * syy);
+#endif
+
+            sxx = job->particles[i].sxx;
+            sxy = job->particles[i].sxy;
+            syy = job->particles[i].syy;
+            pxx = sxx;
+            pxy = sxy;
+            pyx = sxy;
+            pyy = syy;
+
+            job->f_int_grid[NODAL_DOF * nn[0] + XDOF_IDX] += job->particles[i].v*(job->b11[i]*pxx + job->b21[i]*pxy);
+            job->f_int_grid[NODAL_DOF * nn[0] + YDOF_IDX] += job->particles[i].v*(job->b11[i]*pyx + job->b21[i]*pyy);
+            job->f_int_grid[NODAL_DOF * nn[1] + XDOF_IDX] += job->particles[i].v*(job->b12[i]*pxx + job->b22[i]*pxy);
+            job->f_int_grid[NODAL_DOF * nn[1] + YDOF_IDX] += job->particles[i].v*(job->b12[i]*pyx + job->b22[i]*pyy);
+            job->f_int_grid[NODAL_DOF * nn[2] + XDOF_IDX] += job->particles[i].v*(job->b13[i]*pxx + job->b23[i]*pxy);
+            job->f_int_grid[NODAL_DOF * nn[2] + YDOF_IDX] += job->particles[i].v*(job->b13[i]*pyx + job->b23[i]*pyy);
+            job->f_int_grid[NODAL_DOF * nn[3] + XDOF_IDX] += job->particles[i].v*(job->b14[i]*pxx + job->b24[i]*pxy);
+            job->f_int_grid[NODAL_DOF * nn[3] + YDOF_IDX] += job->particles[i].v*(job->b14[i]*pyx + job->b24[i]*pyy);
+        }
     }
+
+/*    for (i = 0; i < job->num_nodes; i++) {*/
+/*        fprintf(fd, "f[%d] = [%g %g]^T\n", i,*/
+/*            job->f_int_grid[NODAL_DOF * i + XDOF_IDX],*/
+/*            job->f_int_grid[NODAL_DOF * i + YDOF_IDX]);*/
+/*    }*/
+
+/*    fclose(fd);*/
+    /*}*/ /* end method loop*/
+
 
     return;
 }
@@ -1109,36 +1250,134 @@ void update_particle_vectors(job_t *job)
 /*----------------------------------------------------------------------------*/
 void update_corner_positions(job_t *job)
 {
-    int i, j;
+    int i, j, k;
+    int e, n;
+
+/*    FILE *fd;*/
+/*    fd = fopen("pnodes.txt", "a");*/
+
+    for (i = 0; i < (job->num_particles * job->num_nodes); i++) {
+        job->phi[i] = 0;
+    }
+
     for (i = 0; i < job->num_particles; i++) {
         /* Find corner positions from (adjusted) vectors. */
-        job->particles[i].corners[0][S_XIDX] = job->particles[i].x +
+        job->particles[i].corners[2][S_XIDX] = job->particles[i].x +
             job->particles[i].r1[S_XIDX] + job->particles[i].r2[S_XIDX];
-        job->particles[i].corners[0][S_YIDX] = job->particles[i].y +
+        job->particles[i].corners[2][S_YIDX] = job->particles[i].y +
             job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX];
 
-        job->particles[i].corners[1][S_XIDX] = job->particles[i].x -
+        job->particles[i].corners[3][S_XIDX] = job->particles[i].x -
             job->particles[i].r1[S_XIDX] + job->particles[i].r2[S_XIDX];
-        job->particles[i].corners[1][S_YIDX] = job->particles[i].y -
+        job->particles[i].corners[3][S_YIDX] = job->particles[i].y -
             job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX];
 
-        job->particles[i].corners[2][S_XIDX] = job->particles[i].x -
+        job->particles[i].corners[0][S_XIDX] = job->particles[i].x -
             job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX];
-        job->particles[i].corners[2][S_YIDX] = job->particles[i].y -
+        job->particles[i].corners[0][S_YIDX] = job->particles[i].y -
             job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX];
 
-        job->particles[i].corners[3][S_XIDX] = job->particles[i].x +
+        job->particles[i].corners[1][S_XIDX] = job->particles[i].x +
             job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX];
-        job->particles[i].corners[3][S_YIDX] = job->particles[i].y +
+        job->particles[i].corners[1][S_YIDX] = job->particles[i].y +
             job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX];
 
         for (j = 0; j < 4; j++) {
             /* Figure out which element each corner is in. */
             job->particles[i].corner_elements[j] = WHICH_ELEMENT(job->particles[i].corners[j][S_XIDX], job->particles[i].corners[j][S_YIDX], job->N, job->h);
 
-            /* calculate local coordinates of  */
+            e = job->particles[i].corner_elements[j];
+            n = job->elements[e].nodes[0];
+
+/*            fprintf(fd, "%d:", i);*/
+/*            for (k = 0; k < 4; k++) {*/
+/*                fprintf(fd, " %d", job->elements[e].nodes[k]);*/
+/*            }*/
+/*            fprintf(fd, "\n");*/
+
+            /* calculate local coordinates of corners */
+            if (job->particles[i].corner_elements[j] != -1) {
+                global_to_local_coords(
+                    &(job->particles[i].cornersl[j][S_XIDX]),
+                    &(job->particles[i].cornersl[j][S_YIDX]),
+                    job->particles[i].corners[j][S_XIDX],
+                    job->particles[i].corners[j][S_YIDX],
+                    job->nodes[n].x,
+                    job->nodes[n].y,
+                    job->h
+                );
+
+                tent(
+                    &(job->particles[i].sc[j][0]),
+                    &(job->particles[i].sc[j][1]),
+                    &(job->particles[i].sc[j][2]),
+                    &(job->particles[i].sc[j][3]),
+                    job->particles[i].cornersl[j][S_XIDX],
+                    job->particles[i].cornersl[j][S_YIDX]
+                );
+            }
         }
+
+        for (j = 0; j < 4; j++) {
+            for (k = 0; k < 4; k++) {
+
+                switch(k) {
+                    case 0:
+                        job->particles[i].grad_sc[k][j][S_XIDX] = (job->particles[i].sc[0][j])*(job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX]);
+
+                        job->particles[i].grad_sc[k][j][S_YIDX] = (job->particles[i].sc[0][j])*(job->particles[i].r2[S_XIDX] - job->particles[i].r1[S_XIDX]);
+                    break;
+                    case 1:
+                        job->particles[i].grad_sc[k][j][S_XIDX] = (job->particles[i].sc[1][j])*(job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX]);
+
+                        job->particles[i].grad_sc[k][j][S_YIDX] = (job->particles[i].sc[1][j])*(-job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX]);
+                    break;
+                    case 2:
+                        job->particles[i].grad_sc[k][j][S_XIDX] = (-job->particles[i].sc[2][j])*(job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX]);
+
+                        job->particles[i].grad_sc[k][j][S_YIDX] = (-job->particles[i].sc[2][j])*(job->particles[i].r2[S_XIDX] - job->particles[i].r1[S_XIDX]);
+                    break;
+                    case 3:
+                        job->particles[i].grad_sc[k][j][S_XIDX] = (-job->particles[i].sc[3][j])*(job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX]);
+
+                        job->particles[i].grad_sc[k][j][S_YIDX] = (-job->particles[i].sc[3][j])*(-job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX]);
+                    break;
+                }
+/*                job->particles[i].grad_sc[k][j][S_XIDX] = (job->particles[i].sc[0][j] - job->particles[i].sc[2][j])*(job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX]) +*/
+/*                (job->particles[i].sc[1][j] - job->particles[i].sc[3][j])*(job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX]);*/
+
+/*                job->particles[i].grad_sc[k][j][S_YIDX] = (job->particles[i].sc[0][j] - job->particles[i].sc[2][j])*(job->particles[i].r2[S_XIDX] - job->particles[i].r1[S_XIDX]) +*/
+/*                (job->particles[i].sc[1][j] - job->particles[i].sc[3][j])*(-job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX]);*/
+
+/*                printf("%d,%d sc [%g %g %g %g]\n", j, k, job->particles[i].sc[k][0], job->particles[i].sc[k][1], job->particles[i].sc[k][2], job->particles[i].sc[k][3]);*/
+/*                printf("%d,%d sc [%g %g]\n", j, k, job->particles[i].grad_sc[k][j][S_XIDX],*/
+/*                    job->particles[i].grad_sc[k][j][S_YIDX]);*/
+
+                /* should be averaging domain, but use particle volume for now */
+                job->particles[i].grad_sc[k][j][S_XIDX] *= (1.0 / job->particles[i].v);
+                job->particles[i].grad_sc[k][j][S_YIDX] *= (1.0 / job->particles[i].v);
+
+                if (job->particles[i].corner_elements[k] == -1) {
+                    continue;
+                }
+
+                /* phi rows are nodal indicies, cols are particle indicies */
+                job->phi[job->num_particles * job->elements[job->particles[i].corner_elements[k]].nodes[j] + i] += 0.25 * job->particles[i].sc[k][j];
+            }
+        }
+
+
     }
+
+/*    for (i = 0; i < job->num_nodes; i++) {*/
+/*        for (j = 0; j < job->num_particles; j++) {*/
+/*            fprintf(fd, " %g", job->phi[job->num_particles * i + j]);*/
+/*        }*/
+/*        fprintf(fd, "\n");*/
+/*    }*/
+/*    fprintf(fd, "\n");*/
+
+/*    fclose(fd);*/
 
     return;
 }
@@ -1247,8 +1486,11 @@ void update_particle_densities(job_t *job)
 /*        if (job->elements[job->in_element[i]].grad_mag > GRAD_THRESHOLD) {*/
 /*            job->particles[i].v = job->particles[i].v * exp (job->dt * (job->particles[i].exx_t + job->particles[i].eyy_t));*/
 /*        } else {*/
-            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);
+/*            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);*/
 /*        }*/
+
+        job->particles[i].v = ((job->particles[i].Fxx * job->particles[i].Fyy) - 
+            job->particles[i].Fxy * job->particles[i].Fyx) * job->particles[i].v0;
     }
 
     return;
