@@ -43,11 +43,12 @@
 #define mu jp(state[3])
 #define eta jp(state[4])
 #define beta jp(state[5])
-#define Exx jp(state[6])
-#define Exy jp(state[7])
-#define Eyy jp(state[8])
+/*#define Exx jp(state[6])*/
+/*#define Exy jp(state[7])*/
+/*#define Eyy jp(state[8])*/
 #define gammap jp(state[9])
 #define Ef_mag jp(state[10])
+#define gf jp(state[6])
 
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
@@ -67,9 +68,10 @@ void material_init(job_t *job)
         mu = mu0;
         eta = eta0;
         beta = hbeta*(mu0 - mucv);
-        Exx = 0;
-        Exy = 0;
-        Eyy = 0;
+/*        Exx = 0;*/
+/*        Exy = 0;*/
+/*        Eyy = 0;*/
+        gf = 0;
         gammap = 0;
     }
 

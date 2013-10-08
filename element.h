@@ -8,7 +8,7 @@
 #ifndef __ELEMENT_H__
 #define __ELEMENT_H__
 
-#define NODAL_DOF 2
+#define NODAL_DOF 3
 #define NODES_PER_ELEMENT 4
 
 #define XDOF_IDX 0
@@ -27,7 +27,7 @@
     9 -> center
 */
 typedef struct element_s {
-    int nodes[9];
+    int nodes[NODES_PER_ELEMENT];
     int n;
     double m;
     int filled;

@@ -157,7 +157,12 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->num_elements = (N - 1) * (N - 1);
 
     /* Copy particles from given ICs. */
+    fprintf(stderr, "Each particle is %d bytes.\n", sizeof(particle_t));
     job->particles = (particle_t *)malloc(num_particles * sizeof(particle_t));
+    fprintf(stderr, "%d bytes (%.2g MB) allocated for %d particles.\n",
+        num_particles * sizeof(particle_t),
+        num_particles * sizeof(particle_t) / 1048576.0,
+        num_particles);
     memcpy(job->particles, particles, num_particles * sizeof(particle_t));
 
     /* Set stress, strain to zero. */
@@ -179,16 +184,27 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
         job->particles[i].ux = 0;
         job->particles[i].uy = 0;
     }
+    fprintf(stderr, "Done setting initial particle data.\n");
 
     /* Get node coordinates. */
+    fprintf(stderr, "Each node is %d bytes.\n", sizeof(node_t));
     job->nodes = (node_t *)malloc(job->num_nodes * sizeof(node_t));
+    fprintf(stderr, "%d bytes (%.2g MB) allocated for %d nodes.\n",
+        job->num_nodes * sizeof(node_t),
+        job->num_nodes * sizeof(node_t) / 1048576.0,
+        job->num_nodes);
     for (i = 0; i < job->num_nodes; i++) {
         node_number_to_coords(&(job->nodes[i].x), &(job->nodes[i].y), i, N, h);
         /* printf("preprocessing: xn=%g yn=%g\n", job->nodes[i].x, job->nodes[i].y); */
     }
 
     /* Get node numbering for elements. */
+    fprintf(stderr, "Each element is %d bytes.\n", sizeof(element_t));
     job->elements = (element_t *)malloc(job->num_elements * sizeof(element_t));
+    fprintf(stderr, "%d bytes (%.2g MB) allocated for %d elements.\n",
+        job->num_elements * sizeof(element_t),
+        job->num_elements * sizeof(element_t) / 1048576.0,
+        job->num_elements);
     for (i = 0; i < job->num_elements; i++) {
         n = ijton(i % (job->N - 1), i / (job->N - 1), job->N);
 
@@ -226,31 +242,31 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->h2 = (double *)malloc(job->num_particles * sizeof(double));
     job->h3 = (double *)malloc(job->num_particles * sizeof(double));
     job->h4 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h5 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h6 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h7 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h8 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h9 = (double *)malloc(job->num_particles * sizeof(double));
+/*    job->h5 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->h6 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->h7 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->h8 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->h9 = (double *)malloc(job->num_particles * sizeof(double));*/
 
     job->b11 = (double *)malloc(job->num_particles * sizeof(double));
     job->b12 = (double *)malloc(job->num_particles * sizeof(double));
     job->b13 = (double *)malloc(job->num_particles * sizeof(double));
     job->b14 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b15 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b16 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b17 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b18 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b19 = (double *)malloc(job->num_particles * sizeof(double));
+/*    job->b15 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b16 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b17 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b18 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b19 = (double *)malloc(job->num_particles * sizeof(double));*/
 
     job->b21 = (double *)malloc(job->num_particles * sizeof(double));
     job->b22 = (double *)malloc(job->num_particles * sizeof(double));
     job->b23 = (double *)malloc(job->num_particles * sizeof(double));
     job->b24 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b25 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b26 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b27 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b28 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b29 = (double *)malloc(job->num_particles * sizeof(double));
+/*    job->b25 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b26 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b27 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b28 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b29 = (double *)malloc(job->num_particles * sizeof(double));*/
 
     /* max size of u_grid is NODAL_DOF * number of nodes. */
     job->vec_len = NODAL_DOF * job->num_nodes;
@@ -1242,31 +1258,31 @@ void mpm_cleanup(job_t *job)
     free(job->h2);
     free(job->h3);
     free(job->h4);
-    free(job->h5);
-    free(job->h6);
-    free(job->h7);
-    free(job->h8);
-    free(job->h9);
+/*    free(job->h5);*/
+/*    free(job->h6);*/
+/*    free(job->h7);*/
+/*    free(job->h8);*/
+/*    free(job->h9);*/
 
     free(job->b11);
     free(job->b12);
     free(job->b13);
     free(job->b14);
-    free(job->b15);
-    free(job->b16);
-    free(job->b17);
-    free(job->b18);
-    free(job->b19);
+/*    free(job->b15);*/
+/*    free(job->b16);*/
+/*    free(job->b17);*/
+/*    free(job->b18);*/
+/*    free(job->b19);*/
 
     free(job->b21);
     free(job->b22);
     free(job->b23);
     free(job->b24);
-    free(job->b25);
-    free(job->b26);
-    free(job->b27);
-    free(job->b28);
-    free(job->b29);
+/*    free(job->b25);*/
+/*    free(job->b26);*/
+/*    free(job->b27);*/
+/*    free(job->b28);*/
+/*    free(job->b29);*/
 
     free(job);
 

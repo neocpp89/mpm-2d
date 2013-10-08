@@ -72,7 +72,7 @@ void usage(char *program_name)
 /*----------------------------------------------------------------------------*/
 int main(int argc, char **argv)
 {
-    const int num_threads = 32;
+    const int num_threads = 1;
 
     double h = 0.1;
     int N = (1+ceil(1/h));
@@ -131,7 +131,8 @@ int main(int argc, char **argv)
     }
 
 
-    len = 1+strlen(g_state.outputdir);
+    /* Add an additional byte in case we need to add a '/'. */
+    len = 2 + strlen(g_state.outputdir);
     printf("Using output directory \"%s\".\n", g_state.outputdir);
     g_state.h5file = (char *)malloc(len + strlen(h5file));
     g_state.fpfile = (char *)malloc(len + strlen(fpfile));
@@ -194,7 +195,7 @@ job_start:
         tasks[i].num_threads = num_threads;
         tasks[i].job = job;
     }
-    printf("Using %d threads.\n", num_threads);
+    printf("Using %d %s.\n", num_threads, (num_threads > 1)?"threads":"thread");
 
     initial_loads(job);
 

@@ -32,6 +32,9 @@ void generate_dirichlet_bcs(job_t *job)
     for (i = 0; i < job->num_nodes; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
             job->u_dirichlet_mask[NODAL_DOF * i + j] = 0;
+            if (j == 2) {
+                job->u_dirichlet_mask[NODAL_DOF * i + j] = 1;
+            }
         }
     }
 
