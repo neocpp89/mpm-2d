@@ -34,17 +34,3 @@ void global_to_local_coords(double *x_local, double *y_local,
 }
 /*----------------------------------------------------------------------------*/
 
-/*---which_element------------------------------------------------------------*/
-int which_element(double x_particle, double y_particle, 
-    int N, double h)
-{
-    int i;
-    int j;
-
-    i = floor(x_particle / h);
-    j = floor(y_particle / h);
-
-	return (i + j*(N-1));
-}
-/*----------------------------------------------------------------------------*/
-

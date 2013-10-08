@@ -30,6 +30,8 @@ typedef struct job_s {
     int N;
     double h;
 
+    int use_cpdi;
+
     node_t *nodes;
     particle_t *particles;
     element_t *elements;
@@ -78,6 +80,8 @@ typedef struct job_s {
     double *q_grid;
     double *f_ext_grid;
     double *f_int_grid;
+
+    double *phi;
 
     /* maps node number to position in u_grid vector. */
     int *node_u_map;

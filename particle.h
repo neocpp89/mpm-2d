@@ -10,6 +10,10 @@
 
 #define DEPVAR 11
 
+/* shape function related indicies in arrays */
+#define S_XIDX 0
+#define S_YIDX 1
+
 typedef struct particle_s {
     /* Position */
     double x;
@@ -36,12 +40,6 @@ typedef struct particle_s {
     double sxx;
     double sxy;
     double syy;
-
-    /* Stress deviator (shares sxy). */
-    /*double sdevxx;
-    double sdevxy;
-    double sdevyy;
-    double sdevmag;*/
 
     /* Strain rate */
     double exx_t;
@@ -75,14 +73,14 @@ typedef struct particle_s {
     /* Material Type */
     int material;
 
-#if 0
-    /* Shapefunctions */
-    double h[9];
+    /* Shapefunctions (follows same nodal numbering as element) */
+    double s[4];
 
     /* Gradient of Shapefunctions */
-    double b1[9];
-    double b2[9];
-#endif
+    double grad_s[4][2];
+
+    /* which element is the particle in? */
+    int element;
 
     /* acceleration */
     double x_tt;
@@ -94,6 +92,29 @@ typedef struct particle_s {
     double real_syy;
     double real_state[DEPVAR];
 
+    /* inital 'vertical' and 'horizontal' vectors.
+        initial volume should be given by magnitude (r_v cross r_h). */
+    double r1_initial[2];
+    double r2_initial[2];
+
+    /* current vertical and horizontal vectors. */
+    double r1[2];
+    double r2[2];
+
+    /* matrix of corner positions c[corner#][x or y] */
+    double corners[4][2];
+
+    /* matrix of corner positions in local coordinates in appropriate element */
+    double cornersl[4][2];
+
+    /* shapefunctions for corner points sc[corner#][node#] */
+    double sc[4][4];
+
+    /* gradient of shapefunctions for corner points sc[corner#][node#][x or y] */
+    double grad_sc[4][4][2];
+
+    /* which elements are the corners in? */
+    int corner_elements[4];
 } particle_t;
 
 /*
@@ -103,10 +124,5 @@ typedef struct particle_s {
 void global_to_local_coords(double *x_local, double *y_local, 
     double x, double y, 
     double x_ref, double y_ref, double h);
-
-/*
-    Determine which element a particle is currently in.
-*/
-int which_element(double x_particle, double y_particle, int N, double h);
 #endif
 

@@ -185,12 +185,19 @@ hid_t h5_element_type()
 /*---write_particle-----------------------------------------------------------*/
 void inline write_particle(FILE *fd, particle_t p)
 {
-
+    int i, j;
     fprintf(fd, "%f %f %f %f %f %f ",
         p.m, p.v, p.x, p.y, p.x_t, p.y_t);
-    fprintf(fd, "%f %f %f %18.18lf %18.18lf %18.18lf %f %18.18lf %f\n",
+    fprintf(fd, "%f %f %f %18.18lf %18.18lf %18.18lf %f %18.18lf %f",
         p.sxx, p.sxy, p.syy, p.ux, p.uy, p.state[9], p.color, p.state[10],
         (double)p.active);
+
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < 2; j++) {
+            fprintf(fd, " %f", p.corners[i][j]);
+        }
+    }
+    fprintf(fd, "\n");
 
     return;
 }

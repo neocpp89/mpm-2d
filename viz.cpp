@@ -127,6 +127,9 @@ typedef struct s_aux_particle {
 
     double vel_mag;
     double vel_theta;
+
+    double corners[4][2];
+    bool has_corners;
 } aux_particle_t;
 
 
@@ -511,6 +514,8 @@ void next_particle(FILE *fp, aux_particle_t *particle)
 
     fgets(s, sizeof(s)/sizeof(char), fp);
 
+    particle->has_corners = false;
+
     i = 0;
     tok = strtok(s, " ,");
     while (tok != NULL) {
@@ -561,6 +566,31 @@ void next_particle(FILE *fp, aux_particle_t *particle)
                 break;
             case 14:
                 particle->active = d;
+                break;
+            case 15:
+                particle->corners[0][0] = d;
+                particle->has_corners = true;
+                break;
+            case 16:
+                particle->corners[0][1] = d;
+                break;
+            case 17:
+                particle->corners[1][0] = d;
+                break;
+            case 18:
+                particle->corners[1][1] = d;
+                break;
+            case 19:
+                particle->corners[2][0] = d;
+                break;
+            case 20:
+                particle->corners[2][1] = d;
+                break;
+            case 21:
+                particle->corners[3][0] = d;
+                break;
+            case 22:
+                particle->corners[3][1] = d;
                 break;
         }
         tok = strtok(NULL, " ,");
@@ -705,7 +735,7 @@ void matlab_colormap(float h, float *r, float *g, float *b)
 int draw_particles(void)
 {
 //    const int points = 100000;
-    int i;
+    int i, j;
     float r, g, b, hue;
 
     static aux_particle_t *particles = NULL;
@@ -903,6 +933,14 @@ int draw_particles(void)
 //        glVertex3f(particles[i].x, particles[i].y, -1.0f);
 #define NUM_SEGS 20
         DrawDisc(GL_POLYGON, particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+
+        if (particles[i].has_corners) {
+            glBegin(GL_LINE_LOOP);
+            for (j = 0; j < 4; j++) {
+                glVertex3f(particles[i].corners[j][0], particles[i].corners[j][1], -1.0f);
+            }
+            glEnd();
+        }
 
         if (g_state.mirror_x) {
 //            glVertex3f(particles[i].x, -particles[i].y, -1.0f);
