@@ -12,6 +12,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <confuse.h>
 
 #include "material.h"
 #include "particle.h"
@@ -45,6 +46,7 @@ const char *h5file = "frame_data.h5";
 const char *fpfile = "frame_particle_data.txt";
 const char *fefile = "frame_element_data.txt";
 const char *statefile = "state.txt";
+const char *cfgfile = "simulation.cfg";
 
 volatile int want_sigterm = 0;
 
@@ -72,6 +74,35 @@ void usage(char *program_name)
 /*----------------------------------------------------------------------------*/
 int main(int argc, char **argv)
 {
+    /* libconfuse config parsing variables */
+    cfg_opt_t timestep_opts[] =
+    {
+        CFG_FLOAT("dt-max", 1e-2, CFGF_NONE),
+        CFG_FLOAT("dt-min", 1e-10, CFGF_NONE),
+        CFG_FLOAT("dt", 1e-6, CFGF_NONE),
+        CFG_INT("automatic-dt", 1, CFGF_NONE),
+        CFG_INT("allow-dt-increase", 0, CFGF_NONE),
+        CFG_INT("stable-dt-threshold", 4, CFGF_NONE),
+        CFG_END()
+    };
+    cfg_opt_t implicit_opts[] =
+    {
+        CFG_FLOAT("displacement-norm-ratio", 1e-2, CFGF_NONE),
+        CFG_FLOAT("residual-norm-ratio", 1e-1, CFGF_NONE),
+        CFG_FLOAT("converged-displacement-norm", 1e-12, CFGF_NONE),
+        CFG_INT("unstable-iteration-count", 10, CFGF_NONE),
+        CFG_END()
+    };
+    cfg_opt_t opts[] =
+    {
+        CFG_SEC("timestep", timestep_opts, CFGF_NONE),
+        CFG_SEC("implicit", implicit_opts, CFGF_NONE),
+        CFG_END()
+    };
+    cfg_t *cfg;
+    cfg_t *cfg_timestep;
+    cfg_t *cfg_implicit;
+
     const int num_threads = 1;
 
     double h = 0.1;
@@ -110,6 +141,7 @@ int main(int argc, char **argv)
     g_state.restart = 0;
     g_state.tmax = 0;
 
+    /* parse command line options */
     opt = getopt(argc, argv, g_optstring);
 
     while (opt != -1) {
@@ -179,6 +211,60 @@ int main(int argc, char **argv)
     printf("Grid parameters: N = %d, h = %g.\n", N, h);
 
     job = mpm_init(N, h, pdata, plen, t_stop);
+
+    /* parse config file */
+    cfg = cfg_init(opts, CFGF_NONE);
+
+    if (cfg_parse(cfg, cfgfile) == CFG_PARSE_ERROR) {
+        fprintf(stderr, "Fatal -- cannot parse configuration file '%s'.\n",
+            cfgfile);
+        exit(127);
+    }
+
+    /* section for timestep */
+    cfg_timestep = cfg_getsec(cfg, "timestep");
+
+    job->timestep.dt_max = cfg_getfloat(cfg_timestep, "dt-max");
+    job->timestep.dt_min = cfg_getfloat(cfg_timestep, "dt-min");
+    job->timestep.dt = cfg_getfloat(cfg_timestep, "dt");
+
+    job->timestep.automatic_dt =
+        cfg_getint(cfg_timestep, "automatic-dt");
+
+    if (job->timestep.automatic_dt != 0) {
+        job->timestep.dt = job->dt;
+    }
+
+    job->timestep.allow_dt_increase =
+        cfg_getint(cfg_timestep, "allow-dt-increase");
+    job->timestep.stable_dt_threshold =
+        cfg_getint(cfg_timestep, "stable-dt-threshold");
+
+    fprintf(stderr, "Timestep options set:\n");
+    fprintf(stderr, "dt_max: %e\n", job->timestep.dt_max);
+    fprintf(stderr, "dt_min: %e\n", job->timestep.dt_min);
+    fprintf(stderr, "dt: %e\n", job->timestep.dt);
+    fprintf(stderr, "automatic_dt: %d\n", job->timestep.automatic_dt);
+    fprintf(stderr, "allow_dt_increase: %d\n", job->timestep.allow_dt_increase);
+    fprintf(stderr, "stable_dt_threshold: %d\n", job->timestep.stable_dt_threshold);
+
+    /* section for implicit solver */
+    cfg_implicit = cfg_getsec(cfg, "implicit");
+
+    job->implicit.du_norm_ratio =
+        cfg_getfloat(cfg_implicit, "displacement-norm-ratio");
+    job->implicit.q_norm_ratio =
+        cfg_getfloat(cfg_implicit, "residual-norm-ratio");
+    job->implicit.du_norm_converged =
+        cfg_getfloat(cfg_implicit, "converged-displacement-norm");
+    job->implicit.unstable_iteration_count =
+        cfg_getint(cfg_implicit, "unstable-iteration-count");
+
+    fprintf(stderr, "Implicit options set:\n");
+    fprintf(stderr, "du_norm_ratio: %e\n", job->implicit.du_norm_ratio);
+    fprintf(stderr, "q_norm_ratio: %e\n", job->implicit.q_norm_ratio);
+    fprintf(stderr, "du_norm_converged: %e\n", job->implicit.du_norm_converged);
+
 
 job_start:
     dispg(job->t_stop);

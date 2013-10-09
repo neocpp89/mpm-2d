@@ -42,8 +42,6 @@
         } \
     } while(0)
 
-/*#define QUAD_ELEMENTS*/
-
 #define SMEAR SMEAR4
 #define ACCUMULATE ACCUMULATE4
 #define ACCUMULATE_WITH_MUL ACCUMULATE_WITH_MUL4
@@ -227,7 +225,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 /*    job->b28 = (double *)malloc(job->num_particles * sizeof(double));*/
 /*    job->b29 = (double *)malloc(job->num_particles * sizeof(double));*/
 
-    job->phi = (double *)malloc(job->num_particles * job->num_nodes * sizeof(double));
+/*    job->phi = (double *)malloc(job->num_particles * job->num_nodes * sizeof(double));*/
 
     /* max size of u_grid is NODAL_DOF * number of nodes. */
     job->vec_len = NODAL_DOF * job->num_nodes;
@@ -245,6 +243,9 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     /* for dirichlet BCs */
     job->u_dirichlet = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
     job->u_dirichlet_mask = (int *)malloc(NODAL_DOF * sizeof(int) * job->num_nodes);
+
+    /* for periodic BCs */
+    job->node_number_override = (int *)malloc(job->vec_len * sizeof(int));
 
 /*    job->kku_grid = (double *)malloc(*/
 /*                        (NODAL_DOF * job->num_nodes) **/
@@ -297,13 +298,13 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->dt = 10 * job->h * sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
 
     /* By default, don't output energy data. */
-    job->ke_data = NULL;
+/*    job->ke_data = NULL;*/
 
     /* make sure corners know where the are on first step */
     update_particle_vectors(job);
     update_corner_positions(job);
 
-    job->use_cpdi = 1;
+    job->use_cpdi = 0;
 
     return job;
 }
@@ -492,7 +493,7 @@ void calculate_strainrate(job_t *job)
 /*    int method;*/
     double dx_tdy;
     double dy_tdx;
-    char fname[] = "tmpx_sr.txt";
+/*    char fname[] = "tmpx_sr.txt";*/
 
 /*    FILE *fd;*/
 
@@ -739,6 +740,7 @@ void update_internal_stress(job_t *job)
 void implicit_solve(job_t *job)
 {
     int i, j;
+    int i_new, j_new;
     int r, s;
     int m, n;
 
@@ -768,6 +770,11 @@ void implicit_solve(job_t *job)
     double *v_grid_t;
     double *a_grid_t;
 
+    /* mass weighted old timestep grid velocity and acceleration */
+    double *mv_grid_t;
+    double *ma_grid_t;
+    double *m_grid_t;
+
     /* csparse */
     int nnz;
     int slda, sldb;
@@ -790,9 +797,17 @@ void implicit_solve(job_t *job)
     v_grid_t = (double *)malloc(lda * sizeof(double));
     a_grid_t = (double *)malloc(lda * sizeof(double));
 
+    mv_grid_t = (double *)malloc(lda * sizeof(double));
+    ma_grid_t = (double *)malloc(lda * sizeof(double));
+    m_grid_t = (double *)malloc(lda * sizeof(double));
+
     /* keep old timestep velocity and acceleration */
     memcpy(v_grid_t, job->v_grid, lda * sizeof(double));
     memcpy(a_grid_t, job->a_grid, lda * sizeof(double));
+/*    for (i = 0; i < ldb; i++) {*/
+/*        mv_grid_t[i] = v_grid_t[i] * job->m_grid[i];*/
+/*        ma_grid_t[i] = a_grid_t[i] * job->m_grid[i];*/
+/*    }*/
 
     /* keep old stresses */
     for (i = 0; i < job->num_particles; i++) {
@@ -811,6 +826,36 @@ start_implicit:
         job->u_grid[i] = 0;
     }
 
+    /* Generate and apply dirichlet boundary conditions given in BC file. */
+    generate_dirichlet_bcs(job);
+
+    /* Generate the new nodal numbers according to BCs. */
+    generate_node_number_override(job);
+
+    /*
+        We have to change the velocities and accelerations if nodes are tied
+        together. Weigh each component by nodal mass.
+    */
+    for (i = 0; i < lda; i++) {
+        mv_grid_t[i] = 0;
+        ma_grid_t[i] = 0;
+        m_grid_t[i] = 0;
+    }
+    for (i = 0; i < lda; i++) {
+        i_new = job->node_number_override[i];
+        mv_grid_t[i_new] += v_grid_t[i] * job->m_grid[i];
+        ma_grid_t[i_new] += a_grid_t[i] * job->m_grid[i];
+        m_grid_t[i_new] += job->m_grid[i];
+    }
+    for (i = 0; i < lda; i++) {
+        i_new = job->node_number_override[i];
+        if (m_grid_t[i_new] == 0) {
+            continue;
+        }
+        v_grid_t[i] = mv_grid_t[i_new] / m_grid_t[i_new];
+        a_grid_t[i] = ma_grid_t[i_new] / m_grid_t[i_new];
+    }
+
     /* Begin newton iterations */
     do {
         update_internal_stress(job);
@@ -819,9 +864,6 @@ start_implicit:
         /* starting timer */
         clock_gettime(CLOCK_REALTIME, &requestStart);
 
-        /* Generate and apply dirichlet boundary conditions given in BC file. */
-        generate_dirichlet_bcs(job);
-
         /* build node and inverse maps, taking BCs into account. */
         for (i = 0; i < lda; i++) {
             job->node_u_map[i] = -1;
@@ -829,15 +871,26 @@ start_implicit:
         }
         j = 0;
         for (i = 0; i < lda; i++) {
+            i_new = job->node_number_override[i];
+
+            /* if the new node dof has already been assigned a place in the
+                matrix, don't set it again */
+            if (job->node_u_map[i_new] != -1) {
+                continue;
+            }
+
+            /* otherwise, check if this node has any particles and the value
+                has not been set by dirichlet BCs. */
             if (job->m_grid[i] > TOL && (job->u_dirichlet_mask[i] == 0)) {
-                job->node_u_map[i] = j;
+                job->node_u_map[i_new] = j;
                 j++;
             }
         }
         slda = j;   /* The number of free DOFs gives the sparse matrix size. */
         for (i = 0; i < lda; i++) {
-            if ((j = job->node_u_map[i]) != -1) {
-                job->inv_node_u_map[j] = i;
+            i_new = job->node_number_override[i];
+            if ((j = job->node_u_map[i_new]) != -1) {
+                job->inv_node_u_map[j] = i_new;
             }
         }
 
@@ -857,62 +910,99 @@ start_implicit:
 
         /* Calculate right hand side (load):
                 Q = f_ext - f_int - M_g * (4 * u / dt^2 - 4 * v / dt - a) */
-        memcpy(job->q_grid, job->m_grid, lda * sizeof(double));
+/*        memcpy(job->q_grid, job->m_grid, lda * sizeof(double));*/
+/*        for (i = 0; i < lda; i++) {*/
+/*            job->q_grid[i] = 0;*/
+/*        }*/
+/*        for (i = 0; i < lda; i++) {*/
+/*            i_new = job->node_number_override[i];*/
+/*            mv_grid_t[i_new] += v_grid_t[i] * job->m_grid[i];*/
+/*            ma_grid_t[i_new] += a_grid_t[i] * job->m_grid[i];*/
+/*            m_grid_t[i_new] += job->m_grid[i];*/
+/*        }*/
+/*        for (i = 0; i < lda; i++) {*/
+/*            i_new = job->node_number_override[i];*/
+/*            if (m_grid_t[i_new] == 0) {*/
+/*                continue;*/
+/*            }*/
+/*            v_grid_t[i] = mv_grid_t[i_new] / m_grid_t[i_new];*/
+/*            a_grid_t[i] = ma_grid_t[i_new] / m_grid_t[i_new];*/
+/*        }*/
         for (i = 0; i < lda; i++) {
-            job->q_grid[i] *= -(4 * job->u_grid[i] - 4 * v_grid_t[i] * job->dt - a_grid_t[i] * job->dt * job->dt);
-            job->q_grid[i] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
+            i_new = job->node_number_override[i];
+/*            job->q_grid[i_new] = (4 * mv_grid_t[i_new] * job->dt + ma_grid_t[i_new] * job->dt * job->dt);*/
+            job->q_grid[i_new] = (1 * mv_grid_t[i_new] * job->dt);
+        }
+        for (i = 0; i < lda; i++) {
+            i_new = job->node_number_override[i];
+            /* XXX this is okay only because
+                u_grid[i] == u_grid[i_new1] == u_grid[i_new2] etc ... */
+/*            job->q_grid[i_new] += -job->m_grid[i] * (4 * job->u_grid[i]);*/
+/*            job->q_grid[i_new] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;*/
+            job->q_grid[i_new] += -job->m_grid[i] * (1 * job->u_grid[i]);
+            job->q_grid[i_new] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
         }
 
         /* assemble elements into global stiffness matrix */
         for (i = 0; i < job->num_elements; i++) {
-            if (job->elements[i].filled != 0) {
-                for (r = 0; r < (NODAL_DOF * NODES_PER_ELEMENT); r++) {
-                    for (s = 0; s < (NODAL_DOF * NODES_PER_ELEMENT); s++) {
-                        job->elements[i].kku_element[r][s] *= (job->dt * job->dt);
-                    }
+
+            /* Ignore empty elements. */
+            if (job->elements[i].filled == 0) {
+                continue;
+            }
+
+            /* scale stiffness matrix */
+            for (r = 0; r < (NODAL_DOF * NODES_PER_ELEMENT); r++) {
+                for (s = 0; s < (NODAL_DOF * NODES_PER_ELEMENT); s++) {
+                    job->elements[i].kku_element[r][s] *= (job->dt * job->dt);
                 }
-                nn[0] = job->elements[i].nodes[0];
-                nn[1] = job->elements[i].nodes[1];
-                nn[2] = job->elements[i].nodes[2];
-                nn[3] = job->elements[i].nodes[3];
-                /*
-                    This presumes that the element level stiffness matrices are
-                    written as (x1, y1, c1, .... , x4, y4, c4) where the
-                    numbers indicate local node and the variable names are
-                    nodal degrees of freedom.
-                */
-                for (r = 0; r < NODES_PER_ELEMENT; r++) {
-                    for (m = 0; m < NODAL_DOF; m++) {
-                        for (s = 0; s < NODES_PER_ELEMENT; s++) {
-                            for (n = 0; n < NODAL_DOF; n++) {
-                                gi = NODAL_DOF * nn[r] + m;
-                                gj = NODAL_DOF * nn[s] + n;
-                                ei = NODAL_DOF * r + m;
-                                ej = NODAL_DOF * s + n;
-                                ke = job->elements[i].kku_element[ei][ej];
+            }
+            nn[0] = job->elements[i].nodes[0];
+            nn[1] = job->elements[i].nodes[1];
+            nn[2] = job->elements[i].nodes[2];
+            nn[3] = job->elements[i].nodes[3];
+            /*
+                This presumes that the element level stiffness matrices are
+                written as (x1, y1, c1, .... , x4, y4, c4) where the
+                numbers indicate local node and the variable names are
+                nodal degrees of freedom.
+            */
+            for (r = 0; r < NODES_PER_ELEMENT; r++) {
+                for (m = 0; m < NODAL_DOF; m++) {
+                    for (s = 0; s < NODES_PER_ELEMENT; s++) {
+                        for (n = 0; n < NODAL_DOF; n++) {
+                            gi = NODAL_DOF * nn[r] + m;
+                            gj = NODAL_DOF * nn[s] + n;
 
-                                /*
-                                    If the global index is masked, don't add it
-                                    to the sparse matrix.
-                                */
-                                if (job->u_dirichlet_mask[gi] != 0) {
-                                    continue;
-                                }
+                            /* renumber nodes as appropriate */
+                            gi = job->node_number_override[gi];
+                            gj = job->node_number_override[gj];
 
-                                /* adjust load for dirichlet bcs. */
-                                if (job->u_dirichlet_mask[gj] != 0) {
-                                    job->q_grid[gi] += (-job->u_dirichlet[gj] * ke);
-                                    continue;
-                                }
+                            ei = NODAL_DOF * r + m;
+                            ej = NODAL_DOF * s + n;
+                            ke = job->elements[i].kku_element[ei][ej];
 
-                                res = cs_entry(triplets,
-                                        job->node_u_map[gi],
-                                        job->node_u_map[gj],
-                                        ke);
+                            /*
+                                If the global index is masked, don't add it
+                                to the sparse matrix.
+                            */
+                            if (job->u_dirichlet_mask[gi] != 0) {
+                                continue;
+                            }
 
-                                if (res == 0) {
-                                    fprintf(stderr, "error adding stiffness entry\n");
-                                }
+                            /* adjust load for dirichlet bcs. */
+                            if (job->u_dirichlet_mask[gj] != 0) {
+                                job->q_grid[gi] += (-job->u_dirichlet[gj] * ke);
+                                continue;
+                            }
+
+                            res = cs_entry(triplets,
+                                    job->node_u_map[gi],
+                                    job->node_u_map[gj],
+                                    ke);
+
+                            if (res == 0) {
+                                fprintf(stderr, "error adding stiffness entry\n");
                             }
                         }
                     }
@@ -921,14 +1011,20 @@ start_implicit:
         }
 
         for (i = 0; i < lda; i++) {
-            if (job->node_u_map[i] != -1) {
+            i_new = job->node_number_override[i];
+            if (job->node_u_map[i_new] != -1) {
                 /* add diagonal mass matrix entries to
                     displacement dofs. */
 
+/*                res = cs_entry(triplets,*/
+/*                        job->node_u_map[i_new],*/
+/*                        job->node_u_map[i_new],*/
+/*                        4 * job->m_grid[i]);*/
+
                 res = cs_entry(triplets,
-                        job->node_u_map[i],
-                        job->node_u_map[i],
-                        4 * job->m_grid[i]);
+                        job->node_u_map[i_new],
+                        job->node_u_map[i_new],
+                        1 * job->m_grid[i]);
 
                 if (res == 0) {
                     fprintf(stderr, "error adding mass entry\n");
@@ -1006,17 +1102,19 @@ start_implicit:
 
         /* map solution back to entire grid */
         for (i = 0; i < ldb; i++) {
-            if ((j = job->node_u_map[i]) != -1) {
+            i_new = job->node_number_override[i];
+            if ((j = job->node_u_map[i_new]) != -1) {
                 job->du_grid[i] = sb[j];
             } else {
                 job->du_grid[i] = 0;
             }
         }
 
-        /* apply BCs to solution */
+        /* apply dirichlet BCs to solution */
         for (i = 0; i < ldb; i++) {
-            if (job->u_dirichlet_mask[i] != 0) {
-                job->du_grid[i] = job->u_dirichlet[i];
+            i_new = job->node_number_override[i];
+            if (job->u_dirichlet_mask[i_new] != 0) {
+                job->du_grid[i] = job->u_dirichlet[i_new];
             }
         }
 
@@ -1025,7 +1123,9 @@ start_implicit:
             job->u_grid[i] += job->du_grid[i];
 
             /* update grid velocity */
-            job->v_grid[i] = 2 * (job->u_grid[i] / job->dt) - v_grid_t[i];
+/*            job->v_grid[i] = 2 * (job->u_grid[i] / job->dt) - v_grid_t[i];*/
+/*            job->v_grid[i] = (job->u_grid[i] / job->dt) - v_grid_t[i];*/
+            job->v_grid[i] = (job->u_grid[i] / job->dt);
         }
 
         for (i = 0; i < job->num_nodes; i++) {
@@ -1040,44 +1140,45 @@ start_implicit:
         cs_spfree(smat);
         free(sb);
         k++;
-#define UNORM_TOL 1e-1
-#define QNORM_TOL 1e-2
-#define UNORM_CONV 1e-10
 
-        if (du_norm < UNORM_CONV) {
+        if (du_norm < job->implicit.du_norm_converged) {
             printf("norm of du  = %e: Accepting as converged.\n", du_norm);
             break;
         }
 
-        if (q_norm*du_norm > 10*(q0_norm*du0_norm) || du_norm > 10*du0_norm || k > 10) {
+        if (q_norm*du_norm > 10*(q0_norm*du0_norm)
+                || du_norm > 10*du0_norm
+                || k > job->implicit.unstable_iteration_count) {
             job->dt = job->dt * 0.8;
             stable_timestep = 0;
             printf("Trouble converging, modifying Timestep to %f.\n", job->dt);
             goto start_implicit;
         }
 
-#define DT_LOWERBOUND 1e-8
-        if (job->dt < DT_LOWERBOUND) {
+        if (job->dt < job->timestep.dt_min) {
             fprintf(stderr, "Timestep %g is too small, aborting.\n", job->dt);
             exit(-1);
         }
 
-    } while ((du_norm / du0_norm) > UNORM_TOL || ((du_norm *q_norm) / (du0_norm * q0_norm)) > QNORM_TOL);
+    } while ((du_norm / du0_norm) > job->implicit.du_norm_ratio ||
+        ((du_norm*q_norm) / (du0_norm*q0_norm)) > job->implicit.q_norm_ratio);
 
-/*    stable_timestep++;*/
-/*#define DT_UPPERBOUND 1.0/240.0*/
-/*    if (stable_timestep > 4 && job->dt < DT_UPPERBOUND) {*/
-/*        job->dt = job->dt * 1.25;*/
-/*        if (job->dt > DT_UPPERBOUND) {*/
-/*            job->dt = DT_UPPERBOUND;*/
-/*        }*/
-/*        printf("Increasing timestep to %f.\n", job->dt);*/
-/*        stable_timestep = 0;*/
-/*    }*/
+    stable_timestep++;
+    if (job->timestep.allow_dt_increase != 0
+        && stable_timestep > job->timestep.stable_dt_threshold 
+        && job->dt < job->timestep.dt_max) {
+        job->dt = job->dt * 1.25;
+        if (job->dt > job->timestep.dt_max) {
+            job->dt = job->timestep.dt_max;
+        }
+        printf("Increasing timestep to %f.\n", job->dt);
+        stable_timestep = 0;
+    }
 
     /* update grid acceleration */
     for (i = 0; i < ldb; i++) {
-        job->a_grid[i] = (4 * job->u_grid[i] * inv_dt_sq - 4 * v_grid_t[i] * inv_dt - a_grid_t[i]);
+/*        job->a_grid[i] = (4 * job->u_grid[i] * inv_dt_sq - 4 * v_grid_t[i] * inv_dt - a_grid_t[i]);*/
+        job->a_grid[i] = (job->u_grid[i] * inv_dt_sq - v_grid_t[i] * inv_dt);
     }
 
     /* repackage for use with macros */
@@ -1165,14 +1266,19 @@ void move_particles(job_t *job)
         job->particles[i].ux += dux;
         job->particles[i].uy += duy;
 
+        while(job->particles[i].x < 0) { job->particles[i].x += 1.0; }
+        while(job->particles[i].x > 1) { job->particles[i].x -= 1.0; }
+
         a_x_t = job->particles[i].x_tt;
         a_y_t = job->particles[i].y_tt;
 
         job->particles[i].x_tt = (N_TO_P(job, x_tt, i));
         job->particles[i].y_tt = (N_TO_P(job, y_tt, i));
 
-        job->particles[i].x_t += 0.5 * job->dt * (job->particles[i].x_tt + a_x_t);
-        job->particles[i].y_t += 0.5 * job->dt * (job->particles[i].y_tt + a_y_t);
+/*        job->particles[i].x_t += 0.5 * job->dt * (job->particles[i].x_tt + a_x_t);*/
+/*        job->particles[i].y_t += 0.5 * job->dt * (job->particles[i].y_tt + a_y_t);*/
+        job->particles[i].x_t = (N_TO_P(job, x_t, i));
+        job->particles[i].y_t = (N_TO_P(job, y_t, i));
     }
     return;
 }
@@ -1272,9 +1378,9 @@ void update_corner_positions(job_t *job)
 /*    FILE *fd;*/
 /*    fd = fopen("pnodes.txt", "a");*/
 
-    for (i = 0; i < (job->num_particles * job->num_nodes); i++) {
-        job->phi[i] = 0;
-    }
+/*    for (i = 0; i < (job->num_particles * job->num_nodes); i++) {*/
+/*        job->phi[i] = 0;*/
+/*    }*/
 
     for (i = 0; i < job->num_particles; i++) {
         /* Find corner positions from (adjusted) vectors. */
@@ -1378,10 +1484,9 @@ void update_corner_positions(job_t *job)
                 }
 
                 /* phi rows are nodal indicies, cols are particle indicies */
-                job->phi[job->num_particles * job->elements[job->particles[i].corner_elements[k]].nodes[j] + i] += 0.25 * job->particles[i].sc[k][j];
+/*                job->phi[job->num_particles * job->elements[job->particles[i].corner_elements[k]].nodes[j] + i] += 0.25 * job->particles[i].sc[k][j];*/
             }
         }
-
 
     }
 
@@ -1505,8 +1610,13 @@ void update_particle_densities(job_t *job)
 /*            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);*/
 /*        }*/
 
-        job->particles[i].v = ((job->particles[i].Fxx * job->particles[i].Fyy) - 
-            job->particles[i].Fxy * job->particles[i].Fyx) * job->particles[i].v0;
+/*        if (job->use_cpdi) {*/
+            job->particles[i].v = job->particles[i].v0 *
+                ((job->particles[i].Fxx * job->particles[i].Fyy) - 
+                job->particles[i].Fxy * job->particles[i].Fyx);
+/*        } else {*/
+/*            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);*/
+/*        }*/
     }
 
     return;

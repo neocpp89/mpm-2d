@@ -246,17 +246,12 @@ job_t *read_state(FILE *fd)
     }
 
     for (i = 0; i < job->num_elements; i++) {
-        r = fscanf(fd, "%d %d %d %d %d %d %d %d %d",
+        r = fscanf(fd, "%d %d %d %d",
             &(job->elements[i].nodes[0]),
             &(job->elements[i].nodes[1]),
             &(job->elements[i].nodes[2]),
-            &(job->elements[i].nodes[3]),
-            &(job->elements[i].nodes[4]),
-            &(job->elements[i].nodes[5]),
-            &(job->elements[i].nodes[6]),
-            &(job->elements[i].nodes[7]),
-            &(job->elements[i].nodes[8]));
-        if (r != 9) {
+            &(job->elements[i].nodes[3]));
+        if (r != 4) {
             printf("error reading state of element %d\n", i);
         }
     }

@@ -435,16 +435,11 @@ void write_state(FILE *fd, job_t *job)
     }
 
     for (i = 0; i < job->num_elements; i++) {
-         fprintf(fd, "%d %d %d %d %d %d %d %d %d\n",
+         fprintf(fd, "%d %d %d %d\n",
             job->elements[i].nodes[0],
             job->elements[i].nodes[1],
             job->elements[i].nodes[2],
-            job->elements[i].nodes[3],
-            job->elements[i].nodes[4],
-            job->elements[i].nodes[5],
-            job->elements[i].nodes[6],
-            job->elements[i].nodes[7],
-            job->elements[i].nodes[8]);
+            job->elements[i].nodes[3]);
     }
 
     return;

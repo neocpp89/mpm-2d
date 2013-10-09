@@ -56,15 +56,39 @@ void generate_dirichlet_bcs(job_t *job)
     }
 
     /* Side walls. */
-    for (n = 0; n < job->N; n++) {
-        job->u_dirichlet[NODAL_DOF * (n*job->N) + XDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * (n*job->N) + XDOF_IDX] = 1;
+/*    for (n = 0; n < job->N; n++) {*/
+/*        job->u_dirichlet[NODAL_DOF * (n*job->N) + XDOF_IDX] = 0;*/
+/*        job->u_dirichlet_mask[NODAL_DOF * (n*job->N) + XDOF_IDX] = 1;*/
 
-        job->u_dirichlet[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 1;
-    }
+/*        job->u_dirichlet[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 0;*/
+/*        job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 1;*/
+/*    }*/
 
     return;
 }
 /*----------------------------------------------------------------------------*/
 
+/*----------------------------------------------------------------------------*/
+void generate_node_number_override(job_t *job)
+{
+    int i, j;
+    int off = job->N - 1;
+
+    for (i = 0; i < job->num_nodes; i++) {
+        for (j = 0; j < NODAL_DOF; j++) {
+            job->node_number_override[NODAL_DOF * i + j] = (NODAL_DOF * i + j);
+        }
+    }
+
+    /* x direction is periodic */
+    for (i = 0; i < job->N; i++) {
+        for (j = 0; j < NODAL_DOF; j++) {
+            job->node_number_override[NODAL_DOF * (off + i*job->N) + j] =
+                (NODAL_DOF * (i*job->N) + j);
+        }
+    }
+
+
+    return;
+}
+/*----------------------------------------------------------------------------*/

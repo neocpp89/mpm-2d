@@ -4,7 +4,7 @@ BIN = mpm_2d
 VIZBIN = viz
 CFLAGS = -c -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -pg -fopenmp -funroll-loops -I/usr/lib/openmpi/include/
 #takes form '-ldl -lpthreads' etc.
-LIB = -lrt -lm -lhdf5 -pthread -lblas -llapack -lcxsparse
+LIB = -lrt -lm -lhdf5 -pthread -lblas -llapack -lcxsparse -lconfuse
 # modified CFLAGS for libraries
 LDFLAGS = $(LIB) -pg -g
 # CFLAGS = -o $(BIN) -I<dir> -L<dir> -Wall -Wstrict-prototypes -ansi -pedantic

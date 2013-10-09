@@ -92,7 +92,7 @@ typedef struct particle_s {
     double real_syy;
     double real_state[DEPVAR];
 
-    /* inital 'vertical' and 'horizontal' vectors.
+    /* inital 'horizontal' and 'vertical' vectors.
         initial volume should be given by magnitude (r_v cross r_h). */
     double r1_initial[2];
     double r2_initial[2];

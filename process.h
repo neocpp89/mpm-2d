@@ -19,6 +19,26 @@ typedef struct material_s {
     double rho;
 } material_t;
 
+typedef struct ts_control_s {
+    double dt_max;
+    double dt_min;
+    double dt;
+
+    int automatic_dt;
+
+    int allow_dt_increase;
+    int stable_dt_threshold;
+} timestep_control_t;
+
+typedef struct im_control_s {
+    double du_norm_ratio;
+    double q_norm_ratio;
+    double du_norm_converged;
+
+    int unstable_iteration_count;
+    int stable_step_count;
+} implicit_control_t;
+
 typedef struct job_s {
     double t;
     double dt;
@@ -81,7 +101,7 @@ typedef struct job_s {
     double *f_ext_grid;
     double *f_int_grid;
 
-    double *phi;
+    /* double *phi; */
 
     /* maps node number to position in u_grid vector. */
     int *node_u_map;
@@ -91,12 +111,24 @@ typedef struct job_s {
     double *u_dirichlet;
     int *u_dirichlet_mask;
 
+    /*
+        Renumbers the nodes before feeding to the node map. Used to implement
+        periodic boundary conditions.
+    */
+    int *node_number_override;
+
     int vec_len;
     double *kku_grid;
     /* kku_grid is vec_len*vec_len in size */
 
-    FILE *ke_data;
-    FILE *stress_data;
+//    FILE *ke_data;
+//    FILE *stress_data;
+
+    /* timestep simulation options */
+    timestep_control_t timestep;
+
+    /* implicit solver options */
+    implicit_control_t implicit;
 
 #define PT_NUM_THREADS 64
     pthread_t threads[PT_NUM_THREADS];
