@@ -321,6 +321,7 @@ job_start:
     printf("\n");
     printf("Freeing allocated memory.\n");
 
+    cfg_free(cfg);
     mpm_cleanup(job);
     h5_cleanup(h5);
 

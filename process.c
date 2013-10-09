@@ -1195,6 +1195,9 @@ start_implicit:
 
     free(v_grid_t);
     free(a_grid_t);
+    free(mv_grid_t);
+    free(ma_grid_t);
+    free(m_grid_t);
 
     return;
 }
