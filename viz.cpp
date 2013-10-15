@@ -13,6 +13,8 @@
 #include <getopt.h>
 #include <unistd.h>
 
+#include <confuse.h>
+
 #include "viz_colormap.hpp"
 #include "viz_builtin_colormap.hpp"
 
@@ -73,6 +75,11 @@ static struct g_state_s {
     int draw_velocity_vector;
 
     float particle_size;
+
+    cfg_t *cfg; /* configuration file */
+    cfg_opt_t *opts;
+    int color_override;
+
 } g_state;
 
 static const char* g_optstring = "ab:c:d:m:el:u:p:svw";
@@ -736,6 +743,7 @@ int draw_particles(void)
 {
 //    const int points = 100000;
     int i, j;
+    int c_idx;
     float r, g, b, hue;
 
     static aux_particle_t *particles = NULL;
@@ -919,7 +927,16 @@ int draw_particles(void)
 //                b = 255/256.0;
 //            }
         }
-        glColor3f(r, g, b);
+        if (g_state.color_override == 0) {
+            glColor3f(r, g, b);
+        } else {
+            //get override color index
+            c_idx = 3 * i;
+            r = cfg_getnfloat(g_state.cfg, "color-by-index", c_idx+0);
+            g = cfg_getnfloat(g_state.cfg, "color-by-index", c_idx+1);
+            b = cfg_getnfloat(g_state.cfg, "color-by-index", c_idx+2);
+            glColor3f(r, g, b);
+        }
 #if 0
         // override for stripes!
         if ((i / (4 * 40) % 2) == 0) {
@@ -1407,6 +1424,13 @@ void heartbeat(void)
 
 int main(int argc, char* argv[])
 {
+    cfg_opt_t opts[] =
+    {
+        CFG_INT("override-particle-colors", 0, CFGF_NONE),
+        CFG_FLOAT_LIST("color-by-index", "{0, 0, 0}", CFGF_NONE),
+        CFG_END()
+    };
+
     int opt = 0;
     int leftover_argc;
     char **leftover_argv;
@@ -1454,6 +1478,16 @@ int main(int argc, char* argv[])
     g_state.colormap.colors = NULL;
     g_state.colormap.anchors = NULL;
     g_state.colormap.num_colors = 0;
+
+    /* configuration file parsing XXX remove hardcoding!*/
+    g_state.cfg = cfg_init(opts, CFGF_NONE);
+    if (cfg_parse(g_state.cfg, "visualization.cfg") == CFG_PARSE_ERROR) {
+        fprintf(stderr, "Fatal -- cannot parse configuration file '%s'.\n",
+            "visualization.cfg");
+        exit(127);
+    }
+
+    g_state.color_override = cfg_getint(g_state.cfg, "override-particle-colors");
 
     opt = getopt(argc, argv, g_optstring);
 

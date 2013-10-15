@@ -21,6 +21,8 @@
 /*#include <omp.h>*/
 #include <signal.h>
 
+#include <assert.h>
+
 #define TOL 1e-16
 
 #define signum(x) ((int)((0 < x) - (x < 0)))
@@ -910,37 +912,19 @@ start_implicit:
 
         /* Calculate right hand side (load):
                 Q = f_ext - f_int - M_g * (4 * u / dt^2 - 4 * v / dt - a) */
-/*        memcpy(job->q_grid, job->m_grid, lda * sizeof(double));*/
-/*        for (i = 0; i < lda; i++) {*/
-/*            job->q_grid[i] = 0;*/
-/*        }*/
-/*        for (i = 0; i < lda; i++) {*/
-/*            i_new = job->node_number_override[i];*/
-/*            mv_grid_t[i_new] += v_grid_t[i] * job->m_grid[i];*/
-/*            ma_grid_t[i_new] += a_grid_t[i] * job->m_grid[i];*/
-/*            m_grid_t[i_new] += job->m_grid[i];*/
-/*        }*/
-/*        for (i = 0; i < lda; i++) {*/
-/*            i_new = job->node_number_override[i];*/
-/*            if (m_grid_t[i_new] == 0) {*/
-/*                continue;*/
-/*            }*/
-/*            v_grid_t[i] = mv_grid_t[i_new] / m_grid_t[i_new];*/
-/*            a_grid_t[i] = ma_grid_t[i_new] / m_grid_t[i_new];*/
-/*        }*/
         for (i = 0; i < lda; i++) {
             i_new = job->node_number_override[i];
-/*            job->q_grid[i_new] = (4 * mv_grid_t[i_new] * job->dt + ma_grid_t[i_new] * job->dt * job->dt);*/
-            job->q_grid[i_new] = (1 * mv_grid_t[i_new] * job->dt);
+            job->q_grid[i_new] = (4 * mv_grid_t[i_new] * job->dt + ma_grid_t[i_new] * job->dt * job->dt);
+/*            job->q_grid[i_new] = (1 * mv_grid_t[i_new] * job->dt);*/
         }
         for (i = 0; i < lda; i++) {
             i_new = job->node_number_override[i];
             /* XXX this is okay only because
                 u_grid[i] == u_grid[i_new1] == u_grid[i_new2] etc ... */
-/*            job->q_grid[i_new] += -job->m_grid[i] * (4 * job->u_grid[i]);*/
-/*            job->q_grid[i_new] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;*/
-            job->q_grid[i_new] += -job->m_grid[i] * (1 * job->u_grid[i]);
+            job->q_grid[i_new] += -job->m_grid[i] * (4 * job->u_grid[i]);
             job->q_grid[i_new] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
+/*            job->q_grid[i_new] += -job->m_grid[i] * (1 * job->u_grid[i]);*/
+/*            job->q_grid[i_new] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;*/
         }
 
         /* assemble elements into global stiffness matrix */
@@ -1016,15 +1000,15 @@ start_implicit:
                 /* add diagonal mass matrix entries to
                     displacement dofs. */
 
-/*                res = cs_entry(triplets,*/
-/*                        job->node_u_map[i_new],*/
-/*                        job->node_u_map[i_new],*/
-/*                        4 * job->m_grid[i]);*/
-
                 res = cs_entry(triplets,
                         job->node_u_map[i_new],
                         job->node_u_map[i_new],
-                        1 * job->m_grid[i]);
+                        4 * job->m_grid[i]);
+
+/*                res = cs_entry(triplets,*/
+/*                        job->node_u_map[i_new],*/
+/*                        job->node_u_map[i_new],*/
+/*                        1 * job->m_grid[i]);*/
 
                 if (res == 0) {
                     fprintf(stderr, "error adding mass entry\n");
@@ -1123,9 +1107,8 @@ start_implicit:
             job->u_grid[i] += job->du_grid[i];
 
             /* update grid velocity */
-/*            job->v_grid[i] = 2 * (job->u_grid[i] / job->dt) - v_grid_t[i];*/
-/*            job->v_grid[i] = (job->u_grid[i] / job->dt) - v_grid_t[i];*/
-            job->v_grid[i] = (job->u_grid[i] / job->dt);
+            job->v_grid[i] = 2 * (job->u_grid[i] / job->dt) - v_grid_t[i];
+/*            job->v_grid[i] = (job->u_grid[i] / job->dt);*/
         }
 
         for (i = 0; i < job->num_nodes; i++) {
@@ -1177,8 +1160,8 @@ start_implicit:
 
     /* update grid acceleration */
     for (i = 0; i < ldb; i++) {
-/*        job->a_grid[i] = (4 * job->u_grid[i] * inv_dt_sq - 4 * v_grid_t[i] * inv_dt - a_grid_t[i]);*/
-        job->a_grid[i] = (job->u_grid[i] * inv_dt_sq - v_grid_t[i] * inv_dt);
+        job->a_grid[i] = (4 * job->u_grid[i] * inv_dt_sq - 4 * v_grid_t[i] * inv_dt - a_grid_t[i]);
+/*        job->a_grid[i] = (job->u_grid[i] * inv_dt_sq - v_grid_t[i] * inv_dt);*/
     }
 
     /* repackage for use with macros */
@@ -1272,16 +1255,19 @@ void move_particles(job_t *job)
         while(job->particles[i].x < 0) { job->particles[i].x += 1.0; }
         while(job->particles[i].x > 1) { job->particles[i].x -= 1.0; }
 
+        while(job->particles[i].y < 0) { job->particles[i].y += 1.0; }
+        while(job->particles[i].y > 1) { job->particles[i].y -= 1.0; }
+
         a_x_t = job->particles[i].x_tt;
         a_y_t = job->particles[i].y_tt;
 
         job->particles[i].x_tt = (N_TO_P(job, x_tt, i));
         job->particles[i].y_tt = (N_TO_P(job, y_tt, i));
 
-/*        job->particles[i].x_t += 0.5 * job->dt * (job->particles[i].x_tt + a_x_t);*/
-/*        job->particles[i].y_t += 0.5 * job->dt * (job->particles[i].y_tt + a_y_t);*/
-        job->particles[i].x_t = (N_TO_P(job, x_t, i));
-        job->particles[i].y_t = (N_TO_P(job, y_t, i));
+        job->particles[i].x_t += 0.5 * job->dt * (job->particles[i].x_tt + a_x_t);
+        job->particles[i].y_t += 0.5 * job->dt * (job->particles[i].y_tt + a_y_t);
+/*        job->particles[i].x_t = (N_TO_P(job, x_t, i));*/
+/*        job->particles[i].y_t = (N_TO_P(job, y_t, i));*/
     }
     return;
 }

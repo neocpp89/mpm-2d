@@ -152,31 +152,31 @@ job_t *read_state(FILE *fd)
     job->h2 = (double *)malloc(job->num_particles * sizeof(double));
     job->h3 = (double *)malloc(job->num_particles * sizeof(double));
     job->h4 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h5 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h6 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h7 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h8 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h9 = (double *)malloc(job->num_particles * sizeof(double));
+/*    job->h5 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->h6 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->h7 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->h8 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->h9 = (double *)malloc(job->num_particles * sizeof(double));*/
 
     job->b11 = (double *)malloc(job->num_particles * sizeof(double));
     job->b12 = (double *)malloc(job->num_particles * sizeof(double));
     job->b13 = (double *)malloc(job->num_particles * sizeof(double));
     job->b14 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b15 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b16 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b17 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b18 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b19 = (double *)malloc(job->num_particles * sizeof(double));
+/*    job->b15 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b16 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b17 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b18 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b19 = (double *)malloc(job->num_particles * sizeof(double));*/
 
     job->b21 = (double *)malloc(job->num_particles * sizeof(double));
     job->b22 = (double *)malloc(job->num_particles * sizeof(double));
     job->b23 = (double *)malloc(job->num_particles * sizeof(double));
     job->b24 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b25 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b26 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b27 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b28 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b29 = (double *)malloc(job->num_particles * sizeof(double));
+/*    job->b25 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b26 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b27 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b28 = (double *)malloc(job->num_particles * sizeof(double));*/
+/*    job->b29 = (double *)malloc(job->num_particles * sizeof(double));*/
 
     for (i = 0; i < job->num_particles; i++) {
         /* Position */

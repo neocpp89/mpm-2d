@@ -14,6 +14,10 @@
 #include <pthread.h>
 #include <confuse.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "material.h"
 #include "particle.h"
 #include "point.h"
@@ -27,7 +31,7 @@
 
 #define SAMPLE_HZ 60.0f
 
-static struct s_state {
+static struct state_s {
     char *outputdir;
 
     char *h5file;
@@ -63,6 +67,24 @@ void signal_callback_handler(int signum)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
+int validate_path(cfg_t *cfg, cfg_opt_t *opt)
+{
+    char *str = cfg_opt_getnstr(opt, cfg_opt_size(opt) - 1);
+    struct stat s;
+
+    /* check if the directory supplied exists and is actually a directory. */
+    if(stat(str, &s) != 0 || !S_ISDIR(s.st_mode))
+    {
+        cfg_error(cfg, "Unable to open '%s' for option '%s.%s'.",
+            str, cfg->name, opt->name);
+        return -1;
+    }
+
+    return 0;
+}
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
 void usage(char *program_name)
 {
     printf("%s: [OPTIONS] grid_file particle_file [t_max]\n", program_name);
@@ -93,15 +115,35 @@ int main(int argc, char **argv)
         CFG_INT("unstable-iteration-count", 10, CFGF_NONE),
         CFG_END()
     };
+    cfg_opt_t output_opts[] =
+    {
+        CFG_STR("job-name", "Default", CFGF_NONE),
+        CFG_STR("job-description", "None", CFGF_NONE),
+        CFG_INT("job-id", 0, CFGF_NONE),
+        CFG_STR("directory", "jobs/", CFGF_NONE),
+        CFG_STR("user", "unknown", CFGF_NONE),
+        CFG_INT("override-directory-with-id", 0, CFGF_NONE),
+        CFG_INT("prepend-date", 1, CFGF_NONE),
+        CFG_STR("particle-file", "frame_particle_data.txt", CFGF_NONE),
+        CFG_INT("enable-particle-output", 1, CFGF_NONE),
+        CFG_STR("element-file", "frame_element_data.txt", CFGF_NONE),
+        CFG_INT("enable-element-output", 0, CFGF_NONE),
+        CFG_STR("state-file", "state.txt", CFGF_NONE),
+        CFG_INT("trap-terminate-interrupt", 1, CFGF_NONE),
+        CFG_INT("save-state-on-terminate", 1, CFGF_NONE),
+        CFG_END()
+    };
     cfg_opt_t opts[] =
     {
         CFG_SEC("timestep", timestep_opts, CFGF_NONE),
         CFG_SEC("implicit", implicit_opts, CFGF_NONE),
+        CFG_SEC("output", output_opts, CFGF_NONE),
         CFG_END()
     };
     cfg_t *cfg;
     cfg_t *cfg_timestep;
     cfg_t *cfg_implicit;
+    cfg_t *cfg_output;
 
     const int num_threads = 1;
 
@@ -214,6 +256,7 @@ int main(int argc, char **argv)
 
     /* parse config file */
     cfg = cfg_init(opts, CFGF_NONE);
+    cfg_set_validate_func(cfg, "output|directory", validate_path);
 
     if (cfg_parse(cfg, cfgfile) == CFG_PARSE_ERROR) {
         fprintf(stderr, "Fatal -- cannot parse configuration file '%s'.\n",
@@ -240,7 +283,7 @@ int main(int argc, char **argv)
     job->timestep.stable_dt_threshold =
         cfg_getint(cfg_timestep, "stable-dt-threshold");
 
-    fprintf(stderr, "Timestep options set:\n");
+    fprintf(stderr, "\nTimestep options set:\n");
     fprintf(stderr, "dt_max: %e\n", job->timestep.dt_max);
     fprintf(stderr, "dt_min: %e\n", job->timestep.dt_min);
     fprintf(stderr, "dt: %e\n", job->timestep.dt);
@@ -260,10 +303,63 @@ int main(int argc, char **argv)
     job->implicit.unstable_iteration_count =
         cfg_getint(cfg_implicit, "unstable-iteration-count");
 
-    fprintf(stderr, "Implicit options set:\n");
+    fprintf(stderr, "\nImplicit options set:\n");
     fprintf(stderr, "du_norm_ratio: %e\n", job->implicit.du_norm_ratio);
     fprintf(stderr, "q_norm_ratio: %e\n", job->implicit.q_norm_ratio);
     fprintf(stderr, "du_norm_converged: %e\n", job->implicit.du_norm_converged);
+    fprintf(stderr, "unstable_iteration_count: %d\n", job->implicit.unstable_iteration_count);
+
+    /* section for output */
+    cfg_output = cfg_getsec(cfg, "output");
+
+    job->output.directory = cfg_getstr(cfg_output, "directory");
+    job->output.user = cfg_getstr(cfg_output, "user");
+    job->output.particle_filename = cfg_getstr(cfg_output, "particle-file");
+    job->output.element_filename = cfg_getstr(cfg_output, "element-file");
+    job->output.state_filename = cfg_getstr(cfg_output, "state-file");
+
+    job->output.modified_directory = 0;
+    len = strlen(job->output.directory);
+    if (job->output.directory[len - 1] != '/') {
+        job->output.directory = (char *)malloc(len + 2);
+        strcpy(job->output.directory, cfg_getstr(cfg_output, "directory"));
+        job->output.directory[len] = '/';
+        job->output.directory[len + 1] = 0;
+        job->output.modified_directory = 1;
+    }
+
+    len = strlen(job->output.directory) + strlen(job->output.particle_filename) + 1;
+    job->output.particle_filename_fullpath = (char *)malloc(len);
+    snprintf(job->output.particle_filename_fullpath, len, "%s%s",
+        job->output.directory, job->output.particle_filename);
+    len = strlen(job->output.directory) + strlen(job->output.element_filename) + 1;
+    job->output.element_filename_fullpath = (char *)malloc(len);
+    snprintf(job->output.element_filename_fullpath, len, "%s%s",
+        job->output.directory, job->output.element_filename);
+    len = strlen(job->output.directory) + strlen(job->output.state_filename) + 1;
+    job->output.state_filename_fullpath = (char *)malloc(len);
+    snprintf(job->output.state_filename_fullpath, len, "%s%s",
+        job->output.directory, job->output.state_filename);
+
+/*    job->output.particle_fd = fopen(job->output.particle_filename_fullpath, "w");*/
+/*    job->output.element_fd = fopen(job->output.element_filename_fullpath, "w");*/
+/*    job->output.state_fd = fopen(job->output.state_filename_fullpath, "w");*/
+
+    fprintf(stderr, "\nOutput options set:\n");
+    fprintf(stderr, "output_directory: %s\n", job->output.directory);
+    fprintf(stderr, "user: %s\n", job->output.user);
+    fprintf(stderr, "particle_filename: %s\n", job->output.particle_filename);
+    fprintf(stderr, "element_filename: %s\n", job->output.element_filename);
+    fprintf(stderr, "state_filename: %s\n", job->output.state_filename);
+
+    fprintf(stderr, "particle_filename_fullpath: %s\n",
+        job->output.particle_filename_fullpath);
+    fprintf(stderr, "element_filename_fullpath: %s\n",
+        job->output.element_filename_fullpath);
+    fprintf(stderr, "state_filename_fullpath: %s\n",
+        job->output.state_filename_fullpath);
+
+/*    exit(0);*/
 
 
 job_start:
@@ -314,6 +410,11 @@ job_start:
     write_state(state_fd, job);
 /*    h5_write_state("state.h5", job);*/
 
+    printf("Closing files.\n");
+/*    fclose(job->output.particle_fd);*/
+/*    fclose(job->output.element_fd);*/
+/*    fclose(job->output.state_fd);*/
+
     fclose(frame_fd);
     fclose(felement_fd);
     fclose(state_fd);
@@ -322,6 +423,12 @@ job_start:
     printf("Freeing allocated memory.\n");
 
     cfg_free(cfg);
+    if (job->output.modified_directory) {
+        free(job->output.directory);
+    }
+    free(job->output.particle_filename_fullpath);
+    free(job->output.element_filename_fullpath);
+    free(job->output.state_filename_fullpath);
     mpm_cleanup(job);
     h5_cleanup(h5);
 

@@ -6,7 +6,7 @@ if [ $# -ne 2 ] && [ $# -ne 1 ]; then
     echo "ARG2: (Optional) Job name. If left unused, name is created from current time.";
 else
     if [ $# -ne 2 ]; then
-        JOB_NAME=job_`date +%Y%d%m%H%M%S`
+        JOB_NAME=job_`date +%Y%m%d%H%M%S`
     else
         JOB_NAME=$2
     fi;

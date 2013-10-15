@@ -29,9 +29,7 @@ OBJ = $(SRC:.c=.o)
 all: $(BIN) $(VIZBIN)
 
 clean:
-	rm $(OBJ); \
-	rm $(BIN); \
-	rm $(VIZBIN);
+	-rm $(OBJ) $(BIN) $(VIZBIN);
 
 backup:
 	tar --exclude=jobs -cvzf ../mpm_2d_`date +%Y%m%d`.tar.gz ../`basename $(CURDIR)`;
@@ -55,7 +53,7 @@ $(BIN): $(OBJ)
 	$(CC) $(OBJ) -o $@ $(LDFLAGS)
 
 $(VIZBIN): viz.cpp
-	g++ -Wall $< -o $@ -lm -lSDL -lGL -lGLU -lftgl -lpng -lSDL_image
+	g++ -Wall $< -o $@ -lm -lSDL -lGL -lGLU -lftgl -lpng -lSDL_image -lconfuse
 
 .c.o:
 	$(CC) $(CFLAGS) $< -o $@

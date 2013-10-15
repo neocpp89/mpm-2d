@@ -39,6 +39,33 @@ typedef struct im_control_s {
     int stable_step_count;
 } implicit_control_t;
 
+typedef struct op_control_s {
+    char *directory;
+    char *user;
+    char *particle_filename;
+    char *element_filename;
+    char *state_filename;
+
+    char *particle_filename_fullpath;
+    char *element_filename_fullpath;
+    char *state_filename_fullpath;
+
+    FILE *particle_fd;
+    FILE *element_fd;
+    FILE *state_fd;
+
+    char *job_name;
+    char *job_description;
+    int job_id;
+
+    char *date;
+
+    int override_directory_with_id;
+    int prepend_date;
+
+    int modified_directory;
+} output_control_t;
+
 typedef struct job_s {
     double t;
     double dt;
@@ -66,31 +93,31 @@ typedef struct job_s {
     double *h2;
     double *h3;
     double *h4;
-    double *h5;
-    double *h6;
-    double *h7;
-    double *h8;
-    double *h9;
+//    double *h5;
+//    double *h6;
+//    double *h7;
+//    double *h8;
+//    double *h9;
 
     double *b11;
     double *b12;
     double *b13;
     double *b14;
-    double *b15;
-    double *b16;
-    double *b17;
-    double *b18;
-    double *b19;
+//    double *b15;
+//    double *b16;
+//    double *b17;
+//    double *b18;
+//    double *b19;
 
     double *b21;
     double *b22;
     double *b23;
     double *b24;
-    double *b25;
-    double *b26;
-    double *b27;
-    double *b28;
-    double *b29;
+//    double *b25;
+//    double *b26;
+//    double *b27;
+//    double *b28;
+//    double *b29;
 
     double *u_grid;
     double *du_grid;
@@ -129,6 +156,9 @@ typedef struct job_s {
 
     /* implicit solver options */
     implicit_control_t implicit;
+
+    /* output control options */
+    output_control_t output;
 
 #define PT_NUM_THREADS 64
     pthread_t threads[PT_NUM_THREADS];
