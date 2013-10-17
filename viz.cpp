@@ -79,7 +79,7 @@ static struct g_state_s {
     cfg_t *cfg; /* configuration file */
     cfg_opt_t *opts;
     int color_override;
-
+    int draw_glyphs;
 } g_state;
 
 static const char* g_optstring = "ab:c:d:m:el:u:p:svw";
@@ -951,7 +951,7 @@ int draw_particles(void)
 #define NUM_SEGS 20
         DrawDisc(GL_POLYGON, particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
 
-        if (particles[i].has_corners) {
+        if (particles[i].has_corners && (g_state.draw_glyphs != 0)) {
             glBegin(GL_LINE_LOOP);
             for (j = 0; j < 4; j++) {
                 glVertex3f(particles[i].corners[j][0], particles[i].corners[j][1], -1.0f);
@@ -1427,7 +1427,9 @@ int main(int argc, char* argv[])
     cfg_opt_t opts[] =
     {
         CFG_INT("override-particle-colors", 0, CFGF_NONE),
+        CFG_INT("draw-glyphs", 1, CFGF_NONE),
         CFG_FLOAT_LIST("color-by-index", "{0, 0, 0}", CFGF_NONE),
+        CFG_FUNC("include", cfg_include),
         CFG_END()
     };
 
@@ -1488,6 +1490,7 @@ int main(int argc, char* argv[])
     }
 
     g_state.color_override = cfg_getint(g_state.cfg, "override-particle-colors");
+    g_state.draw_glyphs = cfg_getint(g_state.cfg, "draw-glyphs");
 
     opt = getopt(argc, argv, g_optstring);
 

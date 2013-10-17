@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <pthread.h>
 
+#include <suitesparse/cs.h>
+
 typedef struct material_s {
     double E;
     double nu;
@@ -128,7 +130,27 @@ typedef struct job_s {
     double *f_ext_grid;
     double *f_int_grid;
 
-    /* double *phi; */
+    /*
+        Maps particle to nodal quantites (and gradient of quantites).
+        The matrix is a compressed sparse matrix, and the transpose will
+        map nodal to particle quantites.
+    */
+    cs *phi;
+    cs *grad_phi;
+    cs *phi_transpose;
+    cs *grad_phi_transpose;
+
+    double *m_nodes;
+    double *mx_t_nodes;
+    double *my_t_nodes;
+    double *mx_tt_nodes;
+    double *my_tt_nodes;
+    double *x_t_nodes;
+    double *y_t_nodes;
+    double *x_tt_nodes;
+    double *y_tt_nodes;
+    double *fx_nodes;
+    double *fy_nodes;
 
     /* maps node number to position in u_grid vector. */
     int *node_u_map;
@@ -151,7 +173,7 @@ typedef struct job_s {
 //    FILE *ke_data;
 //    FILE *stress_data;
 
-    /* timestep simulation options */
+    /* simulation timestep options */
     timestep_control_t timestep;
 
     /* implicit solver options */
@@ -173,6 +195,7 @@ typedef struct s_threadtask {
 
 job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t);
 void mpm_step(job_t *job);
+void mpm_cleanup(job_t *job);
 
 typedef struct s_strided_task {
     job_t *job;
@@ -191,7 +214,10 @@ void update_particle_domains(job_t *job);
 void update_particle_densities(job_t *job);
 void update_corner_domains(job_t *job);
 
-void mpm_cleanup(job_t *job);
+void generate_mappings(job_t *job);
+void map_particles_to_nodes(double *node_var, cs *phi, double *particle_var);
+void map_gradient_particles_to_nodes(double *node_var, cs *grad_phi, double *particle_var);
+void map_nodes_to_particles(double *particle_var, cs *phi_transpose, double *node_var);
 
 #endif
 

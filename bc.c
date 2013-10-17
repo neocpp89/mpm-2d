@@ -16,8 +16,6 @@
 #include "material.h"
 #include "element.h"
 
-#define TOL 1e-10
-
 /*----------------------------------------------------------------------------*/
 void generate_dirichlet_bcs(job_t *job)
 {
@@ -57,7 +55,9 @@ void generate_dirichlet_bcs(job_t *job)
 
     /* Side walls. */
     for (n = 0; n < job->N; n++) {
+#if 0
         if (n == job->N-1) { continue; } /* skip top row */
+#endif
 
         job->u_dirichlet[NODAL_DOF * (n*job->N) + XDOF_IDX] = 0;
         job->u_dirichlet_mask[NODAL_DOF * (n*job->N) + XDOF_IDX] = 1;
@@ -99,8 +99,10 @@ void generate_node_number_override(job_t *job)
     /* y direction is periodic */
     for (i = 0; i < job->N; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
-            job->node_number_override[NODAL_DOF * (job->num_nodes-i-1) + j] =
+            job->node_number_override[NODAL_DOF * (job->num_nodes-job->N+i) + j] =
                 (NODAL_DOF * i + j);
+/*            job->node_number_override[NODAL_DOF * i + j] =*/
+/*                (NODAL_DOF * (job->num_nodes-i-1) + j);*/
         }
     }
 

@@ -201,29 +201,28 @@ void add_particle_stiffness(int idx, job_t *job)
     job->elements[p].kku_element[NODAL_DOF * 3 + 1][NODAL_DOF * 2 + 1] += ( job->particles[i].v*(job->b13[i]*job->b14[i]*job->particles[i].sxx + job->b13[i]*job->b24[i]*job->particles[i].sxy + job->b14[i]*job->b23[i]*job->particles[i].sxy + job->b23[i]*job->b24[i]*job->particles[i].syy) );
     job->elements[p].kku_element[NODAL_DOF * 3 + 1][NODAL_DOF * 3 + 1] += ( job->particles[i].v*(pow(job->b14[i], 2)*job->particles[i].sxx + 2*job->b14[i]*job->b24[i]*job->particles[i].sxy + pow(job->b24[i], 2)*job->particles[i].syy) );
 
-
     /* nonlocal variable g (stored in particle.state[6]) */
-    pr = -0.5 * (job->particles[i].sxx + job->particles[i].syy);
-    tau = sqrt(0.5f*((job->particles[i].sxx + pr)*(job->particles[i].sxx + pr)
-        + 2*job->particles[i].sxy*job->particles[i].sxy
-        + (job->particles[i].syy + pr)*(job->particles[i].syy + pr)));
-    gammadot = sqrt(2.0*(0.25*(job->particles[i].exx_t - job->particles[i].eyy_t)*(job->particles[i].exx_t - job->particles[i].eyy_t) +
-        2*job->particles[i].exy_t*job->particles[i].exy_t +
-        0.25*(job->particles[i].eyy_t - job->particles[i].exx_t)*(job->particles[i].eyy_t - job->particles[i].exx_t)
-    ));
-    g_loc = pr * gammadot / tau;
+/*    pr = -0.5 * (job->particles[i].sxx + job->particles[i].syy);*/
+/*    tau = sqrt(0.5f*((job->particles[i].sxx + pr)*(job->particles[i].sxx + pr)*/
+/*        + 2*job->particles[i].sxy*job->particles[i].sxy*/
+/*        + (job->particles[i].syy + pr)*(job->particles[i].syy + pr)));*/
+/*    gammadot = sqrt(2.0*(0.25*(job->particles[i].exx_t - job->particles[i].eyy_t)*(job->particles[i].exx_t - job->particles[i].eyy_t) +*/
+/*        2*job->particles[i].exy_t*job->particles[i].exy_t +*/
+/*        0.25*(job->particles[i].eyy_t - job->particles[i].exx_t)*(job->particles[i].eyy_t - job->particles[i].exx_t)*/
+/*    ));*/
+/*    g_loc = pr * gammadot / tau;*/
 
-    for (j = 0; j < NODES_PER_ELEMENT; j++) {
-        for (k = 0; k < NODES_PER_ELEMENT; k++) {
-            job->elements[p].kku_element[NODAL_DOF * j + 2][NODAL_DOF * k + 2] +=
-                job->particles[i].v * ((b[j][0]*b[k][0] + b[j][1]*b[k][1]) + h[j]*h[k]/(xi * xi));
-        }
-    }
+/*    for (j = 0; j < NODES_PER_ELEMENT; j++) {*/
+/*        for (k = 0; k < NODES_PER_ELEMENT; k++) {*/
+/*            job->elements[p].kku_element[NODAL_DOF * j + 2][NODAL_DOF * k + 2] +=*/
+/*                job->particles[i].v * ((b[j][0]*b[k][0] + b[j][1]*b[k][1]) + h[j]*h[k]/(xi * xi));*/
+/*        }*/
+/*    }*/
 
-    for (j = 0; j < NODES_PER_ELEMENT; j++) {
-        job->elements[p].f_element[NODAL_DOF * j + 2] += 
-            job->particles[i].v * (job->particles[i].state[6]*(b[j][0]*b[j][0] + b[j][1]*b[j][1]) + h[j]*((job->particles[i].state[6] - g_loc)/(xi * xi)));
-    }
+/*    for (j = 0; j < NODES_PER_ELEMENT; j++) {*/
+/*        job->elements[p].f_element[NODAL_DOF * j + 2] += */
+/*            job->particles[i].v * (job->particles[i].state[6]*(b[j][0]*b[j][0] + b[j][1]*b[j][1]) + h[j]*((job->particles[i].state[6] - g_loc)/(xi * xi)));*/
+/*    }*/
 
     return;
 }

@@ -16,6 +16,7 @@
 #include "node.h"
 #include "process.h"
 #include "material.h"
+#include "exitcodes.h"
 #include <suitesparse/cs.h>
 
 /*#include <omp.h>*/
@@ -23,7 +24,7 @@
 
 #include <assert.h>
 
-#define TOL 1e-16
+#define TOL 1e-12
 
 #define signum(x) ((int)((0 < x) - (x < 0)))
 
@@ -59,7 +60,7 @@
 
 /* XXX: ugly, fix soon */
 #define WHICH_ELEMENT4(xp,yp,N,h) \
-    (((xp)<=1.0 && (xp)>=0.0 && (yp)<=1.0 && (yp)>=0.0)?((floor((xp)/(h)) + floor((yp)/(h))*((N)-1))):(-1))
+    (((xp)<1.0 && (xp)>=0.0 && (yp)<1.0 && (yp)>=0.0)?((floor((xp)/(h)) + floor((yp)/(h))*((N)-1))):(-1))
 
 #define ACCUMULATE4(acc_tok,j,tok,i,n,s) \
     j->nodes[__N(j,i,0)].acc_tok += j->s ## 1[i] * j->particles[i].tok; \
@@ -227,7 +228,6 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 /*    job->b28 = (double *)malloc(job->num_particles * sizeof(double));*/
 /*    job->b29 = (double *)malloc(job->num_particles * sizeof(double));*/
 
-/*    job->phi = (double *)malloc(job->num_particles * job->num_nodes * sizeof(double));*/
 
     /* max size of u_grid is NODAL_DOF * number of nodes. */
     job->vec_len = NODAL_DOF * job->num_nodes;
@@ -308,6 +308,25 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 
     job->use_cpdi = 0;
 
+    /* initialize mapping matricies */
+    job->phi = NULL;
+    job->grad_phi = NULL;
+    job->phi_transpose = NULL;
+    job->grad_phi_transpose = NULL;
+
+    /* nodal quantites */
+    job->m_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->mx_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->my_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->mx_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->my_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->x_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->y_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->x_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->y_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->fx_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+    job->fy_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+
     return job;
 }
 /*----------------------------------------------------------------------------*/
@@ -320,6 +339,14 @@ void mpm_step(job_t *job)
 
     /* Clear grid quantites. */
     for (i = 0; i < job->num_nodes; i++) {
+        job->m_nodes[i] = 0;
+        job->mx_t_nodes[i] = 0;
+        job->my_t_nodes[i] = 0;
+        job->mx_tt_nodes[i] = 0;
+        job->my_tt_nodes[i] = 0;
+        job->fx_nodes[i] = 0;
+        job->fy_nodes[i] = 0;
+
         job->nodes[i].m = 0;
         job->nodes[i].mx_t = 0;
         job->nodes[i].my_t = 0;
@@ -351,6 +378,9 @@ void mpm_step(job_t *job)
 
     /* Calculate shape and gradient of shape functions. */
     calculate_shapefunctions(job);
+
+    /* Generate phi and grad phi mappings. */
+    generate_mappings(job);
 
     /* Map particle state to grid quantites. */
     map_to_grid(job);
@@ -851,12 +881,22 @@ start_implicit:
     }
     for (i = 0; i < lda; i++) {
         i_new = job->node_number_override[i];
-        if (m_grid_t[i_new] == 0) {
+        if (fabs(m_grid_t[i_new]) < TOL) {
+            v_grid_t[i] = 0;
+            a_grid_t[i] = 0;
             continue;
         }
         v_grid_t[i] = mv_grid_t[i_new] / m_grid_t[i_new];
         a_grid_t[i] = ma_grid_t[i_new] / m_grid_t[i_new];
     }
+
+/*    for (i = 0; i < job->num_nodes; i++) {*/
+/*        printf("at[%d] = [%g %g]\n",*/
+/*            a_grid_t[NODAL_DOF * i + XDOF_IDX], i, a_grid_t[NODAL_DOF * i + YDOF_IDX]);*/
+/*        printf("vt[%d] = [%g %g]\n",*/
+/*            v_grid_t[NODAL_DOF * i + XDOF_IDX], i, v_grid_t[NODAL_DOF * i + YDOF_IDX]);*/
+/*    }*/
+/*    getchar();*/
 
     /* Begin newton iterations */
     do {
@@ -885,16 +925,11 @@ start_implicit:
                 has not been set by dirichlet BCs. */
             if (job->m_grid[i] > TOL && (job->u_dirichlet_mask[i] == 0)) {
                 job->node_u_map[i_new] = j;
+                job->inv_node_u_map[j] = i_new;
                 j++;
             }
         }
         slda = j;   /* The number of free DOFs gives the sparse matrix size. */
-        for (i = 0; i < lda; i++) {
-            i_new = job->node_number_override[i];
-            if ((j = job->node_u_map[i_new]) != -1) {
-                job->inv_node_u_map[j] = i_new;
-            }
-        }
 
         /*  calculate number of nonzero elements (before summing duplicates). */
         nnz = 0;
@@ -913,18 +948,16 @@ start_implicit:
         /* Calculate right hand side (load):
                 Q = f_ext - f_int - M_g * (4 * u / dt^2 - 4 * v / dt - a) */
         for (i = 0; i < lda; i++) {
+            job->q_grid[i] = 0;
+        }
+        for (i = 0; i < lda; i++) {
             i_new = job->node_number_override[i];
-            job->q_grid[i_new] = (4 * mv_grid_t[i_new] * job->dt + ma_grid_t[i_new] * job->dt * job->dt);
+            job->q_grid[i_new] = (-4 * m_grid_t[i_new] * job->u_grid[i_new] + 4 * mv_grid_t[i_new] * job->dt + ma_grid_t[i_new] * job->dt * job->dt);
 /*            job->q_grid[i_new] = (1 * mv_grid_t[i_new] * job->dt);*/
         }
         for (i = 0; i < lda; i++) {
             i_new = job->node_number_override[i];
-            /* XXX this is okay only because
-                u_grid[i] == u_grid[i_new1] == u_grid[i_new2] etc ... */
-            job->q_grid[i_new] += -job->m_grid[i] * (4 * job->u_grid[i]);
             job->q_grid[i_new] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
-/*            job->q_grid[i_new] += -job->m_grid[i] * (1 * job->u_grid[i]);*/
-/*            job->q_grid[i_new] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;*/
         }
 
         /* assemble elements into global stiffness matrix */
@@ -1052,6 +1085,8 @@ start_implicit:
             exit(255);
         }
 
+/*        cs_print(smat, 0);*/
+
         /* starting timer */
         clock_gettime(CLOCK_REALTIME, &requestStart);
 
@@ -1065,7 +1100,7 @@ start_implicit:
             fprintf(stderr, "lusol error!\n");
             if (cs_qrsol(1, smat, sb)) {
                 fprintf(stderr, "qrsol error!\n");
-                exit(255);
+                exit(EXIT_ERROR_CS_SOL);
             }
         }
 
@@ -1176,6 +1211,27 @@ start_implicit:
         job->nodes[i].uy = job->u_grid[NODAL_DOF * i + YDOF_IDX];
     }
 
+    for (i = 0; i < job->num_nodes; i++) {
+        i_new = job->node_number_override[NODAL_DOF * i] / NODAL_DOF;
+
+        if (i == i_new) { continue; }
+
+/*        if (fabs(job->nodes[i].x_t) > TOL) {*/
+/*            printf("u[%d] = [%g %g]\n", i, job->nodes[i].ux, job->nodes[i].uy);*/
+/*            printf("v[%d] = [%g %g]\n", i, job->nodes[i].x_t, job->nodes[i].y_t);*/
+/*            printf("a[%d] = [%g %g]\n", i, job->nodes[i].x_tt, job->nodes[i].y_tt);*/
+/*            printf("f_int[%d] = [%g %g]\n", i, job->f_int_grid[NODAL_DOF * i +XDOF_IDX], job->f_int_grid[NODAL_DOF * i + YDOF_IDX]);*/
+/*            printf("f_ext[%d] = [%g %g]\n", i, job->f_ext_grid[NODAL_DOF * i +XDOF_IDX], job->f_ext_grid[NODAL_DOF * i + YDOF_IDX]);*/
+/*        }*/
+
+        assert(job->nodes[i].ux == job->nodes[i_new].ux);
+        assert(job->nodes[i].uy == job->nodes[i_new].uy);
+        assert(job->nodes[i].x_t == job->nodes[i_new].x_t);
+        assert(job->nodes[i].y_t == job->nodes[i_new].y_t);
+        assert(job->nodes[i].x_tt == job->nodes[i_new].x_tt);
+        assert(job->nodes[i].y_tt == job->nodes[i_new].y_tt);
+    }
+
     free(v_grid_t);
     free(a_grid_t);
     free(mv_grid_t);
@@ -1190,12 +1246,30 @@ start_implicit:
 void map_to_grid(job_t *job)
 {
     int i;
+    double *m_nodes;
+    double *m_particles;
+
+    m_nodes = malloc(sizeof(double) * job->num_nodes);
+    m_particles = malloc(sizeof(double) * job->num_particles);
+    for (i = 0; i < job->num_nodes; i++) {
+        m_nodes[i] = 0;
+    }
+    for (i = 0; i < job->num_particles; i++) {
+        m_particles[i] = job->particles[i].m;
+    }
+
+    cs_gaxpy(job->phi, m_particles, m_nodes);
+
+    for (i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].m = m_nodes[i];
+    }
 
     for (i = 0; i < job->num_particles; i++) {
         CHECK_ACTIVE(job, i);
 
         /* Mass. */
-        ACCUMULATE(m,job,m,i,n,h);
+/*        ACCUMULATE(m,job,m,i,n,h);*/
+        
 
         /* Momentum. */
         ACCUMULATE_WITH_MUL(mx_t,job,x_t,i,n,h,job->particles[i].m);
@@ -1230,8 +1304,25 @@ void map_to_grid(job_t *job)
         job->f_ext_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].fy;
     }
 
+    free(m_nodes);
+    free(m_particles);
+
     return;
 }
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
+/*void map_particles_to_nodes(double *node_var, cs *phi, double *particle_var)*/
+/*{*/
+/*    size_t i;*/
+/*    for (i = 0; i < phi->m; i++) {*/
+/*        node_var[i] = 0;*/
+/*    }*/
+
+/*    cs_gaxpy(phi, particle_var, node_var);*/
+
+/*    return;*/
+/*}*/
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -1298,7 +1389,7 @@ void update_deformation_gradient(job_t *job)
         d = job->dt * DY_N_TO_P(job, y_t, 1, i);
 
         dsq = (a - d) * (a - d) + 4 * b * c;
-        delta = 0.5 * sqrt(abs(dsq));
+        delta = 0.5 * sqrt(fabs(dsq));
         delta_inv = (1.0f / delta);
         if (dsq == 0 || delta < 1e-15) {
             cd = 1;
@@ -1599,14 +1690,73 @@ void update_particle_densities(job_t *job)
 /*            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);*/
 /*        }*/
 
-/*        if (job->use_cpdi) {*/
+        if (job->use_cpdi) {
             job->particles[i].v = job->particles[i].v0 *
                 ((job->particles[i].Fxx * job->particles[i].Fyy) - 
                 job->particles[i].Fxy * job->particles[i].Fyx);
-/*        } else {*/
-/*            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);*/
-/*        }*/
+        } else {
+            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);
+        }
     }
+
+    return;
+}
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
+void generate_mappings(job_t *job)
+{
+    size_t p_idx;
+    size_t e_idx;
+    size_t i_idx;
+
+    size_t i;
+
+    size_t nr;
+    size_t nc;
+    size_t nnz;
+    cs *triplets;
+
+    double s[4];
+
+    int res;
+
+    nr = job->num_nodes;
+    nc = job->num_particles;
+    nnz = 4 * job->num_particles;   /* each particle only affects one element */
+
+    triplets = cs_spalloc(nr, nc, nnz, 1, 1);
+
+    for (p_idx = 0; p_idx < job->num_particles; p_idx++) {
+        if (job->particles[p_idx].active == 0) {
+            continue;
+        }
+
+        e_idx = job->in_element[p_idx];
+        tent(&(s[0]), &(s[1]), &(s[2]), &(s[3]),
+            job->particles[p_idx].xl, job->particles[p_idx].yl);
+        for (i = 0; i < 4; i++) {
+            i_idx = job->elements[e_idx].nodes[i];
+
+            res = cs_entry(triplets, i_idx, p_idx, s[i]);
+            if (res == 0) {
+                fprintf(stderr, "Can't add entry to generate mappings.\n");
+                exit(127);
+            }
+        }
+    }
+
+    if (job->phi != NULL) {
+        cs_spfree(job->phi);
+    }
+    if (job->phi_transpose != NULL) {
+        cs_spfree(job->phi_transpose);
+    }
+
+    job->phi = cs_compress(triplets);
+    cs_dupl(job->phi);
+    job->phi_transpose = cs_transpose(job->phi, 1); /* copy values. */
+    cs_spfree(triplets);
 
     return;
 }
@@ -1621,35 +1771,32 @@ void mpm_cleanup(job_t *job)
     
     free(job->in_element);
 
+    free(job->m_nodes);
+    free(job->mx_t_nodes);
+    free(job->my_t_nodes);
+    free(job->mx_tt_nodes);
+    free(job->my_tt_nodes);
+    free(job->x_t_nodes);
+    free(job->y_t_nodes);
+    free(job->x_tt_nodes);
+    free(job->y_tt_nodes);
+    free(job->fx_nodes);
+    free(job->fy_nodes);
+
     free(job->h1);
     free(job->h2);
     free(job->h3);
     free(job->h4);
-/*    free(job->h5);*/
-/*    free(job->h6);*/
-/*    free(job->h7);*/
-/*    free(job->h8);*/
-/*    free(job->h9);*/
 
     free(job->b11);
     free(job->b12);
     free(job->b13);
     free(job->b14);
-/*    free(job->b15);*/
-/*    free(job->b16);*/
-/*    free(job->b17);*/
-/*    free(job->b18);*/
-/*    free(job->b19);*/
 
     free(job->b21);
     free(job->b22);
     free(job->b23);
     free(job->b24);
-/*    free(job->b25);*/
-/*    free(job->b26);*/
-/*    free(job->b27);*/
-/*    free(job->b28);*/
-/*    free(job->b29);*/
 
     free(job);
 

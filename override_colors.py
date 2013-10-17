@@ -9,9 +9,7 @@ stride = int(sys.argv[2])
 left_color = [228/255.0, 28/255.0, 28/255.0]
 right_color = [153/255.0,153/255.0,153/255.0]
 
-f = open("visualization.cfg", "w")
-f.write("override-particle-colors = 1\n")
-
+f = open("visualization_colors.cfg", "w")
 f.write("color-by-index = {\n")
 for i in xrange(0, num_particles):
     c = (i / stride) % 2

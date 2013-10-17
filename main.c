@@ -85,6 +85,24 @@ int validate_path(cfg_t *cfg, cfg_opt_t *opt)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
+int validate_readonly_file(cfg_t *cfg, cfg_opt_t *opt)
+{
+    char *str = cfg_opt_getnstr(opt, cfg_opt_size(opt) - 1);
+    struct stat s;
+
+    /* check if the file supplied exists and is a regular file. */
+    if(stat(str, &s) != 0 || !S_ISREG(s.st_mode))
+    {
+        cfg_error(cfg, "Unable to open '%s' for option '%s.%s'.",
+            str, cfg->name, opt->name);
+        return -1;
+    }
+
+    return 0;
+}
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
 void usage(char *program_name)
 {
     printf("%s: [OPTIONS] grid_file particle_file [t_max]\n", program_name);

@@ -154,12 +154,6 @@ void calculate_stress_dp_shearonly(job_t *job)
         dsjxy += job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
         dsjyy += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
 
-/*        dsjxx += 1e2 * (jp(exx_t) + jp(eyy_t));*/
-/*        dsjyy += 1e2 * (jp(eyy_t) + jp(exx_t));*/
-/*        job->particles[i].sxx += SVISC * jp(exx_t);*/
-/*        job->particles[i].sxy += SVISC * jp(exy_t);*/
-/*        job->particles[i].syy += SVISC * jp(eyy_t);*/
-
         txx = job->particles[i].sxx + dsjxx;
         txy = job->particles[i].sxy + dsjxy;
         tyy = job->particles[i].syy + dsjyy;
@@ -170,13 +164,7 @@ void calculate_stress_dp_shearonly(job_t *job)
         qm = sqrt(0.5f*(t0xx*t0xx + 2*t0xy*t0xy + t0yy*t0yy));
         m = tan(PHI);
 
-/*        m = 1e3;*/
-
-/*        if (hypot(pm,pm) > 1e-6) {*/
-            f = qm - m*pm - c;
-/*        } else {*/
-/*            f = -1;*/
-/*        }*/
+        f = qm - m*pm - c;
 
         if(job->particles[i].material == M_RIGID) {
             job->particles[i].sxx = txx;
@@ -187,7 +175,6 @@ void calculate_stress_dp_shearonly(job_t *job)
 
         if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
             density_flag = 1;
-/*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
         } else {
             density_flag = 0;
         }
@@ -200,15 +187,13 @@ void calculate_stress_dp_shearonly(job_t *job)
             job->particles[i].sxx = txx;
             job->particles[i].sxy = txy;
             job->particles[i].syy = tyy;
-            job->particles[i].color = 1;
         } else {
-            dp_xx = 1e-5 * f * t0xx;
-            dp_xy = 1e-5 * f * t0xy;
-            dp_yy = 1e-5 * f * t0yy;
+            dp_xx = 1e-6 * f * t0xx;
+            dp_xy = 1e-6 * f * t0xy;
+            dp_yy = 1e-6 * f * t0yy;
             job->particles[i].sxx = txx - job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((dp_xx) + NUMOD * (dp_yy));
             job->particles[i].sxy = txy - job->dt * (EMOD / (2 *(1 + NUMOD))) * (dp_xy);
             job->particles[i].syy = tyy - job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((dp_yy) + NUMOD * (dp_xx));
-            job->particles[i].color = 2;
             gammap = sqrt(Epxx*Epxx + 2*Epxy*Epxy + Epyy*Epyy);
         }
     }

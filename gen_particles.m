@@ -3,8 +3,8 @@ p.E = 1e6;
 p.nu = 0.3;
 p.g = -1;
 % p.Np = 4 * 2.5;
-p.Np = 40;
-p.N = 41;
+p.Np = 20;
+p.N = 21;
 p.rhop = 3;
 p.tol = 1e-12;
 p.T = 2;
@@ -24,13 +24,15 @@ tol = p.tol;
 Nn = N*N;
 
 % set up material points
-bar_w = 0.5; Nbx = Np; %
+bar_w = 1.0-1e-5; Nbx = Np; %
+%bar_w = 0.5; Nbx = Np; %
 % Nbx = ceil(p.rhop*bar_w/h);
-bar_h = 0.5; Nby = (bar_h/bar_w)*Nbx;
+bar_h = 1.0-1e-5; Nby = (bar_h/bar_w)*Nbx;
+%bar_h = 0.5; Nby = (bar_h/bar_w)*Nbx;
 
 bxtmp = linspace(0, bar_w, Nbx+1);
-%bar_x = (0.5 - bar_w/2) + bxtmp(1:end-1) + bxtmp(2)/2;
-bar_x = 0.0 + bxtmp(1:end-1) + bxtmp(2)/2;
+bar_x = (0.5 - bar_w/2) + bxtmp(1:end-1) + bxtmp(2)/2;
+% bar_x = 0.0 + bxtmp(1:end-1) + bxtmp(2)/2;
 bytmp = linspace(0, bar_h, Nby+1);
 bar_y = 0.0 + bytmp(1:end-1) + bytmp(2)/2;
 
@@ -60,7 +62,7 @@ mp = p.rho*vp;
 
 % initialize velocity
 xp_t = 0*ones(size(xp));
-yp_t = 0*ones(size(yp));
+yp_t = -0.0*ones(size(yp));
 
 % initialize stress
 sxxp = zeros(size(xp));
