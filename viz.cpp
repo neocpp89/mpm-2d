@@ -82,6 +82,13 @@ static struct g_state_s {
     int draw_glyphs;
 } g_state;
 
+typedef struct drawing_object_s {
+    size_t num_verticies;
+    GLenum mode;
+    GLfloat *vertex_coords;
+    GLfloat *color;
+} drawing_object_t;
+
 static const char* g_optstring = "ab:c:d:m:el:u:p:svw";
 
 int screen_width = 800;

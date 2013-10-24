@@ -15,6 +15,12 @@
 
 #include <suitesparse/cs.h>
 
+enum solver_e {
+    IMPLICIT_SOLVER=0,
+    EXPLICIT_SOLVER,
+    NUM_SOLVERS
+};
+
 typedef struct material_s {
     double E;
     double nu;
@@ -47,14 +53,17 @@ typedef struct op_control_s {
     char *particle_filename;
     char *element_filename;
     char *state_filename;
+    char *log_filename;
 
     char *particle_filename_fullpath;
     char *element_filename_fullpath;
     char *state_filename_fullpath;
+    char *log_filename_fullpath;
 
     FILE *particle_fd;
     FILE *element_fd;
     FILE *state_fd;
+    FILE *log_fd;
 
     char *job_name;
     char *job_description;
@@ -67,6 +76,13 @@ typedef struct op_control_s {
 
     int modified_directory;
 } output_control_t;
+
+typedef struct mat_control_s {
+    char *material_filename;
+    int use_builtin;
+    void (*material_init)(void *);
+    void (*calculate_stress)(void *);
+} material_control_t;
 
 typedef struct job_s {
     double t;
@@ -167,11 +183,9 @@ typedef struct job_s {
     int *node_number_override;
 
     int vec_len;
-    double *kku_grid;
-    /* kku_grid is vec_len*vec_len in size */
 
-//    FILE *ke_data;
-//    FILE *stress_data;
+    /* solver type */
+    enum solver_e solver;
 
     /* simulation timestep options */
     timestep_control_t timestep;
@@ -181,6 +195,9 @@ typedef struct job_s {
 
     /* output control options */
     output_control_t output;
+
+    /* material model options */
+    material_control_t material;
 
 #define PT_NUM_THREADS 64
     pthread_t threads[PT_NUM_THREADS];
@@ -194,7 +211,8 @@ typedef struct s_threadtask {
 } threadtask_t;
 
 job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t);
-void mpm_step(job_t *job);
+void implicit_mpm_step(job_t *job);
+void explicit_mpm_step(job_t *job);
 void mpm_cleanup(job_t *job);
 
 typedef struct s_strided_task {
@@ -208,11 +226,14 @@ void calculate_shapefunctions(job_t *job);
 void calculate_node_velocity(job_t *job);
 void calculate_strainrate(job_t *job);
 void update_grid(job_t *job);
+void move_grid(job_t *job);
 void move_particles(job_t *job);
 void update_deformation_gradient(job_t *job);
 void update_particle_domains(job_t *job);
 void update_particle_densities(job_t *job);
-void update_corner_domains(job_t *job);
+
+void update_particle_vectors(job_t *job);
+void update_corner_positions(job_t *job);
 
 void generate_mappings(job_t *job);
 void map_particles_to_nodes(double *node_var, cs *phi, double *particle_var);

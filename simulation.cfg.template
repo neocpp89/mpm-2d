@@ -2,39 +2,22 @@ timestep
 {
     dt-max = 1e-2
     dt-min = 1e-10
-    dt = 2e-5
+    dt = 1e-6
 
-    automatic-dt = 0
+    automatic-dt = 1
 
     allow-dt-increase = 0
     stable-dt-threshold = 4
 }
 
-solver
-{
-    solver-type = explicit
-}
-
-material
-{
-    material-file = "./g_local.so"
-    use-builtin = 0
-}
-
 implicit
 {
-    displacement-norm-ratio = 1e-2
+    displacement-norm-ratio = 1e-1
     residual-norm-ratio = 1e-2
 
     converged-displacement-norm = 1e-8
 
     unstable-iteration-count = 10
-}
-
-input
-{
-    initial-particle-file = "generated_particles.txt"
-    grid-file = "generated_grid.txt"
 }
 
 output

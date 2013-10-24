@@ -51,6 +51,36 @@
 #define gf jp(state[6])
 
 /*----------------------------------------------------------------------------*/
+void material_init_linear_elastic(job_t *job)
+{
+    int i, j;
+
+    for (i = 0; i < job->num_particles; i++) {
+        for (j = 0; j < DEPVAR; j++) {
+            job->particles[i].state[j] = 0;
+        }
+    }
+
+    for (i = 0; i < job->num_particles; i++) {
+        Epxx = 0;
+        Epxy = 0;
+        Epyy = 0;
+        mu = mu0;
+        eta = eta0;
+        beta = hbeta*(mu0 - mucv);
+/*        Exx = 0;*/
+/*        Exy = 0;*/
+/*        Eyy = 0;*/
+        gf = 0;
+        gammap = 0;
+    }
+
+    return;
+}
+/*----------------------------------------------------------------------------*/
+
+#if 0
+/*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
 {
     int i, j;
@@ -78,6 +108,7 @@ void material_init(job_t *job)
     return;
 }
 /*----------------------------------------------------------------------------*/
+#endif
 
 /*----------------------------------------------------------------------------*/
 void calculate_stress_linear_elastic_novisc(job_t *job)
@@ -150,9 +181,13 @@ void calculate_stress_dp_shearonly(job_t *job)
         dsjxy = job->dt * (EMOD / (2 *(1 + NUMOD))) * (job->particles[i].exy_t);
         dsjyy = job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((job->particles[i].eyy_t) + NUMOD * (job->particles[i].exx_t));
 
-        dsjxx -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
-        dsjxy += job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
-        dsjyy += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
+/*        dsjxx -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;*/
+/*        dsjxy += job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);*/
+/*        dsjyy += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;*/
+
+        dsjxx -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].real_sxy;
+        dsjxy += job->dt * job->particles[i].wxy_t * (job->particles[i].real_sxx - job->particles[i].real_syy);
+        dsjyy += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].real_sxy;
 
         txx = job->particles[i].sxx + dsjxx;
         txy = job->particles[i].sxy + dsjxy;
@@ -188,12 +223,15 @@ void calculate_stress_dp_shearonly(job_t *job)
             job->particles[i].sxy = txy;
             job->particles[i].syy = tyy;
         } else {
-            dp_xx = 1e-6 * f * t0xx;
-            dp_xy = 1e-6 * f * t0xy;
-            dp_yy = 1e-6 * f * t0yy;
+            dp_xx = 1e-6 * f * t0xx / qm;
+            dp_xy = 1e-6 * f * t0xy / qm ;
+            dp_yy = 1e-6 * f * t0yy / qm;
             job->particles[i].sxx = txx - job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((dp_xx) + NUMOD * (dp_yy));
             job->particles[i].sxy = txy - job->dt * (EMOD / (2 *(1 + NUMOD))) * (dp_xy);
             job->particles[i].syy = tyy - job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((dp_yy) + NUMOD * (dp_xx));
+            Epxx = Epxx + dp_xx * job->dt;
+            Epxy = Epxy + dp_xy * job->dt;
+            Epyy = Epyy + dp_yy * job->dt;
             gammap = sqrt(Epxx*Epxx + 2*Epxy*Epxy + Epyy*Epyy);
         }
     }

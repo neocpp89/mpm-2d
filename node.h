@@ -16,7 +16,7 @@ typedef struct node_s {
     double mass_filled_element_neighbors;
 
     /* Mass */
-    double m;
+//    double m;
 
     /* Position */
     double x;

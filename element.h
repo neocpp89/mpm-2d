@@ -49,6 +49,8 @@ typedef struct element_s {
 
     double kku_element[NODAL_DOF * NODES_PER_ELEMENT][NODAL_DOF * NODES_PER_ELEMENT]; /* dof order: x1, y1, x2, y2 ... x4 , y4 ... c1, c2, ... c4 */
     double f_element[NODAL_DOF * NODES_PER_ELEMENT];
+
+    double jacobian[2][2];
 } element_t;
 
 /*

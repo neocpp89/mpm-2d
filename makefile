@@ -2,9 +2,9 @@
 CC = gcc
 BIN = mpm_2d
 VIZBIN = viz
-CFLAGS = -c -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -pg -fopenmp -funroll-loops -I/usr/lib/openmpi/include/
+CFLAGS = -c -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -pg -funroll-loops -I/usr/lib/openmpi/include/ -rdynamic
 #takes form '-ldl -lpthreads' etc.
-LIB = -lrt -lm -lhdf5 -pthread -lblas -llapack -lcxsparse -lconfuse
+LIB = -lrt -lm -lhdf5 -pthread -lblas -llapack -lcxsparse -lconfuse -ldl
 # modified CFLAGS for libraries
 LDFLAGS = $(LIB) -pg -g
 # CFLAGS = -o $(BIN) -I<dir> -L<dir> -Wall -Wstrict-prototypes -ansi -pedantic
@@ -21,6 +21,10 @@ SRC = \
 	writer.c \
 	rtsafe.c \
 	material.c
+
+MATERIAL_SRC = \
+	builtin_material.c \
+	dp_ri.c
 
 OBJ = $(SRC:.c=.o)
 
@@ -42,12 +46,6 @@ doc: Doxyfile
 
 Doxyfile:
 	doxygen -g
-
-strip_tabs: $(SRC)
-	for file in `echo $(SRC) | sed -e 's/ /\n/g'`; \
-	do { sed -e 's/{\t/{       /g' < $$file | \
-	sed -e 's/\t/        /g' > $$file.notabs; }; \
-	done;
 
 $(BIN): $(OBJ)
 	$(CC) $(OBJ) -o $@ $(LDFLAGS)
