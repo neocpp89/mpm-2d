@@ -66,26 +66,60 @@ void time_varying_loads(job_t *job)
 {
     int i;
     double gravity;
+    double compress;
+    double p;
 
-    if ((RAMP_TIME - job->t) > 0) {
-        gravity = -G_MAG * (job->t / RAMP_TIME);
-    } else {
-        gravity = -G_MAG;
+    int sqrtnp;
+
+    p = -0.5*(job->particles[0].sxx + job->particles[0].syy);
+/*    printf("[0].pressure = %f\n", p);*/
+
+    /* we compressed it to about 200 Pa */
+    if (job->step_number == 0 && p >= 200) {
+        job->step_number++;
+        job->step_start_time = job->t;
+        fprintf(job->output.log_fd, "Done compressing laterally. Moving to next step.\n");
+        fflush(job->output.log_fd);
     }
-/*    printf("gravity set to %f.\n", gravity);*/
-    for (i = 0; i < job->num_particles; i++) {
-#ifdef __OEST__
-        if (job->particles[i].material == M_RIGID) {
-            job->particles[i].bx = 0;
-            job->particles[i].by = gravity;
-        } else {
-            job->particles[i].bx = 0;
-            job->particles[i].by = 0;
-        }
-#else
-        job->particles[i].bx = 0;
-        job->particles[i].by = gravity;
-#endif
+
+    if (job->step_number == 1 && (job->t >= job->step_start_time + RAMP_TIME)) {
+        job->step_number++;
+        job->step_start_time = job->t;
+        fprintf(job->output.log_fd, "Done waiting. Moving to next step.\n");
+        fflush(job->output.log_fd);
+    }
+
+    switch (job->step_number) {
+        case 0:
+            sqrtnp = sqrt(job->num_particles);
+            compress = 1000 * G_MAG * (job->t - job->step_start_time);
+            if (compress > 100) { compress = 100; }
+            
+            for (i = 0; i < sqrtnp; i++) {
+                job->particles[i].bx = compress;
+                job->particles[i].by = 0;
+            }
+        break;
+        case 1:
+            /* just wait a bit for waves to die out. */
+            for (i = 0; i < job->num_particles; i++) {
+                job->particles[i].bx = 0;
+                job->particles[i].by = 0;
+            }
+        break;
+        case 2:
+        default:
+            if ((RAMP_TIME - job->step_start_time) > 0) {
+                gravity = -G_MAG * (job->step_start_time / RAMP_TIME);
+            } else {
+                gravity = -G_MAG;
+            }
+
+            for (i = 0; i < job->num_particles; i++) {
+                job->particles[i].bx = 0;
+                job->particles[i].by = gravity;
+            }
+        break;
     }
 
     return;

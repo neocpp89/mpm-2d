@@ -43,10 +43,11 @@ void generate_dirichlet_bcs(job_t *job)
 /*        if (job->nodes[n].x <= HOLE_RAD && job->t > 0.5f) {*/
 /*            continue;*/
 /*        }*/
-        job->u_dirichlet[NODAL_DOF * n + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * n + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * n + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;
+
+/*        job->u_dirichlet[NODAL_DOF * n + XDOF_IDX] = 0;*/
+/*        job->u_dirichlet[NODAL_DOF * n + YDOF_IDX] = 0;*/
+/*        job->u_dirichlet_mask[NODAL_DOF * n + XDOF_IDX] = 1;*/
+/*        job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;*/
 
 /*        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 0;*/
 /*        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 0;*/
@@ -58,13 +59,34 @@ void generate_dirichlet_bcs(job_t *job)
     for (n = 0; n < job->N; n++) {
 #if 0
         if (n == job->N-1) { continue; } /* skip top row */
-#endif
+
 
         job->u_dirichlet[NODAL_DOF * (n*job->N) + XDOF_IDX] = 0;
         job->u_dirichlet_mask[NODAL_DOF * (n*job->N) + XDOF_IDX] = 1;
 
         job->u_dirichlet[NODAL_DOF * (n*job->N) + YDOF_IDX] = 0;
         job->u_dirichlet_mask[NODAL_DOF * (n*job->N) + YDOF_IDX] = 1;
+
+        job->u_dirichlet[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 0;
+        job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 1;
+
+        job->u_dirichlet[NODAL_DOF * (off + n*job->N) + YDOF_IDX] = 0;
+        job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + YDOF_IDX] = 1;
+#endif
+    
+        if (job->step_number > 0) {
+            job->u_dirichlet[NODAL_DOF * (0 + n*job->N) + XDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * (0 + n*job->N) + XDOF_IDX] = 1;
+
+            job->u_dirichlet[NODAL_DOF * (0 + n*job->N) + YDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * (0+ n*job->N) + YDOF_IDX] = 1;
+
+            job->u_dirichlet[NODAL_DOF * (1 + n*job->N) + XDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * (1 + n*job->N) + XDOF_IDX] = 1;
+
+            job->u_dirichlet[NODAL_DOF * (1 + n*job->N) + YDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * (1+ n*job->N) + YDOF_IDX] = 1;
+        }
 
         job->u_dirichlet[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 0;
         job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 1;

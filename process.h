@@ -156,17 +156,17 @@ typedef struct job_s {
     cs *phi_transpose;
     cs *grad_phi_transpose;
 
-    double *m_nodes;
-    double *mx_t_nodes;
-    double *my_t_nodes;
-    double *mx_tt_nodes;
-    double *my_tt_nodes;
-    double *x_t_nodes;
-    double *y_t_nodes;
-    double *x_tt_nodes;
-    double *y_tt_nodes;
-    double *fx_nodes;
-    double *fy_nodes;
+//    double *m_nodes;
+//    double *mx_t_nodes;
+//    double *my_t_nodes;
+//    double *mx_tt_nodes;
+//    double *my_tt_nodes;
+//    double *x_t_nodes;
+//    double *y_t_nodes;
+//    double *x_tt_nodes;
+//    double *y_tt_nodes;
+//    double *fx_nodes;
+//    double *fy_nodes;
 
     /* maps node number to position in u_grid vector. */
     int *node_u_map;
@@ -198,6 +198,9 @@ typedef struct job_s {
 
     /* material model options */
     material_control_t material;
+
+    int step_number;
+    double step_start_time;
 
 #define PT_NUM_THREADS 64
     pthread_t threads[PT_NUM_THREADS];

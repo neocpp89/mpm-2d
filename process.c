@@ -94,6 +94,13 @@ extern void dsysv_(char* uplo, int* n, int* nrhs, double* a, int* lda,
 /* Lapack function, double precision 2-norm of vector */
 extern double dnrm2_(int *n, double *x, int *incx);
 
+/* threaded stress calculation */
+void pt_calculate_stress(void *_task)
+{
+    stask_t *task = (stask_t *)_task;
+    return;
+}
+
 /*----------------------------------------------------------------------------*/
 job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t)
 {
@@ -127,9 +134,12 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 
     /* Set stress, strain to zero. */
     for (i = 0; i < job->num_particles; i++) {
-        job->particles[i].sxx = 0;
-        job->particles[i].sxy = 0;
-        job->particles[i].syy = 0;
+/*        job->particles[i].sxx = 0;*/
+/*        job->particles[i].sxy = 0;*/
+/*        job->particles[i].syy = 0;*/
+        job->particles[i].real_sxx = job->particles[i].sxx;
+        job->particles[i].real_sxy = job->particles[i].sxy;
+        job->particles[i].real_syy = job->particles[i].syy;
 
         job->particles[i].exx_t = 0;
         job->particles[i].exy_t = 0;
@@ -289,23 +299,27 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->grad_phi_transpose = NULL;
 
     /* nodal quantites */
-    job->m_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->mx_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->my_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->mx_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->my_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->x_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->y_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->x_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->y_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->fx_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
-    job->fy_nodes = (double *)malloc(sizeof(double) * job->num_nodes);
+/*    job->m_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->mx_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->my_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->mx_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->my_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->x_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->y_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->x_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->y_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->fx_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
+/*    job->fy_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
 
     /* swap this out later with a pointer from dlopen if needed. */
     job->material.material_filename = (char *)malloc(16);
     strcpy(job->material.material_filename, "builtin");
     job->material.material_init = &material_init_linear_elastic;
     job->material.calculate_stress = &calculate_stress_linear_elastic;
+
+    /* used to vary loads/bcs */
+    job->step_number = 0;
+    job->step_start_time = job->t;
 
     return job;
 }
@@ -314,7 +328,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 /*----------------------------------------------------------------------------*/
 void zero_momentum_bc(job_t *job)
 {
-    int i, j;
+    int i, j, m, n;
 
     for (i = 0; i < job->num_nodes; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
@@ -331,6 +345,48 @@ void zero_momentum_bc(job_t *job)
         }
     }
 
+    /* handle periodicity */
+    for (i = 0; i < job->num_nodes; i++) {
+        for (j = 0; j < NODAL_DOF; j++) {
+            if (job->node_number_override[NODAL_DOF * i + j] != NODAL_DOF * i + j) {
+                /* tie nodes together. */
+                m = job->node_number_override[NODAL_DOF * i + j];
+                n = NODAL_DOF * i + j;
+
+                if (n % NODAL_DOF == XDOF_IDX) {
+                    if (m % NODAL_DOF == XDOF_IDX) {
+                        job->nodes[(m / NODAL_DOF)].mx_t += job->nodes[(n / NODAL_DOF)].mx_t;
+                        job->nodes[(n / NODAL_DOF)].mx_t = job->nodes[(m / NODAL_DOF)].mx_t;
+                    } else if (m % NODAL_DOF == YDOF_IDX) {
+                        job->nodes[(m / NODAL_DOF)].my_t += job->nodes[(n / NODAL_DOF)].mx_t;
+                        job->nodes[(n / NODAL_DOF)].mx_t = job->nodes[(m / NODAL_DOF)].my_t;
+                    }
+                } else if (n % NODAL_DOF == YDOF_IDX) {
+                    if (m % NODAL_DOF == XDOF_IDX) {
+                        job->nodes[(m / NODAL_DOF)].mx_t += job->nodes[(n / NODAL_DOF)].my_t;
+                        job->nodes[(n / NODAL_DOF)].my_t = job->nodes[(m / NODAL_DOF)].mx_t;
+                    } else if (m % NODAL_DOF == YDOF_IDX) {
+                        job->nodes[(m / NODAL_DOF)].my_t += job->nodes[(n / NODAL_DOF)].my_t;
+                        job->nodes[(n / NODAL_DOF)].my_t = job->nodes[(m / NODAL_DOF)].my_t;
+                    }
+                }
+            }
+        }
+    }
+
+    /* fix masses as well */
+    for (i = 0; i < job->num_nodes; i++) {
+        j = 0;
+        if (job->node_number_override[NODAL_DOF * i + j] != NODAL_DOF * i + j) {
+            /* tie nodes together. */
+            m = job->node_number_override[NODAL_DOF * i + j];
+            n = NODAL_DOF * i + j;
+
+            job->nodes[(m / NODAL_DOF)].m += job->nodes[(n / NODAL_DOF)].m;
+            job->nodes[(n / NODAL_DOF)].m = job->nodes[(m / NODAL_DOF)].m;
+        }
+    }
+
     return;
 }
 /*----------------------------------------------------------------------------*/
@@ -338,7 +394,7 @@ void zero_momentum_bc(job_t *job)
 /*----------------------------------------------------------------------------*/
 void zero_force_bc(job_t *job)
 {
-    int i, j;
+    int i, j, m, n;
 
     for (i = 0; i < job->num_nodes; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
@@ -349,6 +405,35 @@ void zero_force_bc(job_t *job)
                         job->nodes[i].fx = 0;
                     } else if (j == YDOF_IDX) {
                         job->nodes[i].fy = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    /* handle periodicity */
+    for (i = 0; i < job->num_nodes; i++) {
+        for (j = 0; j < NODAL_DOF; j++) {
+            if (job->node_number_override[NODAL_DOF * i + j] != NODAL_DOF * i + j) {
+                /* tie nodes together. */
+                m = job->node_number_override[NODAL_DOF * i + j];
+                n = NODAL_DOF * i + j;
+
+                if (n % NODAL_DOF == XDOF_IDX) {
+                    if (m % NODAL_DOF == XDOF_IDX) {
+                        job->nodes[(m / NODAL_DOF)].fx += job->nodes[(n / NODAL_DOF)].fx;
+                        job->nodes[(n / NODAL_DOF)].fx = job->nodes[(m / NODAL_DOF)].fx;
+                    } else if (m % NODAL_DOF == YDOF_IDX) {
+                        job->nodes[(m / NODAL_DOF)].fy += job->nodes[(n / NODAL_DOF)].fx;
+                        job->nodes[(n / NODAL_DOF)].fx = job->nodes[(m / NODAL_DOF)].fy;
+                    }
+                } else if (n % NODAL_DOF == YDOF_IDX) {
+                    if (m % NODAL_DOF == XDOF_IDX) {
+                        job->nodes[(m / NODAL_DOF)].fx += job->nodes[(n / NODAL_DOF)].fy;
+                        job->nodes[(n / NODAL_DOF)].fy = job->nodes[(m / NODAL_DOF)].fx;
+                    } else if (m % NODAL_DOF == YDOF_IDX) {
+                        job->nodes[(m / NODAL_DOF)].fy += job->nodes[(n / NODAL_DOF)].fy;
+                        job->nodes[(n / NODAL_DOF)].fy = job->nodes[(m / NODAL_DOF)].fy;
                     }
                 }
             }
@@ -367,7 +452,7 @@ void explicit_mpm_step(job_t *job)
 
     /* Clear grid quantites. */
     for (i = 0; i < job->num_nodes; i++) {
-/*        job->nodes[i].m = 0;*/
+        job->nodes[i].m = 0;
         job->nodes[i].mx_t = 0;
         job->nodes[i].my_t = 0;
         job->nodes[i].x_t = 0;
@@ -394,7 +479,7 @@ void explicit_mpm_step(job_t *job)
     calculate_shapefunctions(job);
 
     /* Generate phi and grad phi maps. */
-    generate_mappings(job);
+/*    generate_mappings(job);*/
 
     /* Create dirichlet and periodic boundary conditions. */
     generate_dirichlet_bcs(job);
@@ -415,17 +500,18 @@ void explicit_mpm_step(job_t *job)
     /* Calculate stress. */
     (*(job->material.calculate_stress))(job);
 
-    /* Add internal forces from stress. */
+    /* Calculate stress. */
 /*    task.job = job;*/
 /*    for (i = 0; i < PT_NUM_THREADS; i++) {*/
 /*        task.offset = i;*/
-/*        pthread_create(&(job->threads[i]), NULL, &pt_update_stress, &task);*/
+/*        pthread_create(&(job->threads[i]), NULL, &pt_calculate_stress, &task);*/
 /*    }*/
 /*    */
 /*    for (i = 0; i < PT_NUM_THREADS; i++) {*/
 /*        task.offset = i;*/
 /*        pthread_join(job->threads[i], NULL);*/
 /*    }*/
+
     update_stress(job);
 
     /* Zero perpendicular forces at edge nodes. */
@@ -435,7 +521,7 @@ void explicit_mpm_step(job_t *job)
     move_grid(job);
 
     /* Update particle position and velocity. */
-    move_particles(job);
+    move_particles_explicit(job);
 
     /* Update deformation gradient and volume. */
     /* update_deformation_gradient(job); */
@@ -461,15 +547,15 @@ void implicit_mpm_step(job_t *job)
 
     /* Clear grid quantites. */
     for (i = 0; i < job->num_nodes; i++) {
-        job->m_nodes[i] = 0;
-        job->mx_t_nodes[i] = 0;
-        job->my_t_nodes[i] = 0;
-        job->mx_tt_nodes[i] = 0;
-        job->my_tt_nodes[i] = 0;
-        job->fx_nodes[i] = 0;
-        job->fy_nodes[i] = 0;
+/*        job->m_nodes[i] = 0;*/
+/*        job->mx_t_nodes[i] = 0;*/
+/*        job->my_t_nodes[i] = 0;*/
+/*        job->mx_tt_nodes[i] = 0;*/
+/*        job->my_tt_nodes[i] = 0;*/
+/*        job->fx_nodes[i] = 0;*/
+/*        job->fy_nodes[i] = 0;*/
 
-/*        job->nodes[i].m = 0;*/
+        job->nodes[i].m = 0;
         job->nodes[i].mx_t = 0;
         job->nodes[i].my_t = 0;
         job->nodes[i].mx_tt = 0;
@@ -538,7 +624,7 @@ void move_grid(job_t *job)
     int i;
 
     for (i = 0; i < job->num_nodes; i++) {
-        m = job->m_nodes[i];
+        m = job->nodes[i].m;
 
         if (m > TOL) {
             job->nodes[i].x_tt = job->nodes[i].fx / m;
@@ -655,7 +741,7 @@ void calculate_node_velocity(job_t *job)
     double m;
 
     for (i = 0; i < job->num_nodes; i++) {
-        m = job->m_nodes[i];
+        m = job->nodes[i].m;
         if (m > TOL) {
             job->nodes[i].x_t = job->nodes[i].mx_t / m;
             job->nodes[i].y_t = job->nodes[i].my_t / m;
@@ -679,18 +765,8 @@ void calculate_strainrate(job_t *job)
 {
     int i, j, k;
     int ce, nn[4];
-/*    int method;*/
     double dx_tdy;
     double dy_tdx;
-/*    char fname[] = "tmpx_sr.txt";*/
-
-/*    FILE *fd;*/
-
-/*    for (method = 0; method < 2; method++) { */ /* begin method loop */
-/*    fname[3] = method + '0';*/
-/*    fd = fopen(fname, "a");*/
-/*    job->use_cpdi = method;*/
-/*    fprintf(fd, "%g %d\n", job->t, job->use_cpdi);*/
 
     for (i = 0; i < job->num_particles; i++) {
         CHECK_ACTIVE(job, i);
@@ -728,11 +804,6 @@ void calculate_strainrate(job_t *job)
             job->particles[i].wxy_t = 0.5 * (dx_tdy - dy_tdx);
         }
     }
-/*    fprintf(fd, "%d %d: %g %g %g %g", method, i, job->particles[i].exx_t,*/
-/*        job->particles[i].exy_t, job->particles[i].eyy_t, job->particles[i].wxy_t);*/
-
-/*    fclose(fd);*/
-    /*}*/ /*end method loop*/
 
     return;
 }
@@ -1377,18 +1448,19 @@ start_implicit:
 /*----------------------------------------------------------------------------*/
 void map_to_grid(job_t *job)
 {
+    double mn;
     size_t i;
-    double *m_particles;
+/*    double *m_particles;*/
 
-    m_particles = malloc(sizeof(double) * job->num_particles);
-    for (i = 0; i < job->num_nodes; i++) {
-        job->m_nodes[i] = 0;
-    }
-    for (i = 0; i < job->num_particles; i++) {
-        m_particles[i] = job->particles[i].m;
-    }
+/*    m_particles = malloc(sizeof(double) * job->num_particles);*/
+/*    for (i = 0; i < job->num_nodes; i++) {*/
+/*        job->m_nodes[i] = 0;*/
+/*    }*/
+/*    for (i = 0; i < job->num_particles; i++) {*/
+/*        m_particles[i] = job->particles[i].m;*/
+/*    }*/
 
-    cs_gaxpy(job->phi, m_particles, job->m_nodes);
+/*    cs_gaxpy(job->phi, m_particles, job->m_nodes);*/
 
 /*    for (i = 0; i < job->num_nodes; i++) {*/
 /*        job->nodes[i].m = job->m_nodes[i];*/
@@ -1398,7 +1470,7 @@ void map_to_grid(job_t *job)
         CHECK_ACTIVE(job, i);
 
         /* Mass. */
-/*        ACCUMULATE(m,job,m,i,n,h);*/
+        ACCUMULATE(m,job,m,i,n,h);
         
 
         /* Momentum. */
@@ -1416,14 +1488,15 @@ void map_to_grid(job_t *job)
 
     /* for implicit method, map to another array */
     for (i = 0; i < job->num_nodes; i++) {
+        mn = job->nodes[i].m;
         /* used lumped mass */
-        job->m_grid[NODAL_DOF * i + XDOF_IDX] = job->m_nodes[i];
-        job->m_grid[NODAL_DOF * i + YDOF_IDX] = job->m_nodes[i];
+        job->m_grid[NODAL_DOF * i + XDOF_IDX] = mn;
+        job->m_grid[NODAL_DOF * i + YDOF_IDX] = mn;
 
         /* need previous timestep's acceleration for implicit method */
-        if (job->m_nodes[i] > TOL) {
-            job->a_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].mx_tt / job->m_nodes[i];
-            job->a_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].my_tt  / job->m_nodes[i];
+        if (mn > TOL) {
+            job->a_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].mx_tt / mn;
+            job->a_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].my_tt  / mn;
         } else {
             job->a_grid[NODAL_DOF * i + XDOF_IDX] = 0;
             job->a_grid[NODAL_DOF * i + YDOF_IDX] = 0;
@@ -1434,7 +1507,7 @@ void map_to_grid(job_t *job)
         job->f_ext_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].fy;
     }
 
-    free(m_particles);
+/*    free(m_particles);*/
 
     return;
 }
@@ -1488,6 +1561,45 @@ void move_particles(job_t *job)
         job->particles[i].y_t += 0.5 * job->dt * (job->particles[i].y_tt + a_y_t);
 /*        job->particles[i].x_t = (N_TO_P(job, x_t, i));*/
 /*        job->particles[i].y_t = (N_TO_P(job, y_t, i));*/
+    }
+    return;
+}
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
+void move_particles_explicit(job_t *job)
+{
+    int i;
+    double dux, a_x_t;
+    double duy, a_y_t;
+
+    for (i = 0; i < job->num_particles; i++) {
+        CHECK_ACTIVE(job, i);
+
+        dux = (N_TO_P(job, ux, i));
+        duy = (N_TO_P(job, uy, i));
+
+        job->particles[i].x += dux;
+        job->particles[i].y += duy;
+        job->particles[i].ux += dux;
+        job->particles[i].uy += duy;
+
+        while(job->particles[i].x < 0) { job->particles[i].x += -floor(job->particles[i].x); }
+        while(job->particles[i].x > 1) { job->particles[i].x -= floor(job->particles[i].x); }
+
+        while(job->particles[i].y < 0) { job->particles[i].y += -floor(job->particles[i].y); }
+        while(job->particles[i].y > 1) { job->particles[i].y -= floor(job->particles[i].y); }
+
+        a_x_t = job->particles[i].x_tt;
+        a_y_t = job->particles[i].y_tt;
+
+        job->particles[i].x_tt = (N_TO_P(job, x_tt, i));
+        job->particles[i].y_tt = (N_TO_P(job, y_tt, i));
+
+/*        job->particles[i].x_t += 0.5 * job->dt * (job->particles[i].x_tt + a_x_t);*/
+/*        job->particles[i].y_t += 0.5 * job->dt * (job->particles[i].y_tt + a_y_t);*/
+        job->particles[i].x_t = (N_TO_P(job, x_t, i));
+        job->particles[i].y_t = (N_TO_P(job, y_t, i));
     }
     return;
 }
@@ -1901,17 +2013,17 @@ void mpm_cleanup(job_t *job)
     
     free(job->in_element);
 
-    free(job->m_nodes);
-    free(job->mx_t_nodes);
-    free(job->my_t_nodes);
-    free(job->mx_tt_nodes);
-    free(job->my_tt_nodes);
-    free(job->x_t_nodes);
-    free(job->y_t_nodes);
-    free(job->x_tt_nodes);
-    free(job->y_tt_nodes);
-    free(job->fx_nodes);
-    free(job->fy_nodes);
+/*    free(job->m_nodes);*/
+/*    free(job->mx_t_nodes);*/
+/*    free(job->my_t_nodes);*/
+/*    free(job->mx_tt_nodes);*/
+/*    free(job->my_tt_nodes);*/
+/*    free(job->x_t_nodes);*/
+/*    free(job->y_t_nodes);*/
+/*    free(job->x_tt_nodes);*/
+/*    free(job->y_tt_nodes);*/
+/*    free(job->fx_nodes);*/
+/*    free(job->fy_nodes);*/
 
     free(job->h1);
     free(job->h2);

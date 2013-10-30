@@ -7,6 +7,7 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <hdf5.h>
 
 #include "reader.h"
@@ -97,22 +98,73 @@ void read_particles(particle_t **particles, int *num_particles, char *fname)
     FILE *fp;
     int i, r;
 
+    char s[16384];
+    char *tok;
+    double value;
+    int field;
+
     fp = fopen(fname, "r");
 
-    r = fscanf(fp, "%d", num_particles);
+    if (NULL == fgets(s, sizeof(s)/sizeof(char), fp)) {
+        fprintf(stderr, "can't read initial particle file (num particles).\n");
+    }
+    r = sscanf(s, "%d", num_particles);
     if (r != 1) {
         printf("Couldn't read number of particles!\n");
         exit(-1);
     }
     *particles = (particle_t *)malloc(sizeof(particle_t) * (*num_particles));
 
+
     for (i = 0; i < *num_particles; i++) {
-        r = fscanf(fp, "%lf %lf %lf %lf %lf %lf",
-                &((*particles)[i].m), &((*particles)[i].v),
-                &((*particles)[i].x), &((*particles)[i].y),
-                &((*particles)[i].x_t), &((*particles)[i].y_t));
-        if (r != 6) {
-            printf("error reading particle %d\n", i);
+        if (NULL == fgets(s, sizeof(s)/sizeof(char), fp)) {
+            fprintf(stderr, "can't read initial particle file.\n");
+            continue;
+        }
+        field = 0;
+        tok = strtok(s, " ,");
+        while (tok != NULL) {
+            sscanf(tok, "%lf", &value);
+            switch (field) {
+                case 0:
+                    (*particles)[i].m = value;
+                    break;
+                case 1:
+                    (*particles)[i].v = value;
+                    break;
+                case 2:
+                    (*particles)[i].x = value;
+                    break;
+                case 3:
+                    (*particles)[i].y = value;
+                    break;
+                case 4:
+                    (*particles)[i].x_t = value;
+                    break;
+                case 5:
+                    (*particles)[i].y_t = value;
+                    break;
+                case 6:
+                    (*particles)[i].sxx = value;
+                    break;
+                case 7:
+                    (*particles)[i].sxy = value;
+                    break;
+                case 8:
+                    (*particles)[i].syy = value;
+                    break;
+            }
+            tok = strtok(NULL, " ,");
+            field++;
+        }
+        if (field < 9) {
+/*            fprintf(stderr, "No initial stress state for %d\n", i);*/
+            (*particles)[i].sxx = 0;
+            (*particles)[i].sxy = 0;
+            (*particles)[i].syy = 0;
+        }
+        if (field < 6) {
+            fprintf(stderr, "error reading particle %d\n", i);
         }
     }
 

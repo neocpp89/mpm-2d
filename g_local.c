@@ -44,6 +44,7 @@
 #define MU_S 0.577350269
 #define GRAINS_RHO 3000
 #define GRAINS_D 0.01
+#define B 0.5
 
 #define Epxx jp(state[0])
 #define Epxy jp(state[1])
@@ -53,9 +54,9 @@
 #define beta jp(state[5])
 #define gammap jp(state[9])
 #define Ef_mag jp(state[10])
-#define Etxx jp(state[6])
-#define Etxy jp(state[7])
-#define Etyy jp(state[8])
+#define Exx jp(state[6])
+#define Exy jp(state[7])
+#define Eyy jp(state[8])
 
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
@@ -72,9 +73,9 @@ void material_init(job_t *job)
         Epxx = 0;
         Epxy = 0;
         Epyy = 0;
-        Etxx = 0;
-        Etxy = 0;
-        Etyy = 0;
+        Exx = 0;
+        Exy = 0;
+        Eyy = 0;
         eta = 0;
         gammap = 0;
         gf = 0;
@@ -130,6 +131,8 @@ void calculate_stress(job_t *job)
     int i;
 
     for (i = 0; i < job->num_particles; i++) {
+/*        fprintf(stderr, "%d: %f %f %f\n", i, job->particles[i].sxx,*/
+/*            job->particles[i].sxy, job->particles[i].syy);*/
         if (job->particles[i].active == 0) {
             continue;
         }
@@ -143,9 +146,9 @@ void calculate_stress(job_t *job)
         }
 
         /* calculate final total strain */
-        Etauxx = job->particles[i].exx_t * job->dt + Etxx;
-        Etauxy = job->particles[i].exy_t * job->dt + Etxy;
-        Etauyy = job->particles[i].eyy_t * job->dt + Etyy;
+        Etauxx = job->particles[i].exx_t * job->dt + Exx;
+        Etauxy = job->particles[i].exy_t * job->dt + Exy;
+        Etauyy = job->particles[i].eyy_t * job->dt + Eyy;
 
         /* calculate trial elastic strain */
         Ee_trxx = Etauxx - Epxx;
@@ -156,6 +159,7 @@ void calculate_stress(job_t *job)
         dsjxy = job->dt * (EMOD / (2 *(1 + NUMOD))) * (job->particles[i].exy_t);
         dsjyy = job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((job->particles[i].eyy_t) + NUMOD * (job->particles[i].exx_t));
 
+        /* Jaumann spin terms */
         dsjxx -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
         dsjxy += job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
         dsjyy += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
@@ -165,18 +169,18 @@ void calculate_stress(job_t *job)
         txy = job->particles[i].sxy + dsjxy;
         tyy = job->particles[i].syy + dsjyy;
 
-        /* trial pressure */
-        p_tr = -0.5f*(txx + tyy);
+        /* pressure at beginning of timestep */
+        p_tr = -0.5*(txx + tyy);
 
         if (p_tr < c) {
-            job->particles[i].sxx = -0.5 * c / MU_S;
+            job->particles[i].sxx = 0.5 * c / MU_S;
             job->particles[i].sxy = 0;
-            job->particles[i].syy = -0.5 * c / MU_S;
+            job->particles[i].syy = 0.5 * c / MU_S;
             continue;
         }
 
         S0 = p_tr * MU_S;
-        eta = 0.5 * GRAINS_D * sqrt(p_tr * GRAINS_RHO); 
+        eta = B * GRAINS_D * sqrt(p_tr * GRAINS_RHO); 
 
         /* deviator of trial stress */
         t0xx = txx + p_tr;
@@ -186,7 +190,7 @@ void calculate_stress(job_t *job)
         tau = sqrt(0.5f*(t0xx*t0xx + 2*t0xy*t0xy + t0yy*t0yy));
 
         if (tau > S0) {
-            tau_tau = (tau + G * job->dt / eta) / (1.0 + G * job->dt / eta);
+            tau_tau = (tau + G * job->dt * S0 / eta) / (1.0 + G * job->dt / eta);
         } else {
             tau_tau = tau;
         }
@@ -209,6 +213,10 @@ void calculate_stress(job_t *job)
         dpxx = nup_tau * Np_trxx;
         dpxy = nup_tau * Np_trxy;
         dpyy = nup_tau * Np_tryy;
+
+        Epxx += dpxx * job->dt;
+        Epxy += dpxy * job->dt;
+        Epyy += dpyy * job->dt;
 
         job->particles[i].sxx = txx - sqrt(2.0) * (tau - tau_tau) * Np_trxx;
         job->particles[i].sxy = txy - sqrt(2.0) * (tau - tau_tau) * Np_trxy;
