@@ -490,9 +490,25 @@ int main(int argc, char **argv)
         job->output.directory, job->output.log_filename);
 
     job->output.particle_fd = fopen(job->output.particle_filename_fullpath, "w");
+    if (job->output.particle_fd == NULL) {
+      printf( "Failed to open particle_fd file: %s\n", job->output.particle_filename_fullpath );
+      exit(-1);
+    }
     job->output.element_fd = fopen(job->output.element_filename_fullpath, "w");
+    if (job->output.particle_fd == NULL) {
+      printf( "Failed to open element_fd file: %s\n", job->output.element_filename_fullpath );
+      exit(-1);
+    }
     job->output.state_fd = fopen(job->output.state_filename_fullpath, "w");
+    if (job->output.particle_fd == NULL) {
+      printf( "Failed to open state_fd file: %s\n", job->output.state_filename_fullpath );
+      exit(-1);
+    }
     job->output.log_fd = fopen(job->output.log_filename_fullpath, "w");
+    if (job->output.particle_fd == NULL) {
+      printf( "Failed to open log_fd file: %s\n", job->output.log_filename_fullpath );
+      exit(-1);
+    }
 
     fprintf(stderr, "\nOutput options set:\n");
     fprintf(stderr, "output_directory: %s\n", job->output.directory);

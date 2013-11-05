@@ -21,6 +21,10 @@ void read_grid_params(grid_t *grid, char *fname)
     FILE *fp;
 
     fp = fopen(fname, "r");
+    if (fp == NULL) {
+      printf( "Failed to open grid param file: %s\n", fname );
+      exit(-1);
+    }
     r = fscanf(fp, "%d", &(grid->N));
     r += fscanf(fp, "%lf", &(grid->len));
     if (r != 2) {
@@ -104,6 +108,10 @@ void read_particles(particle_t **particles, int *num_particles, char *fname)
     int field;
 
     fp = fopen(fname, "r");
+    if (fp == NULL) {
+      printf( "Failed to open particle file: %s\n", fname );
+      exit(-1);
+    }
 
     if (NULL == fgets(s, sizeof(s)/sizeof(char), fp)) {
         fprintf(stderr, "can't read initial particle file (num particles).\n");
