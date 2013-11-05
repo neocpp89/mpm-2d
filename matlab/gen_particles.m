@@ -87,8 +87,8 @@ ylim([min(y), max(y)]);
 fp = fopen('generated_particles.txt', 'w');
 fprintf(fp, '%d\n', numel(mp));
 for i=1:numel(mp)
-    fprintf(fp, '%f %f %f %f %f %f %f %f %f\n', mp(i), vp(i),
-        xp(i), yp(i), xp_t(i), yp_t(i),
+    fprintf(fp, '%f %f %f %f %f %f %f %f %f\n', mp(i), vp(i), ...
+        xp(i), yp(i), xp_t(i), yp_t(i), ...
         sxxp(i), sxyp(i), syyp(i));
 end
 fclose(fp);
