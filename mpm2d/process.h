@@ -13,7 +13,11 @@
 #include <stdio.h>
 #include <pthread.h>
 
+#ifdef COLUMBIA
+#include <cs.h>
+#else
 #include <suitesparse/cs.h>
+#endif
 
 enum solver_e {
     IMPLICIT_SOLVER=0,

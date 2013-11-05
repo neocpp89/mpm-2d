@@ -17,7 +17,12 @@
 #include "process.h"
 #include "material.h"
 #include "exitcodes.h"
+
+#ifdef COLUMBIA
+#include <cs.h>
+#else
 #include <suitesparse/cs.h>
+#endif
 
 /*#include <omp.h>*/
 #include <signal.h>
@@ -1097,7 +1102,9 @@ start_implicit:
         build_elemental_stiffness(job);
 
         /* starting timer */
+        #ifndef COLUMBIA
         clock_gettime(CLOCK_REALTIME, &requestStart);
+        #endif
 
         /* build node and inverse maps, taking BCs into account. */
         for (i = 0; i < lda; i++) {
@@ -1253,7 +1260,9 @@ start_implicit:
         }
 
         /* stopping timer */
+        #ifndef COLUMBIA
         clock_gettime(CLOCK_REALTIME, &requestEnd);
+        #endif
 
         /* Calculate time it took */
     #define NS_PER_S 1E9
@@ -1291,7 +1300,9 @@ start_implicit:
 /*        cs_print(smat, 0);*/
 
         /* starting timer */
+        #ifndef COLUMBIA
         clock_gettime(CLOCK_REALTIME, &requestStart);
+        #endif
 
         sldb = slda;
         if (k == 0) {
@@ -1313,7 +1324,9 @@ start_implicit:
         du_norm = dnrm2_(&sldb, sb, &incx);
 
         /* stopping timer */
+        #ifndef COLUMBIA
         clock_gettime(CLOCK_REALTIME, &requestEnd);
+        #endif
 
         /* Calculate time it took */
     #define NS_PER_S 1E9

@@ -1,0 +1,31 @@
+# mpm2d CMakeSourceFiles.txt
+# 
+# Breannan Smith (smith@cs.columbia.edu) 
+# Updated: 11/25/2013
+
+set( Sources
+  bc.c
+  element.c
+  interpolate.c
+  loading.c
+  main.c
+  material.c
+  particle.c
+  process.c
+  reader.c
+  writer.c
+)
+
+set( Headers
+  element.h
+  exitcodes.h
+  interpolate.h
+  material.h
+  node.h
+  particle.h
+  point.h
+  process.h
+  reader.h
+  visualization.h
+  writer.h
+)
