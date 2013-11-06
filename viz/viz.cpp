@@ -1268,7 +1268,15 @@ void init_ftgl(void)
 {
     /* Create a pixmap font from a TrueType file. */
     font = ftglCreatePixmapFont("/usr/share/cups/fonts/FreeMono.ttf");
+    if (font == NULL) {
+      std::cerr << "Failed to load pixmap font: /usr/share/cups/fonts/FreeMono.ttf" << std::endl;
+      std::exit( -1 );
+    }
     small_font = ftglCreatePixmapFont("/usr/share/cups/fonts/FreeMono.ttf");
+    if (small_font == NULL) {
+      std::cerr << "Failed to load small pixmap font: /usr/share/cups/fonts/FreeMono.ttf" << std::endl;
+      std::exit( -1 );
+    }
 
     centered_layout = ftglCreateSimpleLayout();
     small_centered_layout = ftglCreateSimpleLayout();
