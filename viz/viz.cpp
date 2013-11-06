@@ -4,9 +4,15 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#ifdef COLUMBIA
+#include <SDL.h>
+#include <SDL_opengl.h>
+#include <SDL_image.h>
+#else
 #include <SDL/SDL.h>
 #include <SDL/SDL_opengl.h>
 #include <SDL/SDL_image.h>
+#endif
 #include <png.h>
 #include <FTGL/ftgl.h>
 

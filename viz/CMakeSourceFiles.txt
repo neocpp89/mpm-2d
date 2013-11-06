@@ -1,0 +1,13 @@
+# viz CMakeSourceFiles.txt
+# 
+# Breannan Smith (smith@cs.columbia.edu) 
+# Updated: 11/25/2013
+
+set( Sources
+  viz.cpp
+)
+
+set( Headers
+  viz_builtin_colormap.hpp
+  viz_colormap.hpp
+)
