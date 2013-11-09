@@ -6,6 +6,7 @@
     Writes particle data to disk.
 */
 #include <stdio.h>
+#include "process.h"
 
 #ifndef __READER_H__
 #define __READER_H__
