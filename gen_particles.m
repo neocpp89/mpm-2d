@@ -24,10 +24,10 @@ tol = p.tol;
 Nn = N*N;
 
 % set up material points
-bar_w = 1.0-1e-5; Nbx = Np; %
+bar_w = 1.0; Nbx = Np; %
 %bar_w = 0.25; Nbx = Np; %
 % Nbx = ceil(p.rhop*bar_w/h);
-bar_h = 1.0-1e-5; Nby = (bar_h/bar_w)*Nbx;
+bar_h = 1.0; Nby = (bar_h/bar_w)*Nbx;
 %bar_h = 0.25; Nby = (bar_h/bar_w)*Nbx;
 
 bxtmp = linspace(0, bar_w, Nbx+1);
@@ -65,9 +65,9 @@ xp_t = 0*ones(size(xp));
 yp_t = -0.0*ones(size(yp));
 
 % initialize stress
-sxxp = 0*ones(size(xp));
+sxxp = -900*ones(size(xp));
 sxyp = 0*ones(size(yp));
-syyp = 0*ones(size(yp));
+syyp = -900*ones(size(yp));
 
 % initialize strain
 exxp = zeros(size(xp));

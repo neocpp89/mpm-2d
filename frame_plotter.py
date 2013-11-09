@@ -2,6 +2,7 @@
 import sys
 import numpy
 import pylab
+import gc
 
 if (len(sys.argv) <= 2):
     print 'usage: FRAME_DATA plotvariables [frame]'
@@ -46,6 +47,13 @@ with open(infile, 'r') as f_in:
             if (particles_left <= 0):
                 state = FRAMEDESC
                 framenum = framenum + 1
+                gc.collect()
+                if (framenum >= 100):
+					break;
+                if (len(data) * sys.getsizeof(data[0]['particles']) >= 128 * 1048576):
+                    break;
+                else:
+                    print 'Data size is approx ', len(data) * sys.getsizeof(data[0]['particles']), ' bytes.'
 
 print 'Got', len(data), 'frames of data.'
 

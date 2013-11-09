@@ -124,6 +124,11 @@ with open(infile, 'r') as f_in:
                             'x_t':tokf[4], 'y_t':tokf[5], 'sxx':tokf[6],
                             'sxy':tokf[7], 'syy':tokf[8], 'ux':tokf[9],
                             'uy':tokf[10], 'gammap':tokf[11]}
+            elif (len(tokf) > 12):
+                particle = {'m':tokf[0], 'v':tokf[1], 'x':tokf[2], 'y':tokf[3],
+                            'x_t':tokf[4], 'y_t':tokf[5], 'sxx':tokf[6],
+                            'sxy':tokf[7], 'syy':tokf[8], 'ux':tokf[9],
+                            'uy':tokf[10], 'gammap':tokf[11]}
             data['particles'].append(particle)
             if (particles_left <= 0):
                 state = FRAMEDESC

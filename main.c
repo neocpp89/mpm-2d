@@ -40,12 +40,13 @@ static struct state_s {
 
     char *gridfile;
     char *particlefile;
+    char *materialso;
 
     double tmax;
     int restart;        /* is this a restart? */
 } g_state;
 
-static const char* g_optstring = "o:r:p:g:";
+static const char* g_optstring = "o:r:p:g:u:";
 char *outputdir = "./";
 const char *cfgfile = "simulation.cfg";
 
@@ -107,8 +108,10 @@ int set_solver_type(cfg_t *cfg, cfg_opt_t *opt, const char *value, void *result)
 {
     if (strcmp(value, "implicit") == 0) {
         *(enum solver_e *)result = IMPLICIT_SOLVER;
-    } else if (strcmp(value, "explicit") == 0) {
-        *(enum solver_e *)result = EXPLICIT_SOLVER;
+    } else if (strcmp(value, "explicit-usf") == 0) {
+        *(enum solver_e *)result = EXPLICIT_SOLVER_USF;
+    } else if (strcmp(value, "explicit-usl") == 0) {
+        *(enum solver_e *)result = EXPLICIT_SOLVER_USL;
     } else {
         cfg_error(cfg, "Invalid value for option '%s': %s", opt->name, value);
         return -1;
@@ -126,6 +129,7 @@ void usage(char *program_name)
     printf("\t\t-r STATE, restart analysis using STATE as input.\n");
     printf("\t\t-p PFILE, particle file to use. Overrides config file value.\n");
     printf("\t\t-g GFILE, grid file to use. Overrides config file value.\n");
+    printf("\t\t-u MATERIAL, material shared object to use. Overrides config file value.\n");
     printf("\n\tdefault t_max is 1.0\n");
     return;
 }
@@ -215,7 +219,8 @@ int main(int argc, char **argv)
 
     const char *solver_names[] = {
         "Implicit",
-        "Explicit",
+        "Explicit - Update Stress First",
+        "Explicit - Update Stress Last",
         "N/A"
     };
 
@@ -223,6 +228,7 @@ int main(int argc, char **argv)
     int command_line_outputdir = 0;
     int command_line_gridfile = 0;
     int command_line_particlefile = 0;
+    int command_line_materialso = 0;
     char *s;
     char *s_dlerror;
 
@@ -300,6 +306,10 @@ int main(int argc, char **argv)
                 g_state.gridfile = optarg;
                 command_line_gridfile = 1;
                 break;
+            case 'u':
+                g_state.materialso = optarg;
+                command_line_materialso = 1;
+                break;
             default:
                 break;
         }
@@ -351,11 +361,15 @@ int main(int argc, char **argv)
 
     /* section for material options */
     cfg_material = cfg_getsec(cfg, "material");
-    fprintf(stderr, "old function pointer %p\n", job->material.calculate_stress); 
-    job->material.use_builtin = cfg_getint(cfg_material, "use-builtin");
+/*    fprintf(stderr, "old function pointer %p\n", job->material.calculate_stress);*/
+    if (command_line_materialso != 0) {
+        job->material.use_builtin = 0;
+        job->material.material_filename = g_state.materialso;
+    } else {
+        job->material.use_builtin = cfg_getint(cfg_material, "use-builtin");
+        job->material.material_filename = cfg_getstr(cfg_material, "material-file");
+    }
     if (job->material.use_builtin == 0) {
-        job->material.material_filename =
-            cfg_getstr(cfg_material, "material-file");
         material_so_handle =
             dlopen(job->material.material_filename, RTLD_LAZY);
         if (material_so_handle == NULL) {
@@ -378,7 +392,7 @@ int main(int argc, char **argv)
             exit(EXIT_ERROR_MATERIAL_FILE);
         }
     }
-    fprintf(stderr, "new function pointer %p\n", job->material.calculate_stress); 
+/*    fprintf(stderr, "new function pointer %p\n", job->material.calculate_stress); */
     fprintf(stderr, "\nMaterial options set:\n");
     fprintf(stderr, "material_filename: %s\n", job->material.material_filename);
     fprintf(stderr, "use_builtin: %d\n", job->material.use_builtin);
@@ -392,8 +406,10 @@ int main(int argc, char **argv)
         job->solver, solver_names[(int)job->solver]);
     if (job->solver == IMPLICIT_SOLVER) {
         mpm_step = implicit_mpm_step;
-    } else if (job->solver == EXPLICIT_SOLVER) {
-        mpm_step = explicit_mpm_step;
+    } else if (job->solver == EXPLICIT_SOLVER_USF) {
+        mpm_step = explicit_mpm_step_usf;
+    } else if (job->solver == EXPLICIT_SOLVER_USL) {
+        mpm_step = explicit_mpm_step_usl;
     } else {
         fprintf(stderr, "Unknown solver type.\n");
         exit(-1);
@@ -553,6 +569,7 @@ job_start:
             j++;
             printf("\rt = %05.3fs\t[%3d%%]\t", job->t, (int)((100 * job->t) / (job->t_stop)));
             fflush(stdout);
+            fflush(job->output.log_fd);
         }
 
         time_varying_loads(job);

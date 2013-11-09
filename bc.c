@@ -74,19 +74,19 @@ void generate_dirichlet_bcs(job_t *job)
         job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + YDOF_IDX] = 1;
 #endif
     
-        if (job->step_number > 0) {
+/*        if (job->step_number > 0) {*/
             job->u_dirichlet[NODAL_DOF * (0 + n*job->N) + XDOF_IDX] = 0;
             job->u_dirichlet_mask[NODAL_DOF * (0 + n*job->N) + XDOF_IDX] = 1;
 
             job->u_dirichlet[NODAL_DOF * (0 + n*job->N) + YDOF_IDX] = 0;
             job->u_dirichlet_mask[NODAL_DOF * (0+ n*job->N) + YDOF_IDX] = 1;
 
-            job->u_dirichlet[NODAL_DOF * (1 + n*job->N) + XDOF_IDX] = 0;
-            job->u_dirichlet_mask[NODAL_DOF * (1 + n*job->N) + XDOF_IDX] = 1;
+/*            job->u_dirichlet[NODAL_DOF * (1 + n*job->N) + XDOF_IDX] = 0;*/
+/*            job->u_dirichlet_mask[NODAL_DOF * (1 + n*job->N) + XDOF_IDX] = 1;*/
 
-            job->u_dirichlet[NODAL_DOF * (1 + n*job->N) + YDOF_IDX] = 0;
-            job->u_dirichlet_mask[NODAL_DOF * (1+ n*job->N) + YDOF_IDX] = 1;
-        }
+/*            job->u_dirichlet[NODAL_DOF * (1 + n*job->N) + YDOF_IDX] = 0;*/
+/*            job->u_dirichlet_mask[NODAL_DOF * (1+ n*job->N) + YDOF_IDX] = 1;*/
+/*        }*/
 
         job->u_dirichlet[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 0;
         job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 1;
@@ -124,8 +124,6 @@ void generate_node_number_override(job_t *job)
         for (j = 0; j < NODAL_DOF; j++) {
             job->node_number_override[NODAL_DOF * (job->num_nodes-job->N+i) + j] =
                 (NODAL_DOF * i + j);
-/*            job->node_number_override[NODAL_DOF * i + j] =*/
-/*                (NODAL_DOF * (job->num_nodes-i-1) + j);*/
         }
     }
 

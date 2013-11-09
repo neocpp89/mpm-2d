@@ -20,7 +20,8 @@ SRC = \
 	reader.c \
 	writer.c \
 	rtsafe.c \
-	material.c
+	material.c \
+	map.c
 
 MATERIAL_SRC = \
 	builtin_material.c \
@@ -35,11 +36,14 @@ all: $(BIN) $(VIZBIN)
 clean:
 	-rm $(OBJ) $(BIN) $(VIZBIN);
 
+backup-nogit:
+	tar --exclude-vcs --exclude=jobs -cvzf ../mpm_2d_`date +%Y%m%d`.tar.gz ../`basename $(CURDIR)`;
+
 backup:
 	tar --exclude=jobs -cvzf ../mpm_2d_`date +%Y%m%d`.tar.gz ../`basename $(CURDIR)`;
 
 distbackup: clean
-	backup
+	make backup-nogit
 
 doc: Doxyfile
 	doxygen

@@ -213,6 +213,9 @@ void write_frame(FILE *fd, int frame, double time, job_t *job)
         write_particle(fd, job->particles[i]);
     }
 
+    /* dump the entire frame to disk (or wherever) */
+    fflush(fd);
+
     return;
 }
 /*----------------------------------------------------------------------------*/

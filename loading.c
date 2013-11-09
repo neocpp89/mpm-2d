@@ -15,8 +15,7 @@
 #include "point.h"
 #include "process.h"
 
-#define G_MAG 1.0f
-/*#define G_MAG 0.0f*/
+#define G_MAG 0.80
 #define RAMP_TIME 0.5f
 
 /*----------------------------------------------------------------------------*/
@@ -64,35 +63,54 @@ void initial_loads(job_t *job)
 /*----------------------------------------------------------------------------*/
 void time_varying_loads(job_t *job)
 {
-    int i;
+    size_t i, j; 
     double gravity;
     double compress;
     double p;
 
     int sqrtnp;
+    int sqrtnel;
 
-    p = -0.5*(job->particles[0].sxx + job->particles[0].syy);
+#if 0
+    p = 0;
+    for (i = 0; i < job->num_particles; i++) {
+        p += -0.5*(job->particles[i].sxx + job->particles[i].syy) / job->num_particles;
+    }
 /*    printf("[0].pressure = %f\n", p);*/
 
-    /* we compressed it to about 200 Pa */
-    if (job->step_number == 0 && p >= 200) {
+    /* we compressed it to about 400 Pa */
+    if (job->step_number == 0 && p >= 100) {
         job->step_number++;
         job->step_start_time = job->t;
         fprintf(job->output.log_fd, "Done compressing laterally. Moving to next step.\n");
         fflush(job->output.log_fd);
     }
 
-    if (job->step_number == 1 && (job->t >= job->step_start_time + RAMP_TIME)) {
+    if (job->step_number == 1 && (job->t >= job->step_start_time + 0.0)) {
         job->step_number++;
         job->step_start_time = job->t;
         fprintf(job->output.log_fd, "Done waiting. Moving to next step.\n");
         fflush(job->output.log_fd);
+        /* deactivate particles in 'frozen' elements (left vertical column). */
+        sqrtnel = (int)sqrt(job->num_elements);
+        for (i = 0; i < job->num_particles; i++) {
+/*            for (j = 0; j < sqrtnel; j++) {*/
+                if (job->in_element[i] % sqrtnel == 0) {
+                    job->particles[i].active = 0;
+                    fprintf(job->output.log_fd,
+                        "Particle %d @(%g, %g) in frozen element, deactivating.\n",
+                        i, job->particles[i].x, job->particles[i].y);
+                }
+/*            }*/
+        }
     }
+#endif
 
     switch (job->step_number) {
+#if 0
         case 0:
-            sqrtnp = sqrt(job->num_particles);
-            compress = 1000 * G_MAG * (job->t - job->step_start_time);
+            sqrtnp = (int)sqrt(job->num_particles);
+            compress = 100 * (job->t - job->step_start_time);
             if (compress > 100) { compress = 100; }
             
             for (i = 0; i < sqrtnp; i++) {
@@ -108,9 +126,10 @@ void time_varying_loads(job_t *job)
             }
         break;
         case 2:
+#endif
         default:
-            if ((RAMP_TIME - job->step_start_time) > 0) {
-                gravity = -G_MAG * (job->step_start_time / RAMP_TIME);
+            if ((RAMP_TIME + job->step_start_time) > job->t) {
+                gravity = -G_MAG * ((job->t - job->step_start_time) / RAMP_TIME);
             } else {
                 gravity = -G_MAG;
             }

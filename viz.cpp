@@ -1164,6 +1164,10 @@ int draw_elements(void)
     for (i = 0; i < ne; i++) {
         if (g_state.data_var == VAR_SXY) {
             p = elements[i].sxy;
+        } else if (g_state.data_var == VAR_SYY) {
+            p = elements[i].syy;
+        } else if (g_state.data_var == VAR_SXX) {
+            p = elements[i].sxx;
         } else if (g_state.data_var == VAR_PRESSURE) {
             p = -0.5 * (elements[i].sxx + elements[i].syy);
 //            if (p != 0) {

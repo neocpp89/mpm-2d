@@ -32,7 +32,7 @@
 #undef EMOD
 #undef NUMOD
 
-#define EMOD 1e6
+#define EMOD 1e8
 #define NUMOD 0.3
 
 #define G (EMOD / (2.0f * (1.0f + NUMOD)))
@@ -41,10 +41,16 @@
 #define PI 3.1415926535897932384626433
 #define PHI (30.0*PI/180.0)
 
-#define MU_S 0.577350269
-#define GRAINS_RHO 3000
-#define GRAINS_D 0.01
-#define B 0.5
+/* from Dave + Ken's paper (modified B) */
+#define MU_S 0.3819
+#define GRAINS_RHO 2450
+#define B (0.9377 * 20)
+
+/*
+    from geometric considerations -- artificially increased to make
+    velocity field reasonable in chute.
+*/
+#define GRAINS_D (0.01 * 5)
 
 #define Epxx jp(state[0])
 #define Epxy jp(state[1])
@@ -101,6 +107,7 @@ void calculate_stress(job_t *job)
     double tau;
     double tau_tau;
     double p_tr;
+    double p_t;
     double S0;
 
     double dsjxx;
@@ -169,7 +176,7 @@ void calculate_stress(job_t *job)
         txy = job->particles[i].sxy + dsjxy;
         tyy = job->particles[i].syy + dsjyy;
 
-        /* pressure at beginning of timestep */
+        /* pressure of trial  */
         p_tr = -0.5*(txx + tyy);
 
         if (p_tr < c) {
@@ -218,9 +225,52 @@ void calculate_stress(job_t *job)
         Epxy += dpxy * job->dt;
         Epyy += dpyy * job->dt;
 
-        job->particles[i].sxx = txx - sqrt(2.0) * (tau - tau_tau) * Np_trxx;
-        job->particles[i].sxy = txy - sqrt(2.0) * (tau - tau_tau) * Np_trxy;
-        job->particles[i].syy = tyy - sqrt(2.0) * (tau - tau_tau) * Np_tryy;
+/*        job->particles[i].sxx = txx - sqrt(2.0) * (tau - tau_tau) * Np_trxx;*/
+/*        job->particles[i].sxy = txy - sqrt(2.0) * (tau - tau_tau) * Np_trxy;*/
+/*        job->particles[i].syy = tyy - sqrt(2.0) * (tau - tau_tau) * Np_tryy;*/
+
+        p_t = -0.5 * (job->particles[i].sxx + job->particles[i].syy);
+        t0xx = job->particles[i].sxx + p_t;
+        t0xy = job->particles[i].sxy;
+        t0yy = job->particles[i].syy + p_t;
+        tau = sqrt(0.5f*(t0xx*t0xx + 2*t0xy*t0xy + t0yy*t0yy));
+        Np_trxx = sqrt(0.5) * t0xx / tau;
+        Np_trxy = sqrt(0.5) * t0xy / tau;
+        Np_tryy = sqrt(0.5) * t0yy / tau;
+        
+        eta = B * GRAINS_D * sqrt (GRAINS_RHO * p_t);
+        if (tau > MU_S * p_t && p_t > c) {
+            dpxx = sqrt(0.5) * ((tau - MU_S * p_t) / eta) * Np_trxx;
+            dpxy = sqrt(0.5) * ((tau - MU_S * p_t) / eta) * Np_trxy;
+            dpyy = sqrt(0.5) * ((tau - MU_S * p_t) / eta) * Np_tryy;
+/*            fprintf(stderr, "dp != 0\n");*/
+/*            dpxx = 0;*/
+/*            dpxy = 0;*/
+/*            dpyy = 0;*/
+        } else {
+            dpxx = 0;
+            dpxy = 0;
+            dpyy = 0;
+        }
+
+        if (job->t == 0 /* || job->step_number == 0 */) {
+            dpxx = 0;
+            dpxy = 0;
+            dpyy = 0;
+        }
+
+        dsjxx = job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((job->particles[i].exx_t - dpxx) + NUMOD * (job->particles[i].eyy_t - dpyy));
+        dsjxy = job->dt * (EMOD / (2 *(1 + NUMOD))) * (job->particles[i].exy_t - dpxy);
+        dsjyy = job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((job->particles[i].eyy_t - dpyy) + NUMOD * (job->particles[i].exx_t - dpxx));
+        dsjxx -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
+        dsjxy += job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
+        dsjyy += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
+
+        job->particles[i].sxx += dsjxx;
+        job->particles[i].sxy += dsjxy;
+        job->particles[i].syy += dsjyy;
+
+        /* bulk viscosity */
     }
 
     return;
