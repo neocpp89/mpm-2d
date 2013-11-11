@@ -452,7 +452,7 @@ void solve_diffusion_part(job_t *job)
         s[2] = job->h3[i];
         s[3] = job->h4[i];
 
-        nn = job->elements[i].nodes;
+        nn = job->elements[p].nodes;
 
         for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
             gi = nn[ei];
@@ -496,7 +496,7 @@ void solve_diffusion_part(job_t *job)
         grad_s[2][1] = job->b23[i];
         grad_s[3][1] = job->b24[i];
 
-        nn = job->elements[i].nodes;
+        nn = job->elements[p].nodes;
 
         for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
             for (ej = 0; ej < NODES_PER_ELEMENT; ej++) {
@@ -565,7 +565,7 @@ void solve_diffusion_part(job_t *job)
         s[3] = job->h4[i];
 
         gf = 0;
-        nn = job->elements[i].nodes;
+        nn = job->elements[p].nodes;
 
         for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
             gi = nn[ei];

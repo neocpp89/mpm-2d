@@ -1,7 +1,7 @@
 p.rho = 1500;
 p.E = 1e6;
 p.nu = 0.3;
-p.g = -1;
+p.g = -0.8;
 % p.Np = 4 * 2.5;
 p.Np = 80;
 p.N = 81;
@@ -66,7 +66,8 @@ yp_t = -0.0*ones(size(yp));
 
 % initialize stress
 sxxp = -900*ones(size(xp));
-sxyp = 0*ones(size(yp));
+%sxyp = 0*ones(size(yp));
+sxyp = p.rho * p.g * (xp - (bar_w / 2));
 syyp = -900*ones(size(yp));
 
 % initialize strain

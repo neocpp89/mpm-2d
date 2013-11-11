@@ -16,7 +16,7 @@
 #include "process.h"
 
 #define G_MAG 0.80
-#define RAMP_TIME 0.5f
+#define RAMP_TIME 0.0f
 
 /*----------------------------------------------------------------------------*/
 void initial_loads(job_t *job)
