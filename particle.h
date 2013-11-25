@@ -115,6 +115,9 @@ typedef struct particle_s {
 
     /* which elements are the corners in? */
     int corner_elements[4];
+
+    /* material specific data structure, can be defined in material_init */
+    void *material_data;
 } particle_t;
 
 /*

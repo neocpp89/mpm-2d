@@ -33,7 +33,6 @@ def read_frame_cb(f_in, f_cb, p_cb):
             else:
                 frame['particles'][i] = p_cb(particle)
             i = i + 1
-
             if (i >= num_particles):
                 if (f_cb is not None):
                     frame = f_cb(frame)

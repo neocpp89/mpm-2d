@@ -544,7 +544,13 @@ job_start:
         tasks[i].num_threads = num_threads;
         tasks[i].job = job;
     }
+    job->num_threads = num_threads;
     printf("Using %d %s.\n", num_threads, (num_threads > 1)?"threads":"thread");
+    if(pthread_barrier_init(&(job->barrier), NULL, num_threads))
+    {
+        fprintf(stderr, "Could not create pthread barrier!\n");
+        exit(EXIT_ERROR_THREADING);
+    }
 
     initial_loads(job);
     (*(job->material.material_init))(job);

@@ -3,6 +3,7 @@ import sys
 import numpy
 import time
 import os
+import math
 
 import matplotlib
 #matplotlib.use("WXAgg")
@@ -59,9 +60,9 @@ def draw_scatter(fig, data, framenum, plotvars, crange):
     else:
         cdata = [p[zvar] for p in data['particles']]
     if len(crange) > 1:
-        scat = plt.scatter(xdata, ydata, c=cdata, s=particlesize, cmap=pylab.cm.jet, edgecolors='none', vmin=crange[0], vmax=crange[1])
+        scat = plt.scatter(xdata, ydata, c=cdata, s=particlesize, cmap=pylab.cm.RdBu, edgecolors='none', vmin=crange[0], vmax=crange[1])
     else:
-        scat = plt.scatter(xdata, ydata, c=cdata, s=particlesize, cmap=pylab.cm.jet, edgecolors='none')
+        scat = plt.scatter(xdata, ydata, c=cdata, s=particlesize, cmap=pylab.cm.RdBu, edgecolors='none')
     plt.axes().set_aspect('equal')
     fig.colorbar(scat)
     pylab.draw()

@@ -203,24 +203,16 @@ typedef struct job_s {
     int step_number;
     double step_start_time;
 
-#define PT_NUM_THREADS 64
-    pthread_t threads[PT_NUM_THREADS];
+#define PT_MAX_THREADS 64
+    pthread_t threads[PT_MAX_THREADS];
+    pthread_barrier_t barrier;
+    int num_threads;
 } job_t;
 
 typedef struct s_threadtask {
     int id;
     int num_threads;
 
-    job_t *job;
-} threadtask_t;
-
-job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t);
-void implicit_mpm_step(job_t *job);
-void explicit_mpm_step_usf(job_t *job);
-void explicit_mpm_step_usl(job_t *job);
-void mpm_cleanup(job_t *job);
-
-typedef struct s_block_task {
     /* global array bounds (may not be used). */
     int gidx_min;
     int gidx_max;
@@ -231,9 +223,17 @@ typedef struct s_block_task {
     */
     int offset;
     int blocksize;
+    int stride;
 
     job_t *job;
-} stask_t;
+} threadtask_t;
+
+job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t);
+void implicit_mpm_step(job_t *job);
+void explicit_mpm_step_usf(job_t *job);
+void explicit_mpm_step_usl(job_t *job);
+void mpm_cleanup(job_t *job);
+
 void pt_update_stress(void *args);
 
 void create_particle_to_element_map(job_t *job);
