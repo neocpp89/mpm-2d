@@ -1,0 +1,10 @@
+# Mirror across Y Axis
+M Y
+
+# Move camera
+C 0,-0.5,-0.5
+
+# Draw boundaries (these will be mirrored if needed)
+L 1.0,0,1.0,1
+L 0.00,0,1.0,0
+
