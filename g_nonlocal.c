@@ -65,6 +65,7 @@
 
 void calculate_bulk_granular_fluidity(job_t *job);
 void solve_diffusion_part(job_t *job);
+void BiCGSTAB(double *x, cs *A, double *b, double tol);
 
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
@@ -438,7 +439,7 @@ void solve_diffusion_part(job_t *job)
 
     /* project xi and g_local onto background grid (volume-weighted) */
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 
@@ -472,7 +473,7 @@ void solve_diffusion_part(job_t *job)
 
     /* create stiffness matrix. */
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 
@@ -550,7 +551,7 @@ void solve_diffusion_part(job_t *job)
 
     /* map nodal g_nonlocal back to particles */
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 
@@ -591,4 +592,21 @@ void solve_diffusion_part(job_t *job)
 }
 /*----------------------------------------------------------------------------*/
 
+/*----------------------------------------------------------------------------*/
+void BiCGSTAB(double *x, cs *A, double *b, double tol, int lenx)
+{
+    int i;
+    double *r;
+    double rho;
+
+    r = (double *)malloc(sizeof(double) * lenx);
+    for (i = 0; i < lenx; i++) {
+        r[i] = -b[i];
+    }
+    rho = 1.0;
+    cs_gaxpy(A, x, r);
+    free(r);
+    return;
+}
+/*----------------------------------------------------------------------------*/
 

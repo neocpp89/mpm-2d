@@ -34,7 +34,7 @@
 #undef EMOD
 #undef NUMOD
 
-#define EMOD 1e6
+#define EMOD 1e8
 #define NUMOD 0.3
 
 #define G (EMOD / (2.0f * (1.0f + NUMOD)))
@@ -108,7 +108,7 @@ void calculate_stress(job_t *job)
     int i;
 
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 

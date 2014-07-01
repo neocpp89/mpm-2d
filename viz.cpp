@@ -1,9 +1,13 @@
 #include <iostream>
+#include <sstream>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
+#include <map>
+#include <unordered_map>
 #include <SDL/SDL.h>
 #include <SDL/SDL_opengl.h>
 #include <SDL/SDL_image.h>
@@ -18,9 +22,11 @@
 #include "viz_colormap.hpp"
 #include "viz_builtin_colormap.hpp"
 
-using namespace FTGL;
+#include "viz_particle.hpp"
+#include "viz_element.hpp"
+#include "viz_reader.hpp"
 
-#define PI 3.141592653589793238462
+using namespace FTGL;
 
 #define CROSS_SIZE 0.05f
 #define PARTICLE_SIZE 5.0f
@@ -28,7 +34,6 @@ using namespace FTGL;
 #define VAR_DISPLACEMENT 0
 #define VAR_VELOCITY 1
 #define VAR_PRESSURE 5
-#define VAR_RHO 6
 
 #define RESTRICT_VALUE(var,lower,upper) \
 do { \
@@ -38,6 +43,24 @@ do { \
         var = (lower); \
     } \
 } while (0)
+
+class Renderer
+{
+    public:
+        virtual ~Renderer();
+        virtual void setColor(rgbaColor &color) = 0;
+};
+
+class OpenGLRenderer : Renderer
+{
+    public:
+        void setColor(rgbaColor &color)
+        {
+            glColor4f(color.getr(), color.getg(), color.getg(), color.geta());
+        }
+};
+
+void apply_colormap(cm_t *cm, float val, float *r, float *g, float *b);
 
 static struct g_state_s {
     FILE *data_file;        /* which data file */
@@ -80,6 +103,12 @@ static struct g_state_s {
     cfg_opt_t *opts;
     int color_override;
     int draw_glyphs;
+
+    int want_colorbar;
+    int logscale;
+
+    char wm_title[1024];
+    char loaded_file_path[1024];
 } g_state;
 
 typedef struct drawing_object_s {
@@ -89,9 +118,9 @@ typedef struct drawing_object_s {
     GLfloat *color;
 } drawing_object_t;
 
-static const char* g_optstring = "ab:c:d:m:el:u:p:svw";
+static const char* g_optstring = "ab:c:d:m:el:u:p:svwCL";
 
-int screen_width = 800;
+int screen_width = 1000;
 int screen_height = 800;
 const int screen_bpp = 32;
 
@@ -108,6 +137,29 @@ FTGLlayout *small_centered_layout = NULL;
 FTGLlayout *small_left_layout = NULL;
 char pngbase[] = "figs/viz/frame";
 char pngfile[1024];
+
+const int bgsize = 101;
+int which_element(double x, double y, int N)
+{
+    double h = 1.0 / (N-1);
+    int r = floor(y / h);
+    int c = floor(x / h);
+    return (N-1) * r + c;
+}
+
+//assume list has length at least 4
+void element_to_node_list(int *list, int elem, int N)
+{
+    int i = elem % (N - 1);
+    int j = elem / (N - 1);
+    
+    list[0] = j*(N) + i;
+    list[1] = j*(N) + i + 1;
+    list[2] = (j + 1)*(N) + i + 1;
+    list[3] = (j + 1)*(N) + i;
+
+    return;
+}
 
 typedef struct s_aux_particle {
     double x;
@@ -144,6 +196,8 @@ typedef struct s_aux_particle {
 
     double corners[4][2];
     bool has_corners;
+
+    double mu;
 } aux_particle_t;
 
 
@@ -168,14 +222,96 @@ enum e_particle_variables {
     VAR_VX, VAR_VY,
     VAR_SXX, VAR_SXY, VAR_SYY,
     VAR_TAU, VAR_GAMMAP,
-    VAR_YIELD,
+    VAR_YIELD, VAR_MU, VAR_MAGEF, VAR_GAMMADOTP,
+    /* calculated from primitives */
+    VAR_RHO, VAR_SMOOTH_SXX, VAR_SMOOTH_SXY, VAR_SMOOTH_SYY,
     NUM_VAR_PARTICLES
 };
+
+class Node {
+    private:
+        double sxx, sxy, syy;
+        double m;
+        double x, y;
+        double w, h;
+
+    public:
+        Node(double X, double Y, double W, double H) :
+            sxx(0), sxy(0), syy(0), m(0), x(X), y(Y), w(W), h(H) { return; }
+        ~Node() { return; }
+
+        double ShapeFunction(double xp, double yp)
+        {
+            double xl, yl, s;
+            xl = (xp - x) / w;
+            yl = (yp - y) / h;
+            s = 0;
+
+//            if (xl > 0 && yl > 0) {
+//                s = (1 - xl) * fabs(1 - yl);
+//            } else if (xl < 0 && yl > 0) {
+//                s = (1 + xl) * (1 - yl);
+//            } else if (xl > 0 && yl < 0) {
+//                s = (1 - xl) * (1 + yl);
+//            } else if (xl < 0 && yl < 0) {
+//                s = (1 + xl) * (1 + yl);
+//            }
+            
+    //        if (xl >= -1 && yl >= -1 && xl <= 1 && yl <= 1) {
+                s = (1 - fabs(xl)) * (1 - fabs(yl));
+    //        } else {
+    //            printf("warning s = %f %f %f\n", xl, yl, fabs(xl) * fabs(yl));
+    //        }
+
+            return s;
+        }
+        void ClearStress()
+        {
+            sxx = 0;
+            sxy = 0;
+            syy = 0;
+            m = 0;
+            return;
+        }
+        void CopyStressFromParticle(aux_particle_t *p)
+        {
+            double s = ShapeFunction(p->x, p->y);
+            this->sxx += s * p->sxx * p->m;
+            this->sxy += s * p->sxy * p->m;
+            this->syy += s * p->syy * p->m;
+            this->m += s * p->m;
+            return;
+        }
+        void CopyStressToParticle(aux_particle_t *p)
+        {
+            double s = ShapeFunction(p->x, p->y);
+            p->sxx += s * this->sxx;
+            p->sxy += s * this->sxy;
+            p->syy += s * this->syy;
+            return;
+        }
+        void Print()
+        {
+            printf("%p: %f %f %f %f %f %f\n", this, m, x, y, sxx, sxy, syy);
+            fflush(stdout);
+            return;
+        }
+        void RescaleStress()
+        {
+            if (m != 0) {
+                this->sxx = this->sxx / this->m;
+                this->sxy = this->sxy / this->m;
+                this->syy = this->syy / this->m;
+            }
+        }
+};
+
+std::vector<Node> bgmesh;
 
 void DrawDisc(GLenum mode, float cx, float cy, float r, int num_segments) 
 { 
     //from http://slabode.exofire.net/circle_draw.shtml
-    float theta = 2 * PI / float(num_segments); 
+    float theta = 2 * M_PI / float(num_segments); 
     float c = cosf(theta);//precalculate the sine and cosine
     float s = sinf(theta);
     float t;
@@ -217,7 +353,7 @@ void calc_stress_eigenvectors(aux_particle_t *p)
     y = p->s_p - p->sxx;
     x = p->sxy;
     p->theta_p = atan2(y,x);
-    p->theta_m = PI/2.0 + p->theta_p;
+    p->theta_m = M_PI/2.0 + p->theta_p;
 
     p->sv_p[0] = cos(p->theta_p);
     p->sv_p[1] = sin(p->theta_p);
@@ -243,9 +379,9 @@ void inline draw_vector(double x0, double y0, double mag, double theta)
     glVertex3f(x0 + mag*cos(theta), y0 + mag*sin(theta), -1.0f);
 
     //arrowheads
-    glVertex3f(x0 + mag*cos(theta + PI/4.0)/2.0, y0 + mag*sin(theta + PI/4.0)/2.0, -1.0f);
+    glVertex3f(x0 + mag*cos(theta + M_PI_4)/2.0, y0 + mag*sin(theta + M_PI_4)/2.0, -1.0f);
     glVertex3f(x0 + mag*cos(theta), y0 + mag*sin(theta), -1.0f);
-    glVertex3f(x0 + mag*cos(theta - PI/4.0)/2.0, y0 + mag*sin(theta - PI/4.0)/2.0, -1.0f);
+    glVertex3f(x0 + mag*cos(theta - M_PI_4)/2.0, y0 + mag*sin(theta - M_PI_4)/2.0, -1.0f);
     glVertex3f(x0 + mag*cos(theta), y0 + mag*sin(theta), -1.0f);
     return;
 }
@@ -397,7 +533,7 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
 
         /* parse anchor/color pairs */
         if (line[0] == 'I') {
-            sscanf(line, "I %f,%d,%d,%d,%d", &f, &r, &g, &b, &a);
+            sscanf(line, "I,%f,%d,%d,%d,%d", &f, &r, &g, &b, &a);
             rf = r / 255.0;
             gf = g / 255.0;
             bf = b / 255.0;
@@ -406,12 +542,12 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
         }
         
         if (line[0] == 'F') {
-            sscanf(line, "F %f,%f,%f,%f,%f", &f, &rf, &gf, &bf, &af);
+            sscanf(line, "F,%f,%f,%f,%f,%f", &f, &rf, &gf, &bf, &af);
             set_color = true;
         }
 
         if (line[0] == 'H') {
-            sscanf(line, "H %f,%x", &f, &h);
+            sscanf(line, "H,%f,%x", &f, &h);
             rf = ((h >> 24) & 0xFF) / 255.0;
             gf = ((h >> 16) & 0xFF) / 255.0;
             bf = ((h >> 8) & 0xFF) / 255.0;
@@ -451,6 +587,35 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
     return;
 }
 
+void draw_colorbar(cm_t *cm, int gradation, float xl, float yl, float w, float h)
+{
+    float r, g, b;
+    float delta;
+    float xq0, yq0;
+    int i;
+
+    if (gradation <= 0) {
+        return;
+    } else {
+        delta = 1.0f / gradation;
+    }
+
+    glBegin(GL_QUADS);
+    for (i = 0; i < gradation; i++) {
+        apply_colormap(cm, i * delta, &r, &g, &b);
+        glColor3f(r, g, b);
+        xq0 = xl;
+        yq0 = yl + h*i*delta;
+        glVertex3f(xq0, yq0, -1.0f);
+        glVertex3f(xq0 + w, yq0, -1.0f);
+        glVertex3f(xq0 + w, yq0 + delta*h, -1.0f);
+        glVertex3f(xq0, yq0 + delta*h, -1.0f);
+    }
+    glEnd();
+
+    return;
+}
+
 void tga_screendump(char *destFile, short W, short H)
 {
     FILE   *out = fopen(destFile, "w");
@@ -461,6 +626,95 @@ void tga_screendump(char *destFile, short W, short H)
     fwrite(&TGAhead, sizeof(TGAhead), 1, out);
     fwrite(pixel_data, 3*W*H, 1, out);
     fclose(out);
+}
+
+/*
+    Modification of PNG writing code from:
+    http://www.labbookpages.co.uk/software/imgProc/files/libPNG/makePNG.c
+*/
+
+int png_screendump(char* filename, int width, int height, char* title)
+{
+    int code = 0;
+    FILE *fp;
+    png_structp png_ptr;
+    png_infop info_ptr;
+    png_bytep row;
+
+    // Open file for writing (binary mode)
+    fp = fopen(filename, "wb");
+    if (fp == NULL) {
+        fprintf(stderr, "Could not open file %s for writing\n", filename);
+        code = 1;
+        goto finalise;
+    }
+
+    // Initialize write structure
+    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (png_ptr == NULL) {
+        fprintf(stderr, "Could not allocate write struct\n");
+        code = 1;
+        goto finalise;
+    }
+
+    // Initialize info structure
+    info_ptr = png_create_info_struct(png_ptr);
+    if (info_ptr == NULL) {
+        fprintf(stderr, "Could not allocate info struct\n");
+        code = 1;
+        goto finalise;
+    }
+
+    // Setup Exception handling
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        fprintf(stderr, "Error during png creation\n");
+        code = 1;
+        goto finalise;
+    }
+
+    png_init_io(png_ptr, fp);
+
+    // Write header (8 bit colour depth)
+    png_set_IHDR(png_ptr, info_ptr, width, height,
+	        8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+	        PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
+    // Set title
+    if (title != NULL) {
+        png_text title_text;
+        title_text.compression = PNG_TEXT_COMPRESSION_NONE;
+        title_text.key = "Title";
+        title_text.text = title;
+        png_set_text(png_ptr, info_ptr, &title_text, 1);
+    }
+
+    png_write_info(png_ptr, info_ptr);
+    png_write_flush(png_ptr);
+
+    // Allocate memory for one row (3 bytes per pixel - RGB)
+    row = (png_bytep) malloc(3 * width * sizeof(png_byte));
+
+    // Write image data
+    int x, y;
+    for (y=0 ; y<height ; y++) {
+//        for (x=0 ; x<width ; x++) {
+//	        setRGB(&(row[x*3]), buffer[y*width + x]);
+//        }
+            glReadPixels(0, height-y-1, width, 1, GL_RGB, GL_UNSIGNED_BYTE, row);
+        png_write_row(png_ptr, row);
+    }
+
+    // End write
+    png_write_end(png_ptr, NULL);
+    png_write_flush(png_ptr);
+
+    finalise:
+    if (fp != NULL) fclose(fp);
+    if (info_ptr != NULL) png_free_data(png_ptr, info_ptr, PNG_FREE_ALL, -1);
+    if (png_ptr != NULL) png_destroy_write_struct(&png_ptr, (png_infopp)NULL);
+    if (row != NULL) free(row);
+
+    return code;
 }
 
 void next_element(FILE *fp, element_t *element)
@@ -615,6 +869,23 @@ void next_particle(FILE *fp, aux_particle_t *particle)
         particle->active = 1.0f;
     }
 
+    if (i >= 14) {
+        double p_t;
+        double t0xx;
+        double t0xy;
+        double t0yy;
+        double tau_t;
+        p_t = -0.5 * (particle->sxx + particle->syy);
+        t0xx = particle->sxx + p_t;
+        t0xy = particle->sxy;
+        t0yy = particle->syy + p_t;
+        tau_t = sqrt(0.5*(t0xx*t0xx + 2*t0xy*t0xy + t0yy*t0yy));
+        particle->mu = tau_t / (fmax(p_t, 0));
+        if (p_t <= 1e-8) {
+            particle->mu = 0.64;
+        }
+    }
+
     return;
 }
 
@@ -746,6 +1017,13 @@ void matlab_colormap(float h, float *r, float *g, float *b)
     }
 }
 
+void draw_stress_tensor(double scaling,
+    double eigval0, double eigval1,
+    double eigang0, double eigang1)
+{
+    return;
+}
+
 int draw_particles(void)
 {
 //    const int points = 100000;
@@ -754,6 +1032,9 @@ int draw_particles(void)
     float r, g, b, hue;
 
     static aux_particle_t *particles = NULL;
+    static aux_particle_t *previous_particles = NULL;
+    static int prev_frame_time = 0;
+    static int curr_frame_time = 0;
     aux_particle_t *ptmp = NULL;
     static int np;
 
@@ -770,9 +1051,12 @@ int draw_particles(void)
     if (!feof(g_state.data_file)) {
         ptmp = next_frame(g_state.data_file, &np);
         if (ptmp != NULL) {
-            if (particles != NULL) {
-                free(particles);
+            if (previous_particles != NULL) {
+                free(previous_particles);
             }
+            prev_frame_time = curr_frame_time;
+            curr_frame_time = current_frame;
+            previous_particles = particles;
             particles = ptmp;
             ptmp = NULL;
         }
@@ -813,49 +1097,49 @@ int draw_particles(void)
             calc_stress_eigenpairs(&particles[i]);
         }
 
-        g_state.principal_stress_max = particles[0].s_p;
-        g_state.principal_stress_min = particles[0].s_m;
+//        g_state.principal_stress_max = particles[0].s_p;
+//        g_state.principal_stress_min = particles[0].s_m;
 
-        g_state.abs_ps_max = abs(particles[0].s_p);
-        g_state.abs_ps_min = abs(particles[0].s_m);
+//        g_state.abs_ps_max = abs(particles[0].s_p);
+//        g_state.abs_ps_min = abs(particles[0].s_m);
 
-        if (g_state.abs_ps_min > g_state.abs_ps_max) {
-            double tmp = g_state.abs_ps_min;
-            g_state.abs_ps_min = g_state.abs_ps_max;
-            g_state.abs_ps_max = tmp;
-        }
+//        if (g_state.abs_ps_min > g_state.abs_ps_max) {
+//            double tmp = g_state.abs_ps_min;
+//            g_state.abs_ps_min = g_state.abs_ps_max;
+//            g_state.abs_ps_max = tmp;
+//        }
 
-        for (i = 1; i < np; i++) {
-            if (!particles[i].active) {
-                continue;
-            }
+//        for (i = 1; i < np; i++) {
+//            if (!particles[i].active) {
+//                continue;
+//            }
 
-            if (particles[i].s_m < g_state.principal_stress_min) {
-                g_state.principal_stress_min = particles[i].s_m;
-            }
-            if (particles[i].s_p > g_state.principal_stress_max) {
-                g_state.principal_stress_max = particles[i].s_p;
-            }
+//            if (particles[i].s_m < g_state.principal_stress_min) {
+//                g_state.principal_stress_min = particles[i].s_m;
+//            }
+//            if (particles[i].s_p > g_state.principal_stress_max) {
+//                g_state.principal_stress_max = particles[i].s_p;
+//            }
 
-            if (abs(particles[i].s_p) > g_state.abs_ps_max) {
-                g_state.abs_ps_max = abs(particles[i].s_p);
-            }
-            if (abs(particles[i].s_m) > g_state.abs_ps_max) {
-                g_state.abs_ps_max = abs(particles[i].s_m);
-            }
+//            if (abs(particles[i].s_p) > g_state.abs_ps_max) {
+//                g_state.abs_ps_max = abs(particles[i].s_p);
+//            }
+//            if (abs(particles[i].s_m) > g_state.abs_ps_max) {
+//                g_state.abs_ps_max = abs(particles[i].s_m);
+//            }
 
-            if (abs(particles[i].s_p) < g_state.abs_ps_min) {
-                g_state.abs_ps_min = abs(particles[i].s_p);
-            }
-            if (abs(particles[i].s_m) < g_state.abs_ps_min) {
-                g_state.abs_ps_min = abs(particles[i].s_m);
-            }
-        }
+//            if (abs(particles[i].s_p) < g_state.abs_ps_min) {
+//                g_state.abs_ps_min = abs(particles[i].s_p);
+//            }
+//            if (abs(particles[i].s_m) < g_state.abs_ps_min) {
+//                g_state.abs_ps_min = abs(particles[i].s_m);
+//            }
+//        }
 
-        g_state.principal_stress_delta = g_state.principal_stress_max -
-            g_state.principal_stress_min;
-        g_state.abs_ps_delta = g_state.abs_ps_max -
-            g_state.abs_ps_min;
+//        g_state.principal_stress_delta = g_state.principal_stress_max -
+//            g_state.principal_stress_min;
+//        g_state.abs_ps_delta = g_state.abs_ps_max -
+//            g_state.abs_ps_min;
     }
 
 //    g_state.abs_ps_delta = 500;
@@ -867,7 +1151,74 @@ int draw_particles(void)
         g_state.camera_view[2]);
     glPointSize(g_state.particle_size);
 //    glBegin(GL_POINTS);
+
+    /* compute smoothed stresses */
+    for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
+        it->ClearStress();
+    }
+
     for (i = 0; i < np; i++) {
+        if (!particles[i].active) {
+            continue;
+        }
+
+        int elem = which_element(particles[i].x, particles[i].y, bgsize);
+        if (elem < 0 || elem >= (bgsize - 1) * (bgsize - 1)) {
+            continue;
+        }
+        int list[4];
+        element_to_node_list(&list[0], elem, bgsize);
+
+//        if (i == 0)
+//            printf("Elem %d: %d %d %d %d\n", elem, list[0], list[2], list[2], list[3]);
+
+        for (int k = 0; k < 4; k++) {
+            bgmesh[list[k]].CopyStressFromParticle(&(particles[i]));
+        }
+
+//        for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
+//            it->CopyStressFromParticle(&(particles[i]));
+//        }
+    }
+
+    for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
+        it->RescaleStress();
+//        it->Print();
+    }
+//    exit(0);
+//    printf("XXXXXXXXXXXXXXX\n");
+
+    for (i = 0; i < np; i++) {
+        if (!particles[i].active) {
+            continue;
+        }
+        particles[i].sxx = 0;
+        particles[i].sxy = 0;
+        particles[i].syy = 0;
+
+        int elem = which_element(particles[i].x, particles[i].y, bgsize);
+        if (elem < 0 || elem >= (bgsize - 1) * (bgsize - 1)) {
+            continue;
+        }
+        int list[4];
+        element_to_node_list(&list[0], elem, bgsize);
+//        if (i == 0)
+//            printf("Elem %d: %d %d %d %d\n", elem, list[0], list[1], list[2], list[3]);
+        for (int k = 0; k < 4; k++) {
+            bgmesh[list[k]].CopyStressToParticle(&(particles[i]));
+        }
+//        for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
+//            it->CopyStressToParticle(&(particles[i]));
+//        }
+    }
+
+    for (i = 0; i < np; i++) {
+
+        // fast draw
+//        if (i % 16 != 0) {
+//            continue;
+//        }
+
         if (!particles[i].active) {
 //            printf("%d inactive\n", i);
             continue;
@@ -880,33 +1231,75 @@ int draw_particles(void)
 //        hue = sqrt(particles[i].ux * particles[i].ux + particles[i].uy * particles[i].uy);
 //        hue = sqrt(particles[i].x_t * particles[i].x_t + particles[i].y_t * particles[i].y_t);
 //        hue = (particles[i].m / particles[i].v > 1200)?(0.5):(0);
-        if (g_state.data_var == VAR_DISPLACEMENT) {
-            hue = hypot(particles[i].ux, particles[i].uy);
-        } else if (g_state.data_var == VAR_RHO) {
-            hue = particles[i].m / particles[i].v;
-        } else if (g_state.data_var == VAR_PRESSURE) {
-            hue = -0.5f*(particles[i].sxx + particles[i].syy);
-        } else if (g_state.data_var == VAR_VELOCITY) {
-            hue = hypot(particles[i].x_t, particles[i].y_t);
-        } else if (g_state.data_var == VAR_VX) {
-            hue = particles[i].x_t;
-        } else if (g_state.data_var == VAR_SXX) {
-            hue = particles[i].sxx;
-        } else if (g_state.data_var == VAR_SXY) {
-            hue = particles[i].sxy;
-        } else if (g_state.data_var == VAR_SYY) {
-            hue = particles[i].syy;
-        } else if (g_state.data_var == VAR_GAMMAP) {
-            hue = particles[i].gammap;
-        } else if (g_state.data_var == VAR_TAU) {
-            hue = sqrt(particles[i].sxy * particles[i].sxy + 0.5 * (particles[i].sxx - particles[i].syy) * (particles[i].sxx - particles[i].syy));
-        } else if (g_state.data_var == VAR_YIELD) {
-            hue = -0.5f*(particles[i].sxx + particles[i].syy);
-            hue = sqrt(particles[i].sxy * particles[i].sxy + 0.5 * (particles[i].sxx - particles[i].syy) * (particles[i].sxx - particles[i].syy)) - tan((30.0*PI/180.0)) * hue;
+
+        switch (g_state.data_var) {
+            case VAR_DISPLACEMENT:
+                hue = hypot(particles[i].ux, particles[i].uy);
+                break;
+            case VAR_RHO:
+                hue = particles[i].m / particles[i].v;
+                break;
+            case VAR_PRESSURE:
+                hue = -0.5f*(particles[i].sxx + particles[i].syy);
+                break;
+            case VAR_VELOCITY:
+                hue = hypot(particles[i].x_t, particles[i].y_t);
+                break;
+            case VAR_VX:
+                hue = particles[i].x_t;
+                break;
+            case VAR_SXX:
+                hue = particles[i].sxx;
+                break;
+            case VAR_SXY:
+                hue = particles[i].sxy;
+                break;
+            case VAR_SYY:
+                hue = particles[i].syy;
+                break;
+            case VAR_GAMMAP:
+                hue = particles[i].gammap;
+                break;
+            case VAR_GAMMADOTP:
+                if (previous_particles != NULL) {
+                    hue = (particles[i].gammap - previous_particles[i].gammap)
+                            / (curr_frame_time - prev_frame_time);
+                } else {
+                    hue = particles[i].gammap;
+                }
+                break;
+            case VAR_MU:
+                if (previous_particles != NULL) {
+                    hue = (particles[i].gammap - previous_particles[i].gammap)
+                            / (curr_frame_time - prev_frame_time);
+                } else {
+                    hue = particles[i].gammap;
+                }
+//                hue = hue * (0.05 * sqrt(2450)) / sqrt(-0.5f*(particles[i].sxx + particles[i].syy));
+//                hue = 0.32 + 0.32 / (0.28 / (hue) + 1.0);
+                hue = particles[i].mu;
+                break;
+            case VAR_MAGEF:
+                hue = particles[i].magEf;
+                break;
+            case VAR_TAU:
+                hue = sqrt(particles[i].sxy * particles[i].sxy + 0.5 * (particles[i].sxx - particles[i].syy) * (particles[i].sxx - particles[i].syy));
+                break;
+            case VAR_YIELD:
+                hue = -0.5f*(particles[i].sxx + particles[i].syy);
+                hue = sqrt(particles[i].sxy * particles[i].sxy + 0.5 * (particles[i].sxx - particles[i].syy) * (particles[i].sxx - particles[i].syy)) - tan((30.0*M_PI/180.0)) * hue;
+                break;
+            default:
+                hue = hypot(particles[i].ux, particles[i].uy);
         }
-//        hue = particles[i].magEf;
-//        hue = particles[i].gammap;
-//        hue = -0.5f*(particles[i].sxx + particles[i].syy);
+
+        if (g_state.logscale) {
+            if (hue <= 0) {
+                hue = -20;
+            } else {
+                hue = log10(hue);
+            }
+        }
 
         if (hue > data_max) {
             hue = 1.0f;
@@ -991,6 +1384,7 @@ int draw_particles(void)
     draw_boundaries();
     glEnd();
 
+    g_state.abs_ps_max = 400;
     /* Draw stress tensor crosses. */
     if (g_state.draw_stress_tensor) {
         glBegin(GL_LINES);
@@ -1002,12 +1396,10 @@ int draw_particles(void)
                 continue;
             }
             if (particles[i].s_p < 0) {
-                glColor3f(1.0f, 1.0f, 1.0f);
+                glColor3f(1.0f, 0.0f, 1.0f);
             } else {
-                glColor3f(0.5f, 0.5f, 0.5f);
+                glColor3f(0.5f, 0.0f, 0.5f);
             }
-//            scale = (abs(particles[i].s_p) - g_state.abs_ps_min) / 
-//                        g_state.abs_ps_delta;
             scale = (abs(particles[i].s_p)) / g_state.abs_ps_max;
             glVertex3f(particles[i].x - CROSS_SIZE*scale*particles[i].sv_p[0], particles[i].y - CROSS_SIZE*scale*particles[i].sv_p[1], -1.0f);
             glVertex3f(particles[i].x + CROSS_SIZE*scale*particles[i].sv_p[0], particles[i].y + CROSS_SIZE*scale*particles[i].sv_p[1], -1.0f);
@@ -1019,12 +1411,10 @@ int draw_particles(void)
 
             /* minor principal stress */
             if (particles[i].s_m < 0) {
-                glColor3f(1.0f, 1.0f, 1.0f);
+                glColor3f(0.0f, 1.0f, 0.0f);
             } else {
-                glColor3f(0.5f, 0.5f, 0.5f);
+                glColor3f(0.0f, 0.5f, 0.0f);
             }
-//            scale = (abs(particles[i].s_m) - g_state.abs_ps_min) / 
-//                        g_state.abs_ps_delta;
             scale = (abs(particles[i].s_m)) / g_state.abs_ps_max;
             glVertex3f(particles[i].x - CROSS_SIZE*scale*particles[i].sv_m[0], particles[i].y - CROSS_SIZE*scale*particles[i].sv_m[1], -1.0f);
             glVertex3f(particles[i].x + CROSS_SIZE*scale*particles[i].sv_m[0], particles[i].y + CROSS_SIZE*scale*particles[i].sv_m[1], -1.0f);
@@ -1034,27 +1424,7 @@ int draw_particles(void)
                 glVertex3f(-(particles[i].x + CROSS_SIZE*scale*particles[i].sv_m[0]), particles[i].y + CROSS_SIZE*scale*particles[i].sv_m[1], -1.0f);
             }
 
-            /* XXX don't do this... */
-//            if (particles[i].sxy > 1e-3) {
-//                printf("particle %d: s_max %lf, s_min %lf\n", i, particles[i].s_p, particles[i].s_m);
-//                printf("particle %d: sxy %lf\n", i, particles[i].sxy);
-//                printf("particle mu = %lf\n", -particles[i].sxy / particles[i].syy);
-//                printf("particle mu = %lf\n", -(particles[i].s_p - particles[i].s_m) / (particles[i].s_p + particles[i].s_m));
-//            }
         }
-
-        /* minor principal stress */
-//        glColor3f(0.5f, 0.5f, 0.5f);
-//        for (i = 0; i < np; i++) {
-//            if (!particles[i].active) {
-//                continue;
-//            }
-
-//            scale = (abs(particles[i].s_m) - g_state.abs_ps_min) / 
-//                        g_state.abs_ps_delta;
-//            glVertex3f(particles[i].x - CROSS_SIZE*scale*particles[i].sv_m[0], particles[i].y - CROSS_SIZE*scale*particles[i].sv_m[1], -1.0f);
-//            glVertex3f(particles[i].x + CROSS_SIZE*scale*particles[i].sv_m[0], particles[i].y + CROSS_SIZE*scale*particles[i].sv_m[1], -1.0f);
-//        }
 
         glEnd();
     }
@@ -1075,17 +1445,41 @@ int draw_particles(void)
 //            printf("vel_mag %lf, vel_theta = %lf\n", particles[i].vel_mag, particles[i].vel_theta);
 
             if (g_state.mirror_y) {
-                draw_vector(-particles[i].x, particles[i].y, scale*particles[i].vel_mag, PI - particles[i].vel_theta);
+                draw_vector(-particles[i].x, particles[i].y, scale*particles[i].vel_mag, M_PI - particles[i].vel_theta);
             }
         }
         glEnd();
     }
 
-    glColor3f(1.0f, 1.0f, 1.0f);
-    snprintf(title, sizeof(title)/sizeof(title[0]),
-        "[Frame %5.5d]\nTime: %8.5f", current_frame, current_time);
-    snprintf(fps_counter, sizeof(fps_counter)/sizeof(fps_counter[0]),
-        " \nFPS: [%6.2f]", current_fps);
+#define XC 0.55
+#define YC 0.1
+#define W 0.05
+#define H 0.8
+    if (g_state.want_colorbar) {
+        draw_colorbar(&(g_state.colormap), 40, XC, YC, W, H);
+
+        /* draw with inverse of background */
+        glColor3f(
+            1.0f - g_state.bgcolor.r,
+            1.0f - g_state.bgcolor.g,
+            1.0f - g_state.bgcolor.b
+        );
+        glRasterPos3f(XC + W, YC - 0.02, -1.0f);
+        snprintf(title, sizeof(title)/sizeof(title[0]),
+            "%4.2f", data_min);
+        ftglRenderLayout(small_left_layout, title, RENDER_ALL);
+
+        glRasterPos3f(XC + W, YC + H, -1.0f);
+        snprintf(title, sizeof(title)/sizeof(title[0]),
+            "%4.2f", data_max);
+        ftglRenderLayout(small_left_layout, title, RENDER_ALL);
+
+        glColor3f(1.0f, 1.0f, 1.0f);
+        snprintf(title, sizeof(title)/sizeof(title[0]),
+            "[Frame %5.5d]\nTime: %8.5f", current_frame, current_time);
+        snprintf(fps_counter, sizeof(fps_counter)/sizeof(fps_counter[0]),
+            " \nFPS: [%6.2f]", current_fps);
+    }
 
     glRasterPos3f(-0.5f-g_state.camera_view[0], -0.0f, -1.0f);
 //    ftglRenderLayout(small_left_layout, fps_counter, RENDER_ALL);
@@ -1093,22 +1487,6 @@ int draw_particles(void)
     glRasterPos3f(-0.5f-g_state.camera_view[0], 1.0f, -1.0f);
 //    ftglRenderLayout(centered_layout, title, RENDER_ALL);
 
-    if (g_state.write_frames && !feof(g_state.data_file)) {
-        snprintf(pngfile, sizeof(pngfile)/sizeof(pngfile[0]), "%s_%d.tga", pngbase, current_frame);
-        tga_screendump(pngfile, screen->w, screen->h);
-
-//        printf("Screen: %p\n", screen);
-//        printf("Screen->w: %d\n", screen->w);
-//        printf("Screen->h: %d\n", screen->h);
-//        fflush(stdout);`
-//        output_surf = SDL_CreateRGBSurface(screen->flags, screen->w, screen->h, screen->format->BitsPerPixel, rmask, gmask, bmask, 0);
-//        SDL_BlitSurface(screen, NULL, output_surf, NULL);
-//        snprintf(pngfile, sizeof(pngfile)/sizeof(pngfile[0]), "%s_%d.png", pngbase, current_frame);
-//        png_save_surface(pngfile, screen);
-//        snprintf(pngfile, sizeof(pngfile)/sizeof(pngfile[0]), "%s_%d.bmp", pngbase, current_frame);
-//        SDL_SaveBMP(output_surf, pngfile);
-//        SDL_FreeSurface(output_surf);
-    }
     return true;
 }
 
@@ -1173,6 +1551,19 @@ int draw_elements(void)
 //            if (p != 0) {
 //                printf("p = %f\n", p);
 //            }
+        } else if (g_state.data_var == VAR_MU) {
+            double p_t;
+            double t0xx;
+            double t0xy;
+            double t0yy;
+            double tau_t;
+            p_t = -0.5 * (elements[i].sxx + elements[i].syy);
+            t0xx = elements[i].sxx + p_t;
+            t0xy = elements[i].sxy;
+            t0yy = elements[i].syy + p_t;
+            tau_t = sqrt(0.5f*(t0xx*t0xx + 2*t0xy*t0xy + t0yy*t0yy));
+            p = tau_t / (fmax(p_t, 0) + 1e-4);
+//            printf("%g\n", p);
         } else if (g_state.data_var == VAR_TAU) {
             p = sqrt(elements[i].sxy * elements[i].sxy + 0.5 * (elements[i].sxx - elements[i].syy) * (elements[i].sxx - elements[i].syy));
         }
@@ -1187,12 +1578,50 @@ int draw_elements(void)
             hue = (hue - data_min) / data_delta;
         }
 
+//        if (p < 0.3819) {
+//            hue = 0;
+//        } else if (p > 0.64) {
+//            hue = 1;
+//        } else {
+//            hue = 0.5;
+//        } 
+
         if (p == 0.0f) {
             continue;
         }
 
-        matlab_colormap(hue, &r, &g, &b);
-        glColor3f(r, g, b);
+//        matlab_colormap(hue, &r, &g, &b);
+//        glColor3f(r, g, b);
+
+        if (g_state.colormap.num_colors <= 0) {
+            matlab_colormap(hue, &r, &g, &b);
+        } else if (g_state.colormap.num_colors == 1) {
+            r = g_state.colormap.colors[0].r;
+            g = g_state.colormap.colors[0].g;
+            b = g_state.colormap.colors[0].b;
+        } else {
+            apply_colormap(&(g_state.colormap), hue, &r, &g, &b);
+//            if (hue >= 0.5) {
+//                r = 153/256.0;
+//                g = 255/256.0;
+//                b = 0/256.0;
+//            } else {
+//                r = 102/256.0;
+//                g = 0/256.0;
+//                b = 255/256.0;
+//            }
+        }
+        if (g_state.color_override == 0) {
+            glColor3f(r, g, b);
+        } else {
+            //get override color index
+            int c_idx = 3 * i;
+            r = cfg_getnfloat(g_state.cfg, "color-by-index", c_idx+0);
+            g = cfg_getnfloat(g_state.cfg, "color-by-index", c_idx+1);
+            b = cfg_getnfloat(g_state.cfg, "color-by-index", c_idx+2);
+            glColor3f(r, g, b);
+        }
+
         glVertex3f(elements[i].x1, elements[i].y1, -1.0f);
         glVertex3f(elements[i].x2, elements[i].y2, -1.0f);
         glVertex3f(elements[i].x3, elements[i].y3, -1.0f);
@@ -1286,7 +1715,7 @@ void init_ftgl(void)
 
     /* Set the font size and render a small text. */
     ftglSetFontFaceSize(font, 72, 72);
-    ftglSetFontFaceSize(small_font, 32, 72);
+    ftglSetFontFaceSize(small_font, 24, 72);
 }
 
 static void init_opengl(void)
@@ -1297,26 +1726,9 @@ static void init_opengl(void)
     glLoadIdentity();
     gluPerspective(60.0, aspect, 0.1, 100.0);
     glMatrixMode(GL_MODELVIEW);
-    //glClearColor(1.0, 1.0, 1.0, 0); //white is for you
-    // glClearColor(0.0, 0.0, 0.0, 0); //black is for me
     glClearColor(g_state.bgcolor.r, g_state.bgcolor.g, g_state.bgcolor.b,
                     g_state.bgcolor.a);
 
-//    glEnable( GL_POINT_SMOOTH );
-//    glEnable( GL_BLEND );
-//    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
-
-//    glEnable(GL_ALPHA_TEST);
-//    glAlphaFunc(GL_NOTEQUAL, 0);
-//    glEnable(GL_BLEND);
-//    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-//    glEnable(GL_POINT_SMOOTH);
-
-//    glEnable(GL_MULTISAMPLE);
-
-//    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-
-//    glEnable(GL_DEPTH_TEST);
     glDisable(GL_DEPTH_TEST);
 }
 
@@ -1347,11 +1759,6 @@ void heartbeat(void)
                             if (g_state.paused) {
                                 std::cout << "Pausing Simulation." << std::endl;
                             }
-//                            if (g_state.paused) {
-//                                std::cout << "Pausing Simulation." << std::endl;
-//                            } else {
-//                                std::cout << "Resuming Simulation." << std::endl;
-//                            }
                             break;
                         case SDLK_n:
                             if (g_state.paused) {
@@ -1427,9 +1834,35 @@ void heartbeat(void)
         delta = SDL_GetTicks() - start_ticks;
         current_fps = 1000.0f / delta;
         printf("Frame: [%05d] Time: [%8.5f] FPS: [%6.2f]\r", current_frame, current_time, current_fps);
+        snprintf(g_state.wm_title, sizeof(g_state.wm_title) / sizeof(g_state.wm_title[0]),
+            "%s[%05d]: %8.5fs", g_state.loaded_file_path, current_frame, current_time);
+        SDL_WM_SetCaption(g_state.wm_title, g_state.wm_title);
         fflush(stdout);
 
         SDL_GL_SwapBuffers();
+
+        if (g_state.write_frames && !feof(g_state.data_file)) {
+//            snprintf(pngfile, sizeof(pngfile)/sizeof(pngfile[0]), "%s_%d.tga", pngbase, current_frame);
+//            tga_screendump(pngfile, screen->w, screen->h);
+            snprintf(pngfile, sizeof(pngfile)/sizeof(pngfile[0]), "%s_%d.png", pngbase, current_frame);
+            png_screendump(pngfile, screen->w, screen->h, g_state.wm_title);
+
+    //        printf("Screen: %p\n", screen);
+    //        printf("Screen->w: %d\n", screen->w);
+    //        printf("Screen->h: %d\n", screen->h);
+    //        fflush(stdout);`
+    //        output_surf = SDL_CreateRGBSurface(screen->flags, screen->w, screen->h, screen->format->BitsPerpixel, rmask, gmask, bmask, 0);
+    //        SDL_BlitSurface(screen, NULL, output_surf, NULL);
+    //        snprintf(pngfile, sizeof(pngfile)/sizeof(pngfile[0]), "%s_%d.png", pngbase, current_frame);
+    //        png_save_surface(pngfile, screen);
+    //        snprintf(pngfile, sizeof(pngfile)/sizeof(pngfile[0]), "%s_%d.bmp", pngbase, current_frame);
+    //        SDL_SaveBMP(output_surf, pngfile);
+    //        SDL_FreeSurface(output_surf);
+        } else if (g_state.write_frames && feof(g_state.data_file)) {
+            /* exit when done with file if we are dumping frames */
+            exit(0);
+        }
+
     }
 }
 
@@ -1455,6 +1888,14 @@ int main(int argc, char* argv[])
     {
         std::cout << "SDL Init Successful." << std::endl;
     }
+
+//    Colormap default_colormap;
+//    std::cout << default_colormap << std::endl;
+//    std::cout << default_colormap.interpolatedColor(-1) << std::endl;
+//    std::cout << default_colormap.interpolatedColor(0) << std::endl;
+//    std::cout << default_colormap.interpolatedColor(0.87) << std::endl;
+//    std::cout << default_colormap.interpolatedColor(1) << std::endl;
+//    std::cout << default_colormap.interpolatedColor(2) << std::endl;
 
     /* Command line option defaults */
     g_state.data_file = NULL;
@@ -1491,6 +1932,10 @@ int main(int argc, char* argv[])
     g_state.colormap.colors = NULL;
     g_state.colormap.anchors = NULL;
     g_state.colormap.num_colors = 0;
+
+    g_state.want_colorbar = 0;
+
+    g_state.logscale = 0;
 
     /* configuration file parsing XXX remove hardcoding!*/
     g_state.cfg = cfg_init(opts, CFGF_NONE);
@@ -1591,6 +2036,12 @@ int main(int argc, char* argv[])
                     g_state.data_var = VAR_YIELD;
                 } else if (strcmp(optarg, "gammap") == 0) {
                     g_state.data_var = VAR_GAMMAP;
+                } else if (strcmp(optarg, "gammadotp") == 0) {
+                    g_state.data_var = VAR_GAMMADOTP;
+                } else if (strcmp(optarg, "mu") == 0) {
+                    g_state.data_var = VAR_MU;
+                } else if (strcmp(optarg, "magef") == 0) {
+                    g_state.data_var = VAR_MAGEF;
                 } else {
                     g_state.data_var = VAR_DISPLACEMENT;
                 }
@@ -1608,6 +2059,14 @@ int main(int argc, char* argv[])
                 g_state.write_frames = 1;
                 printf("Writing frames to files in figs/viz directory.\n");
                 break;
+            case 'C':
+                g_state.want_colorbar = 1;
+                printf("Plotting colorbar.\n");
+                break;
+            case 'L':
+                g_state.logscale = 1;
+                printf("Using logscale.\n");
+                break;
             default:
                 break;
         }
@@ -1620,16 +2079,44 @@ int main(int argc, char* argv[])
     if (leftover_argc >= 1) {
         std::cout << "Using data file: " << leftover_argv[0] << std::endl;
         g_state.data_file = fopen(leftover_argv[0], "r");
-        SDL_WM_SetCaption(leftover_argv[0], leftover_argv[0]);
+        strncpy(g_state.loaded_file_path, leftover_argv[0], sizeof(g_state.loaded_file_path) / sizeof(g_state.loaded_file_path[0]));
+        snprintf(g_state.wm_title, sizeof(g_state.wm_title) / sizeof(g_state.wm_title[0]), "%s", leftover_argv[0]);
+        SDL_WM_SetCaption(g_state.wm_title, g_state.wm_title);
     }
+
+    SimulationReader *s;
+    TXTReader t(leftover_argv[0], leftover_argv[0]);
+
+    s = &t;
+    s->nextParticles();
 
     if (g_state.data_file == NULL) {
         std::cout << "No data file. Exiting." << std::endl;
         return 0;
     }
 
+    if (colormap_file == NULL) {
+        // load default colormap from memory (in viz_builtin_colormap.hpp)
+        colormap_file = fmemopen((void *)viz_default_colormap_str,
+            sizeof(viz_default_colormap_str) / sizeof(viz_default_colormap_str[0]),
+            "r"
+        );
+        parse_colormap(&(g_state.colormap), colormap_file);
+    }
+
     init_opengl();
     init_ftgl();
+
+    /* Make background mesh */
+    for (int i = 0; i < bgsize; i++) {
+        for (int j = 0; j < bgsize; j++) {
+            bgmesh.push_back(Node(j / (float)(bgsize-1), i / (float)(bgsize-1), 1.0/(bgsize-1), 1.0/(bgsize-1)));
+        }
+    }
+
+//    for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
+//        it->Print();
+//    }
 
     heartbeat();    // SDL main loop
 

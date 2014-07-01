@@ -2,22 +2,53 @@ timestep
 {
     dt-max = 1e-2
     dt-min = 1e-10
-    dt = 1e-6
+dt = 1e-5
+#    dt = 1.5e-5
+#dt = 1e-7
 
-    automatic-dt = 1
+    automatic-dt = 0 
 
     allow-dt-increase = 0
     stable-dt-threshold = 4
 }
 
+solver
+{
+    solver-type = explicit-usl
+}
+
+material
+{
+    material-file = "./g_local_mu2.so"
+    use-builtin = 0
+    properties = {1e6, 0.3}
+        # properties are Young's modulus and Poisson's ratio
+    integer-properties = { }
+        # no integer properties by default
+}
+
+boundary-conditions
+{
+    boundary-conditions-file = "builtin.so"
+    use-builtin = 1
+    properties = {0.05, 0.1}
+    integer-properties = { }
+}
+
 implicit
 {
-    displacement-norm-ratio = 1e-1
+    displacement-norm-ratio = 1e-2
     residual-norm-ratio = 1e-2
 
     converged-displacement-norm = 1e-8
 
     unstable-iteration-count = 10
+}
+
+input
+{
+    initial-particle-file = "generated_particles.txt"
+    grid-file = "generated_grid.txt"
 }
 
 output
@@ -37,5 +68,6 @@ output
 #    save-state-on-terminate = 1
 
 #    prepend-date = 1
+    sample-rate = 60.0
 }
 

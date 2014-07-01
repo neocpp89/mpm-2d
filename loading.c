@@ -96,7 +96,7 @@ void time_varying_loads(job_t *job)
         for (i = 0; i < job->num_particles; i++) {
 /*            for (j = 0; j < sqrtnel; j++) {*/
                 if (job->in_element[i] % sqrtnel == 0) {
-                    job->particles[i].active = 0;
+                    job->active[i] = 0;
                     fprintf(job->output.log_fd,
                         "Particle %d @(%g, %g) in frozen element, deactivating.\n",
                         i, job->particles[i].x, job->particles[i].y);

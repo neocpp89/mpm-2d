@@ -112,7 +112,7 @@ void calculate_stress(job_t *job)
     int i;
 
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 

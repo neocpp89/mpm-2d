@@ -27,6 +27,10 @@
     9 -> center
 */
 typedef struct element_s {
+//    int id;
+    int color;
+    int color_idx;
+
     int nodes[NODES_PER_ELEMENT];
     int n;
     double m;
@@ -46,6 +50,15 @@ typedef struct element_s {
     double sxx;
     double sxy;
     double syy;
+
+    double exx_t;
+    double exy_t;
+    double eyy_t;
+
+    double wxy_t;
+
+    double p;
+    double tau;
 
     double kku_element[NODAL_DOF * NODES_PER_ELEMENT][NODAL_DOF * NODES_PER_ELEMENT]; /* dof order: x1, y1, x2, y2 ... x4 , y4 ... c1, c2, ... c4 */
     double f_element[NODAL_DOF * NODES_PER_ELEMENT];

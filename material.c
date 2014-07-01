@@ -124,6 +124,10 @@ void calculate_stress_linear_elastic_novisc(job_t *job)
     int i;
 
     for (i = 0; i < job->num_particles; i++) {
+        if (job->active[i] == 0) {
+            continue;
+        }
+
         dsjxx = job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((job->particles[i].exx_t) + NUMOD * (job->particles[i].eyy_t));
         dsjxy = job->dt * (EMOD / (2 *(1 + NUMOD))) * (job->particles[i].exy_t);
         dsjyy = job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((job->particles[i].eyy_t) + NUMOD * (job->particles[i].exx_t));
@@ -265,7 +269,7 @@ void calculate_stress_dp_shearonly_indep(job_t *job)
     int i;
 
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 
@@ -367,7 +371,7 @@ void calculate_stress_vm_indep(job_t *job)
     double q0 = 1e4;
 
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 
@@ -432,7 +436,7 @@ void calculate_stress_linear_elastic(job_t *job)
     int i;
 
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 

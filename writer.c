@@ -12,6 +12,26 @@
 #include "process.h"
 #include "writer.h"
 
+/*---Version 2 of output format-----------------------------------------------*/
+size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
+    size_t (*particle_output_fn)(FILE *, job_t *, particle_t *),
+    size_t (*element_output_fn)(FILE *, job_t *, element_t *))
+{
+    size_t bytes_out = 0;
+
+    
+
+    return bytes_out;
+}
+
+size_t v2_write_particle(FILE *fd, particle_t *p)
+{
+    size_t bytes_out = 0;
+
+    return bytes_out;
+}
+/*----------------------------------------------------------------------------*/
+
 /*----------------------------------------------------------------------------*/
 h5writer_t *h5_init(const char *fname, const job_t *job)
 {
@@ -137,7 +157,7 @@ hid_t h5_particle_type()
         snprintf(buf, sizeof(buf), "state%d", i);
         H5Tinsert(hparticle_type, buf, HOFFSET(particle_t, state[i]), H5T_NATIVE_DOUBLE);
     }
-    H5Tinsert(hparticle_type, "active", HOFFSET(particle_t, active), H5T_NATIVE_INT);
+/*    H5Tinsert(hparticle_type, "active", HOFFSET(particle_t, active), H5T_NATIVE_INT);*/
     H5Tinsert(hparticle_type, "material", HOFFSET(particle_t, material), H5T_NATIVE_INT);
     H5Tinsert(hparticle_type, "x_tt", HOFFSET(particle_t, x_tt), H5T_NATIVE_DOUBLE);
     H5Tinsert(hparticle_type, "y_tt", HOFFSET(particle_t, y_tt), H5T_NATIVE_DOUBLE);
@@ -183,14 +203,14 @@ hid_t h5_element_type()
 /*----------------------------------------------------------------------------*/
 
 /*---write_particle-----------------------------------------------------------*/
-void inline write_particle(FILE *fd, particle_t p)
+void inline write_particle(FILE *fd, particle_t p, double active)
 {
     int i, j;
     fprintf(fd, "%f %f %f %f %f %f ",
         p.m, p.v, p.x, p.y, p.x_t, p.y_t);
     fprintf(fd, "%f %f %f %18.18lf %18.18lf %18.18lf %f %18.18lf %f",
         p.sxx, p.sxy, p.syy, p.ux, p.uy, p.state[9], p.color, p.state[10],
-        (double)p.active);
+        (double)active);
 
     for (i = 0; i < 4; i++) {
         for (j = 0; j < 2; j++) {
@@ -210,7 +230,7 @@ void write_frame(FILE *fd, int frame, double time, job_t *job)
 
     fprintf(fd, "%d %f %d\n", frame, time, job->num_particles);
     for (i = 0; i < job->num_particles; i++) {
-        write_particle(fd, job->particles[i]);
+        write_particle(fd, job->particles[i], (double)(job->active[i]));
     }
 
     /* dump the entire frame to disk (or wherever) */
@@ -293,7 +313,7 @@ void write_element_frame(FILE *fd, int frame, double time, job_t *job)
     }
 
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
         e = job->in_element[i];
@@ -430,7 +450,7 @@ void write_state(FILE *fd, job_t *job)
         }
 
         /* Flag particle as active or not (used for discharge problems). */
-        fprintf(fd, "%d\n", job->particles[i].active);
+        fprintf(fd, "%d\n", job->active[i]);
     }
 
     for (i = 0; i < job->num_nodes; i++) {

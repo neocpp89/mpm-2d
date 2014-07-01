@@ -68,7 +68,10 @@ with open(infile, 'r') as f_in:
                 break
             i = i + 1
 
-print 'Writing', ', '.join(pvars[:-1]), 'and', pvars[-1], 'of frame', i, 'to csv file.'
+if (len(pvars) > 1):
+    print 'Writing', ', '.join(pvars[:-1]), 'and', pvars[-1], 'of frame', i, 'to csv file.'
+else:
+    print 'Writing', pvars[-1], 'of frame', i, 'to csv file.'
 
 with open(outfile, 'w') as f_csv:
     wcsv = csv.writer(f_csv)

@@ -11,7 +11,7 @@
 #include "process.h"
 #include "material.h"
 
-#define CHECK_ACTIVE(j,i) if (j->particles[i].active == 0) { continue; }
+#define CHECK_ACTIVE(j,i) if (j->active[i] == 0) { continue; }
 
 void build_elemental_stiffness(job_t *job);
 void add_particle_stiffness(int idx, job_t *job);

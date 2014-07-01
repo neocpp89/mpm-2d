@@ -24,10 +24,17 @@ def read_frame_cb(f_in, f_cb, p_cb):
         elif (state == PARTICLE):
             tok = line.split(' ')
             tokf = map(float, tok)
-            particle = {'m':tokf[0], 'v':tokf[1], 'x':tokf[2], 'y':tokf[3],
-                        'x_t':tokf[4], 'y_t':tokf[5], 'sxx':tokf[6],
-                        'sxy':tokf[7], 'syy':tokf[8], 'ux':tokf[9],
-                        'uy':tokf[10], 'gammap':tokf[11]}
+            if (len(tokf) == 12):
+                particle = {'m':tokf[0], 'v':tokf[1], 'x':tokf[2], 'y':tokf[3],
+                            'x_t':tokf[4], 'y_t':tokf[5], 'sxx':tokf[6],
+                            'sxy':tokf[7], 'syy':tokf[8], 'ux':tokf[9],
+                            'uy':tokf[10], 'gammap':tokf[11]}
+            elif (len(tokf) >= 15):
+                particle = {'m':tokf[0], 'v':tokf[1], 'x':tokf[2], 'y':tokf[3],
+                            'x_t':tokf[4], 'y_t':tokf[5], 'sxx':tokf[6],
+                            'sxy':tokf[7], 'syy':tokf[8], 'ux':tokf[9],
+                            'uy':tokf[10], 'gammap':tokf[11], 'color':tokf[12],
+                            'magEf':tokf[13], 'active':tokf[14]}
             if (p_cb is None):
                 frame['particles'][i] = particle
             else:

@@ -13,6 +13,21 @@
 /* shape function related indicies in arrays */
 #define S_XIDX 0
 #define S_YIDX 1
+#define S_ZIDX 2
+
+/* dimension of the stress/strain tensors */
+#define NDIM 3
+
+/* indicies for stress/strain tensors */
+#define XX (NDIM * S_XIDX + S_XIDX)
+#define XY (NDIM * S_XIDX + S_YIDX)
+#define XZ (NDIM * S_XIDX + S_ZIDX)
+#define YX (NDIM * S_YIDX + S_XIDX)
+#define YY (NDIM * S_YIDX + S_YIDX)
+#define YZ (NDIM * S_YIDX + S_ZIDX)
+#define ZX (NDIM * S_ZIDX + S_XIDX)
+#define ZY (NDIM * S_ZIDX + S_YIDX)
+#define ZZ (NDIM * S_ZIDX + S_ZIDX)
 
 typedef struct particle_s {
     /* Position */
@@ -23,23 +38,37 @@ typedef struct particle_s {
     double xl;
     double yl;
 
-    /* Velocity */
-    double x_t;
-    double y_t;
-
-    /* Mass */
-    double m;
-
     /* Volume */
     double v;
 
     /* Initial volume */
     double v0;
 
+    /* Shapefunctions (follows same nodal numbering as element) */
+    double s[4];
+
+    /* Mass */
+    double m;
+
+    /* Velocity */
+    double x_t;
+    double y_t;
+
+    /* Acceleration */
+    double x_tt;
+    double y_tt;
+
+    /* Body forces */
+    double bx;
+    double by;
+
     /* Stress */
     double sxx;
     double sxy;
     double syy;
+
+    /* full 3D stress tensor */
+    double T[NDIM*NDIM];
 
     /* Strain rate */
     double exx_t;
@@ -47,9 +76,8 @@ typedef struct particle_s {
     double eyy_t;
     double wxy_t;
 
-    /* Body forces */
-    double bx;
-    double by;
+    /* full 3D velocity gradient tensor */
+    double L[NDIM*NDIM];
 
     /* Deformation gradient tensor */
     double Fxx;
@@ -68,23 +96,16 @@ typedef struct particle_s {
     double state[DEPVAR];
 
     /* Flag particle as active or not (used for discharge problems). */
-    int active;
+//    int active;
 
     /* Material Type */
     int material;
-
-    /* Shapefunctions (follows same nodal numbering as element) */
-    double s[4];
 
     /* Gradient of Shapefunctions */
     double grad_s[4][2];
 
     /* which element is the particle in? */
     int element;
-
-    /* acceleration */
-    double x_tt;
-    double y_tt;
 
     /* held stress (for each implicit step) */
     double real_sxx;
@@ -118,6 +139,9 @@ typedef struct particle_s {
 
     /* material specific data structure, can be defined in material_init */
     void *material_data;
+    
+    /* unique id, so particles can be tracked between frames */
+    int id;
 } particle_t;
 
 /*

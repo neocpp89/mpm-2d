@@ -10,6 +10,6 @@ else
     CFILE=$1
     SOFILE=${CFILE%.c}.so
 
-    gcc -g -Wall -march=native -fPIC -shared -nostartfiles -o $SOFILE $CFILE
+    gcc -g -O3 -Wall -march=native -fPIC -shared -nostartfiles -o $SOFILE $CFILE
 fi
 

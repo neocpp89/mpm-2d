@@ -15,12 +15,15 @@
 #include "process.h"
 
 /*---read_grid_params---------------------------------------------------------*/
-void read_grid_params(grid_t *grid, char *fname)
+int read_grid_params(grid_t *grid, char *fname)
 {
     int r;
     FILE *fp;
 
     fp = fopen(fname, "r");
+    if (fp == NULL) {
+        return -1;
+    }
     r = fscanf(fp, "%d", &(grid->N));
     r += fscanf(fp, "%lf", &(grid->len));
     if (r != 2) {
@@ -30,7 +33,7 @@ void read_grid_params(grid_t *grid, char *fname)
 
     fclose(fp);
 
-    return;
+    return 0;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -93,7 +96,7 @@ void h5_read_particles(particle_t **particles, int *num_particles, char *fname, 
 /*----------------------------------------------------------------------------*/
 
 /*---read_particles-----------------------------------------------------------*/
-void read_particles(particle_t **particles, int *num_particles, char *fname)
+int read_particles(particle_t **particles, int *num_particles, char *fname)
 {
     FILE *fp;
     int i, r;
@@ -104,6 +107,9 @@ void read_particles(particle_t **particles, int *num_particles, char *fname)
     int field;
 
     fp = fopen(fname, "r");
+    if (fp == NULL) {
+        return -1;
+    }
 
     if (NULL == fgets(s, sizeof(s)/sizeof(char), fp)) {
         fprintf(stderr, "can't read initial particle file (num particles).\n");
@@ -170,7 +176,7 @@ void read_particles(particle_t **particles, int *num_particles, char *fname)
 
     fclose(fp);
 
-    return;
+    return 0;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -283,7 +289,7 @@ job_t *read_state(FILE *fd)
         }
 
         /* Flag particle as active or not (used for discharge problems). */
-        r += fscanf(fd, "%d", &(job->particles[i].active));
+        r += fscanf(fd, "%d", &(job->active[i]));
 
         if (r != (26 + dep + 1)) {
             printf("error reading state of particle %d\n", i);

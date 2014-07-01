@@ -122,7 +122,7 @@ void calculate_stress(job_t *job)
     int i;
 
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 
@@ -168,6 +168,16 @@ void calculate_stress(job_t *job)
             dpyy = 0;
             nup_tau = 0;
         }
+
+/*        if (p_t < c) {*/
+/*            dpxx = job->particles[i].exx_t;*/
+/*            dpxy = job->particles[i].exy_t;*/
+/*            dpyy = job->particles[i].eyy_t;*/
+/*            job->particles[i].sxx = -c;*/
+/*            job->particles[i].sxy = 0;*/
+/*            job->particles[i].syy = -c;*/
+/*            continue;*/
+/*        }*/
 
         /* use strain rate to calculate stress increment */
         dsjxx = job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((job->particles[i].exx_t - dpxx) + NUMOD * (job->particles[i].eyy_t - dpyy));

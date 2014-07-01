@@ -19,7 +19,7 @@ void map_particles_to_nodes_doublescalar(job_t *job,
     double s[NODES_PER_ELEMENT];
 
     for (i = 0; i < job->num_particles; i++) {
-        if (job->particles[i].active == 0) {
+        if (job->active[i] == 0) {
             continue;
         }
 
@@ -61,7 +61,8 @@ void accumulate_p_to_n_doublescalar(node_t *nodes,
     return;
 }
 /*----------------------------------------------------------------------------*/
-
+#pragma GCC push_options
+#pragma GCC optimize ("unroll-loops")
 /*---Accumulates a list of scalars of type double to nodes.  -----------------*/
 void accumulate_p_to_n_ds_list(node_t *nodes,
     size_t *node_field_offset, int *nodelist, double *sfvalues, 
@@ -82,3 +83,4 @@ void accumulate_p_to_n_ds_list(node_t *nodes,
     return;
 }
 /*----------------------------------------------------------------------------*/
+#pragma GCC pop_options
