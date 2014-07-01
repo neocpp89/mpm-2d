@@ -7,7 +7,6 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
-#include <hdf5.h>
 
 #include "process.h"
 #include "writer.h"
@@ -24,181 +23,11 @@ size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
     return bytes_out;
 }
 
-size_t v2_write_particle(FILE *fd, particle_t *p)
+size_t v2_write_particle(FILE *fd, job_t *job, particle_t *p)
 {
     size_t bytes_out = 0;
 
     return bytes_out;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-h5writer_t *h5_init(const char *fname, const job_t *job)
-{
-    h5writer_t *h5state;
-    herr_t status = 0;
-
-    hid_t plist;
-    hid_t elist;
-
-    hsize_t pdims[2] = {job->num_particles, 1};
-    hsize_t edims[2] = {job->num_elements, 1};
-    hsize_t max_pdims[2] = {job->num_particles, H5S_UNLIMITED};
-    hsize_t max_edims[2] = {job->num_elements, H5S_UNLIMITED};
-
-    /* For compression. */
-    hsize_t chunk_pdims[2] = {job->num_particles, 1};
-    hsize_t chunk_edims[2] = {job->num_elements, 1};
-
-    h5state = (h5writer_t *)malloc(sizeof(h5writer_t));
-    h5state->particle_type = h5_particle_type();
-    h5state->element_type = h5_element_type();
-    h5state->file = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-
-    h5state->pdataspace = H5Screate_simple(sizeof(pdims)/sizeof(pdims[0]), pdims, max_pdims);
-    h5state->edataspace = H5Screate_simple(sizeof(edims)/sizeof(edims[0]), edims, max_edims);
-
-    plist  = H5Pcreate(H5P_DATASET_CREATE);
-    status |= H5Pset_chunk(plist, sizeof(chunk_pdims)/sizeof(chunk_pdims[0]), chunk_pdims);
-    status |= H5Pset_deflate(plist, 1);
-    elist  = H5Pcreate(H5P_DATASET_CREATE);
-    status |= H5Pset_chunk(elist, sizeof(chunk_edims)/sizeof(chunk_edims[0]), chunk_edims);
-    status |= H5Pset_deflate(elist, 1);
-
-    h5state->pdataset = H5Dcreate2(h5state->file, "/particles",
-                        h5state->particle_type, h5state->pdataspace,
-                        H5P_DEFAULT, plist, H5P_DEFAULT);
-    h5state->edataset = H5Dcreate2(h5state->file, "/elements",
-                        h5state->element_type, h5state->edataspace,
-                        H5P_DEFAULT, elist, H5P_DEFAULT);
-
-    return h5state;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void h5_cleanup(h5writer_t *h5state)
-{
-    herr_t status = 0;
-
-    status |= H5Dclose(h5state->pdataset);
-    status |= H5Sclose(h5state->pdataspace);
-    status |= H5Dclose(h5state->edataset);
-    status |= H5Sclose(h5state->edataspace);
-    status |= H5Fclose(h5state->file);
-    free(h5state);
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*---h5_particle_type---------------------------------------------------------*/
-hid_t h5_particle_type()
-{
-    int i;
-    char buf[80];
-    hid_t hparticle_type;
-
-    hparticle_type = H5Tcreate(H5T_COMPOUND, sizeof(particle_t));
-    H5Tinsert(hparticle_type, "x", HOFFSET(particle_t, x), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "y", HOFFSET(particle_t, y), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "xl", HOFFSET(particle_t, xl), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "yl", HOFFSET(particle_t, yl), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "x_t", HOFFSET(particle_t, x_t), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "y_t", HOFFSET(particle_t, y_t), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "m", HOFFSET(particle_t, m), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "v", HOFFSET(particle_t, v), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "v0", HOFFSET(particle_t, v0), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "sxx", HOFFSET(particle_t, sxx), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "sxy", HOFFSET(particle_t, sxy), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "syy", HOFFSET(particle_t, syy), H5T_NATIVE_DOUBLE);
-/*    H5Tinsert(hparticle_type, "sxx_t", HOFFSET(particle_t, sxx_t), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "sxy_t", HOFFSET(particle_t, sxy_t), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "syy_t", HOFFSET(particle_t, syy_t), H5T_NATIVE_DOUBLE);*/
-    H5Tinsert(hparticle_type, "exx_t", HOFFSET(particle_t, exx_t), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "exy_t", HOFFSET(particle_t, exy_t), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "eyy_t", HOFFSET(particle_t, eyy_t), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "wxy_t", HOFFSET(particle_t, wxy_t), H5T_NATIVE_DOUBLE);
-/*    H5Tinsert(hparticle_type, "dsjxx", HOFFSET(particle_t, dsjxx), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "dsjxy", HOFFSET(particle_t, dsjxy), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "dsjyy", HOFFSET(particle_t, dsjyy), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "deexx", HOFFSET(particle_t, deexx), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "deexy", HOFFSET(particle_t, deexy), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "deeyy", HOFFSET(particle_t, deeyy), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "depxx", HOFFSET(particle_t, depxx), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "depxy", HOFFSET(particle_t, depxy), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "depyy", HOFFSET(particle_t, depyy), H5T_NATIVE_DOUBLE);*/
-    H5Tinsert(hparticle_type, "bx", HOFFSET(particle_t, bx), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "by", HOFFSET(particle_t, by), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "Fxx", HOFFSET(particle_t, Fxx), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "Fxy", HOFFSET(particle_t, Fxy), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "Fyx", HOFFSET(particle_t, Fyx), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "Fyy", HOFFSET(particle_t, Fyy), H5T_NATIVE_DOUBLE);
-/*    H5Tinsert(hparticle_type, "r1x0", HOFFSET(particle_t, r1x0), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "r1y0", HOFFSET(particle_t, r1y0), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "r2x0", HOFFSET(particle_t, r2x0), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "r2y0", HOFFSET(particle_t, r2y0), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "r1xn", HOFFSET(particle_t, r1xn), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "r1yn", HOFFSET(particle_t, r1yn), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "r2xn", HOFFSET(particle_t, r2xn), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "r2yn", HOFFSET(particle_t, r2yn), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "c1x", HOFFSET(particle_t, c1x), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "c1y", HOFFSET(particle_t, c1y), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "c2x", HOFFSET(particle_t, c2x), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "c2y", HOFFSET(particle_t, c2y), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "c3x", HOFFSET(particle_t, c3x), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "c3y", HOFFSET(particle_t, c3y), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "c4x", HOFFSET(particle_t, c4x), H5T_NATIVE_DOUBLE);*/
-/*    H5Tinsert(hparticle_type, "c4y", HOFFSET(particle_t, c4y), H5T_NATIVE_DOUBLE);*/
-    H5Tinsert(hparticle_type, "ux", HOFFSET(particle_t, ux), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "uy", HOFFSET(particle_t, uy), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "color", HOFFSET(particle_t, color), H5T_NATIVE_DOUBLE);
-    for (i = 0; i < DEPVAR; i++) {
-        snprintf(buf, sizeof(buf), "state%d", i);
-        H5Tinsert(hparticle_type, buf, HOFFSET(particle_t, state[i]), H5T_NATIVE_DOUBLE);
-    }
-/*    H5Tinsert(hparticle_type, "active", HOFFSET(particle_t, active), H5T_NATIVE_INT);*/
-    H5Tinsert(hparticle_type, "material", HOFFSET(particle_t, material), H5T_NATIVE_INT);
-    H5Tinsert(hparticle_type, "x_tt", HOFFSET(particle_t, x_tt), H5T_NATIVE_DOUBLE);
-    H5Tinsert(hparticle_type, "y_tt", HOFFSET(particle_t, y_tt), H5T_NATIVE_DOUBLE);
-
-    return hparticle_type;
-}
-/*----------------------------------------------------------------------------*/
-
-/*---h5_element_type----------------------------------------------------------*/
-hid_t h5_element_type()
-{
-    int i;
-    char buf[80];
-    hid_t helement_type;
-
-    helement_type = H5Tcreate(H5T_COMPOUND, sizeof(element_t));
-    for (i = 0; i < 9; i++) {
-        snprintf(buf, sizeof(buf), "nodes%d", i);
-        H5Tinsert(helement_type, buf, HOFFSET(element_t, nodes[i]), H5T_NATIVE_INT);
-    }
-    H5Tinsert(helement_type, "n", HOFFSET(element_t, n), H5T_NATIVE_INT);
-    H5Tinsert(helement_type, "m", HOFFSET(element_t, m), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "filled", HOFFSET(element_t, filled), H5T_NATIVE_INT);
-    for (i = 0; i < 8; i++) {
-        snprintf(buf, sizeof(buf), "neighbors%d", i);
-        H5Tinsert(helement_type, buf, HOFFSET(element_t, neighbors[i]), H5T_NATIVE_INT);
-    }
-    H5Tinsert(helement_type, "grad_x", HOFFSET(element_t, grad_x), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "grad_y", HOFFSET(element_t, grad_y), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "grad_mag", HOFFSET(element_t, grad_mag), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "n_x", HOFFSET(element_t, n_x), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "n_y", HOFFSET(element_t, n_y), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "n_theta", HOFFSET(element_t, n_theta), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "v", HOFFSET(element_t, v), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "p_index", HOFFSET(element_t, p_index), H5T_NATIVE_INT);
-    H5Tinsert(helement_type, "p_dist", HOFFSET(element_t, p_dist), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "sxx", HOFFSET(element_t, sxx), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "sxy", HOFFSET(element_t, sxy), H5T_NATIVE_DOUBLE);
-    H5Tinsert(helement_type, "syy", HOFFSET(element_t, syy), H5T_NATIVE_DOUBLE);
-
-    return helement_type;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -235,53 +64,6 @@ void write_frame(FILE *fd, int frame, double time, job_t *job)
 
     /* dump the entire frame to disk (or wherever) */
     fflush(fd);
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*---h5_write_frame-----------------------------------------------------------*/
-void h5_write_frame(h5writer_t *h5, int frame, job_t *job)
-{
-    herr_t status = 0;
-    hsize_t pdims[2] = {job->num_particles, frame+1};
-    hsize_t edims[2] = {job->num_elements, frame+1};
-
-    /* hyperslab size */
-    hsize_t poffset[2] = {0, frame};
-    hsize_t pcount[2] = {job->num_particles, 1};
-    hsize_t scpdims[2] = {job->num_particles, 1};
-    hsize_t eoffset[2] = {0, frame};
-    hsize_t ecount[2] = {job->num_elements, 1};
-    hsize_t scedims[2] = {job->num_elements, 1};
-
-    hid_t pmemspace;
-    hid_t ememspace;
-
-    /* increase size of file to add frame... */
-    status |= H5Dset_extent(h5->pdataset, pdims);
-    status |= H5Sclose(h5->pdataspace);
-    h5->pdataspace = H5Dget_space(h5->pdataset);
-    status |= H5Dset_extent(h5->edataset, edims);
-    status |= H5Sclose(h5->edataspace);
-    h5->edataspace = H5Dget_space(h5->edataset);
-
-    status |= H5Sselect_hyperslab(h5->pdataspace, H5S_SELECT_SET, poffset, NULL, 
-        pcount, NULL);
-    status |= H5Sselect_hyperslab(h5->edataspace, H5S_SELECT_SET, eoffset, NULL, 
-        ecount, NULL);
-
-    /* memory space */
-    pmemspace = H5Screate_simple(sizeof(scpdims)/sizeof(scpdims[0]), scpdims, NULL);
-    ememspace = H5Screate_simple(sizeof(scedims)/sizeof(scedims[0]), scedims, NULL);
-
-    /* first dim is particle id, second dim is time */
-    status |= H5Dwrite(h5->pdataset, h5->particle_type, pmemspace,
-                h5->pdataspace, H5P_DEFAULT, job->particles);
-    status |= H5Sclose(pmemspace);
-    status |= H5Dwrite(h5->edataset, h5->element_type, ememspace,
-                h5->edataspace, H5P_DEFAULT, job->elements);
-    status |= H5Sclose(ememspace);
 
     return;
 }
@@ -464,46 +246,6 @@ void write_state(FILE *fd, job_t *job)
             job->elements[i].nodes[2],
             job->elements[i].nodes[3]);
     }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void h5_write_state(const char *hfilename, job_t *job)
-{
-    hid_t hfile;
-    herr_t status = 0;
-    hsize_t dims[1];    /* data by particle index */
-    hsize_t chunk_dims[1];  /* for compression */
-
-    hid_t hdataspace;
-    hid_t hdataset;
-
-    hid_t hplist;
-    hid_t hparticle_type;
-
-    dims[0] = job->num_particles;
-    chunk_dims[0] = job->num_particles; /* one giant chunk */
-
-    hfile = H5Fcreate(hfilename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-
-    hparticle_type = h5_particle_type();
-
-    hdataspace = H5Screate_simple(sizeof(dims)/sizeof(dims[0]), dims, NULL);
-
-    hplist  = H5Pcreate(H5P_DATASET_CREATE);
-    status |= H5Pset_chunk(hplist, sizeof(chunk_dims)/sizeof(chunk_dims[0]), chunk_dims);
-    status |= H5Pset_deflate(hplist, 9);
-    hdataset = H5Dcreate2(hfile, "/particles", hparticle_type, hdataspace, 
-                          H5P_DEFAULT, hplist, H5P_DEFAULT);
-
-    status |= H5Dwrite(hdataset, hparticle_type, H5S_ALL, H5S_ALL, H5P_DEFAULT, 
-                     job->particles);
-
-    status |= H5Dclose(hdataset);
-    status |= H5Sclose(hdataspace);
-    status |= H5Fclose(hfile);
 
     return;
 }

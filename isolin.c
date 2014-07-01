@@ -1,9 +1,9 @@
 /**
-    \file g_local.c
+    \file isolin.c
     \author Sachith Dunatunga
     \date 23.10.13
 
-    mpm_2d -- An implementation of the Material Point Method in 2D.
+    The isotropic linear elastic material model.
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -84,6 +84,7 @@ void calculate_stress_threaded(threadtask_t *task)
     double dsjxy;
     double dsjyy;
     double evoldot;
+    double trD;
     size_t i;
 
     for (i = p_start; i < p_stop; i++) {

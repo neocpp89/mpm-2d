@@ -30,6 +30,7 @@ SRC = \
 
 MATERIAL_SRC = \
 	dp_ri.c \
+	isolin.c \
 	g_local_mu2.c
 
 # Need to fix this; test each material separately

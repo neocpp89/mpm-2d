@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <hdf5.h>
 
 #include "reader.h"
 #include "writer.h"
@@ -34,64 +33,6 @@ int read_grid_params(grid_t *grid, char *fname)
     fclose(fp);
 
     return 0;
-}
-/*----------------------------------------------------------------------------*/
-
-/*---h5_read_particles--------------------------------------------------------*/
-void h5_read_particles(particle_t **particles, int *num_particles, char *fname, int frame)
-{
-    hid_t particle_type;
-    hid_t file;
-    hid_t dataset;
-    hid_t dataspace;
-    herr_t status = 0;
-
-    /* hyperslab size */
-    hsize_t offset[2] = {0, frame};
-    hsize_t count[2] = {0, 1};
-    hsize_t scdims[2] = {0, 1};
-
-    hid_t memspace;
-
-    hsize_t dims[2] = {0, 0};
-
-    int ndims;
-
-    *particles = NULL;
-    *num_particles = 0;
-
-    particle_type = h5_particle_type();
-
-    file = H5Fopen(fname, H5F_ACC_RDONLY, H5P_DEFAULT);
-    dataset = H5Dopen2(file, "/particles", H5P_DEFAULT);
-    dataspace = H5Dget_space(dataset);
-    ndims = H5Sget_simple_extent_dims(dataspace, dims, NULL);
-
-    if (frame != 0 && frame >= dims[1]) {
-        printf("ndims = %d\n", ndims);
-        printf("can't get frame %d, size is (%d %d)\n", frame, (int)dims[0], (int)dims[1]);
-        return;
-    }
-
-    *num_particles = dims[0];
-    *particles = (particle_t *)malloc(*num_particles * sizeof (particle_t));
-    count[0] = *num_particles;
-    scdims[0] = *num_particles;
-
-    status |= H5Sselect_hyperslab(dataspace, H5S_SELECT_SET, offset, NULL, 
-        count, NULL);
-    memspace = H5Screate_simple(sizeof(scdims)/sizeof(scdims[0]), scdims, NULL);
-
-    status |= H5Dread(dataset, particle_type, memspace, dataspace, H5P_DEFAULT,
-                *particles);
-
-    status |= H5Dclose(dataset);
-    status |= H5Sclose(dataspace);
-    status |= H5Sclose(memspace);
-    status |= H5Tclose(particle_type);
-    status |= H5Fclose(file);
-
-    return;
 }
 /*----------------------------------------------------------------------------*/
 
