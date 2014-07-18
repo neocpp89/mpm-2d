@@ -27,62 +27,62 @@ typedef struct {
 
 headerinfo_t particle_out_fields[] = {
     /* Position */
-    HEADERINFO(x, "%g"),
-    HEADERINFO(y, "%g"),
+    HEADERINFO(x, "%lg"),
+    HEADERINFO(y, "%lg"),
 
     /* Local Coordinates */
-/*    HEADERINFO(xl, "%g"),*/
-/*    HEADERINFO(yl, "%g"),*/
+/*    HEADERINFO(xl, "%lg"),*/
+/*    HEADERINFO(yl, "%lg"),*/
 
     /* Volume */
-    HEADERINFO(v, "%g"),
+    HEADERINFO(v, "%lg"),
 
     /* Initial volume */
-/*    HEADERINFO(v0, "%g"),*/
+/*    HEADERINFO(v0, "%lg"),*/
 
     /* Skip shapefunctions in output. */
 
     /* Mass */
-    HEADERINFO(m, "%g"),
+    HEADERINFO(m, "%lg"),
 
     /* Velocity */
-    HEADERINFO(x_t, "%g"),
-    HEADERINFO(y_t, "%g"),
+    HEADERINFO(x_t, "%lg"),
+    HEADERINFO(y_t, "%lg"),
 
     /* Acceleration */
-/*    HEADERINFO(x_tt, "%g"),*/
-/*    HEADERINFO(y_tt, "%g"),*/
+/*    HEADERINFO(x_tt, "%lg"),*/
+/*    HEADERINFO(y_tt, "%lg"),*/
 
     /* Body forces */
-/*    HEADERINFO(bx, "%g"),*/
-/*    HEADERINFO(by, "%g"),*/
+/*    HEADERINFO(bx, "%lg"),*/
+/*    HEADERINFO(by, "%lg"),*/
 
     /* Stress */
-    HEADERINFO(sxx, "%g"),
-    HEADERINFO(sxy, "%g"),
-    HEADERINFO(syy, "%g"),
+    HEADERINFO(sxx, "%lg"),
+    HEADERINFO(sxy, "%lg"),
+    HEADERINFO(syy, "%lg"),
 
     /* Skip full 3D stress tensor */
 
     /* Strain rate */
-/*    HEADERINFO(exx_t, "%g"),*/
-/*    HEADERINFO(exy_t, "%g"),*/
-/*    HEADERINFO(eyy_t, "%g"),*/
-/*    HEADERINFO(wxy_t, "%g"),*/
+/*    HEADERINFO(exx_t, "%lg"),*/
+/*    HEADERINFO(exy_t, "%lg"),*/
+/*    HEADERINFO(eyy_t, "%lg"),*/
+/*    HEADERINFO(wxy_t, "%lg"),*/
 
     /* Skip full 3D velocity gradient tensor and Deformation Gradient */
 
     /* Displacements */
-/*    HEADERINFO(ux, "%g"),*/
-/*    HEADERINFO(uy, "%g"),*/
+/*    HEADERINFO(ux, "%lg"),*/
+/*    HEADERINFO(uy, "%lg"),*/
 
     /* Color used by splot visualization */
-    HEADERINFO(color, "%g"),
+    HEADERINFO(color, "%lg"),
 
     /* State Variables (for constitutive law) */
 /*    double state[DEPVAR];*/
-    NAMEDHEADERINFO(state[9], "%g", "gammap"), 
-    NAMEDHEADERINFO(state[10], "%g", "gammadotp") /* gammadotp */
+    NAMEDHEADERINFO(state[9], "%lg", "gammap"), 
+    NAMEDHEADERINFO(state[10], "%lg", "gammadotp") /* gammadotp */
 };
 
 /*---Version 2 of output format-----------------------------------------------*/
@@ -127,7 +127,7 @@ size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
         Write metadata to file (if it exists).
     */
     if (metafd != NULL) {
-        bytes_out += fprintf(metafd, "%s,%zu,%d,%g\n",
+        bytes_out += fprintf(metafd, "%s,%zu,%d,%lg\n",
             fp_name, particles_written, job->frame, job->t);
     }
 
@@ -158,15 +158,15 @@ size_t v2_write_particle(FILE *fd, job_t *job, particle_t *p)
 void inline write_particle(FILE *fd, particle_t p, double active)
 {
     int i, j;
-    fprintf(fd, "%f %f %f %f %f %f ",
+    fprintf(fd, "%lg %lg %lg %lg %lg %lg ",
         p.m, p.v, p.x, p.y, p.x_t, p.y_t);
-    fprintf(fd, "%f %f %f %18.18lf %18.18lf %18.18lf %f %18.18lf %f",
+    fprintf(fd, "%lg %lg %lg %lg %lg %lg %lg %lg %lg",
         p.sxx, p.sxy, p.syy, p.ux, p.uy, p.state[9], p.color, p.state[10],
         (double)active);
 
     for (i = 0; i < 4; i++) {
         for (j = 0; j < 2; j++) {
-            fprintf(fd, " %f", p.corners[i][j]);
+            fprintf(fd, " %lg", p.corners[i][j]);
         }
     }
     fprintf(fd, "\n");
@@ -180,7 +180,7 @@ void write_frame(FILE *fd, int frame, double time, job_t *job)
 {
     int i;
 
-    fprintf(fd, "%d %f %d\n", frame, time, job->num_particles);
+    fprintf(fd, "%d %lg %d\n", frame, time, job->num_particles);
     for (i = 0; i < job->num_particles; i++) {
         write_particle(fd, job->particles[i], (double)(job->active[i]));
     }
@@ -228,18 +228,18 @@ void write_element_frame(FILE *fd, int frame, double time, job_t *job)
         v_acc[e] += job->particles[i].v;
     }
 
-    fprintf(fd, "%d %f %d\n", frame, time, job->num_elements);
+    fprintf(fd, "%d %lg %d\n", frame, time, job->num_elements);
 
     for (i = 0; i < job->num_elements; i++) {
         node_number_to_coords(&x, &y, job->elements[i].nodes[0], job->N, job->h);
-        fprintf(fd, "%f %f ", x, y);
+        fprintf(fd, "%lg %lg ", x, y);
         node_number_to_coords(&x, &y, job->elements[i].nodes[1], job->N, job->h);
-        fprintf(fd, "%f %f ", x, y);
+        fprintf(fd, "%lg %lg ", x, y);
         node_number_to_coords(&x, &y, job->elements[i].nodes[2], job->N, job->h);
-        fprintf(fd, "%f %f ", x, y);
+        fprintf(fd, "%lg %lg ", x, y);
         node_number_to_coords(&x, &y, job->elements[i].nodes[3], job->N, job->h);
-        fprintf(fd, "%f %f ", x, y);
-        fprintf(fd, "%f %f %f\n",
+        fprintf(fd, "%lg %lg ", x, y);
+        fprintf(fd, "%lg %lg %lg\n",
             (v_acc[i] > 0) ? (sxx_acc[i] / v_acc[i]) : 0.0f,
             (v_acc[i] > 0) ? (sxy_acc[i] / v_acc[i]) : 0.0f,
             (v_acc[i] > 0) ? (syy_acc[i] / v_acc[i]) : 0.0f);
@@ -259,99 +259,99 @@ void write_state(FILE *fd, job_t *job)
 {
     int i, j;
 
-    fprintf(fd, "%f %f %f\n", job->t, job->dt, job->t_stop);
+    fprintf(fd, "%lg %lg %lg\n", job->t, job->dt, job->t_stop);
     fprintf(fd, "%d %d %d\n", job->num_particles, job->num_nodes, job->num_elements);
-    fprintf(fd, "%d %f\n", job->N, job->h);
+    fprintf(fd, "%d %lg\n", job->N, job->h);
 
     for (i = 0; i < job->num_particles; i++) {
         /* Position */
-        fprintf(fd, "%f %f\n", job->particles[i].x, job->particles[i].y);
+        fprintf(fd, "%lg %lg\n", job->particles[i].x, job->particles[i].y);
 
         /* Local Coordinates */
-        fprintf(fd, "%f %f\n", job->particles[i].xl, job->particles[i].yl);
+        fprintf(fd, "%lg %lg\n", job->particles[i].xl, job->particles[i].yl);
 
         /* Velocity */
-        fprintf(fd, "%f %f\n", job->particles[i].x_t, job->particles[i].y_t);
+        fprintf(fd, "%lg %lg\n", job->particles[i].x_t, job->particles[i].y_t);
 
         /* Mass */
-        fprintf(fd, "%f\n", job->particles[i].m);
+        fprintf(fd, "%lg\n", job->particles[i].m);
 
         /* Volume */
-        fprintf(fd, "%f\n", job->particles[i].v);
+        fprintf(fd, "%lg\n", job->particles[i].v);
 
         /* Initial volume */
-        fprintf(fd, "%f\n", job->particles[i].v0);
+        fprintf(fd, "%lg\n", job->particles[i].v0);
 
         /* Stress */
-        fprintf(fd, "%f %f %f\n",
+        fprintf(fd, "%lg %lg %lg\n",
             job->particles[i].sxx,
             job->particles[i].sxy,
             job->particles[i].syy);
 
         /* Stress rate */
-/*        fprintf(fd, "%f %f %f\n",*/
+/*        fprintf(fd, "%lg %lg %lg\n",*/
 /*            job->particles[i].sxx_t,*/
 /*            job->particles[i].sxy_t,*/
 /*            job->particles[i].syy_t);*/
 
         /* Strain rate */
-        fprintf(fd, "%f %f %f %f\n",
+        fprintf(fd, "%lg %lg %lg %lg\n",
             job->particles[i].exx_t,
             job->particles[i].exy_t,
             job->particles[i].eyy_t,
             job->particles[i].wxy_t);
 
         /* Jaumann stress increment */
-/*        fprintf(fd, "%f %f %f\n",*/
+/*        fprintf(fd, "%lg %lg %lg\n",*/
 /*            job->particles[i].dsjxx,*/
 /*            job->particles[i].dsjxy,*/
 /*            job->particles[i].dsjyy);*/
 
         /* Elastic and plastic strain increments */
-/*        fprintf(fd, "%f %f %f\n",*/
+/*        fprintf(fd, "%lg %lg %lg\n",*/
 /*            job->particles[i].deexx,*/
 /*            job->particles[i].deexy,*/
 /*            job->particles[i].deeyy);*/
-/*        fprintf(fd, "%f %f %f\n",*/
+/*        fprintf(fd, "%lg %lg %lg\n",*/
 /*            job->particles[i].depxx,*/
 /*            job->particles[i].depxy,*/
 /*            job->particles[i].depyy);*/
 
         /* Body forces */
-        fprintf(fd, "%f %f\n", job->particles[i].bx, job->particles[i].by);
+        fprintf(fd, "%lg %lg\n", job->particles[i].bx, job->particles[i].by);
 
         /* Deformation gradient tensor */
-        fprintf(fd, "%f %f %f %f\n",
+        fprintf(fd, "%lg %lg %lg %lg\n",
             job->particles[i].Fxx, job->particles[i].Fxy,
             job->particles[i].Fyx, job->particles[i].Fyy);
 
         /* Initial particle domain vectors */
-/*        fprintf(fd, "%f %f %f %f\n",*/
+/*        fprintf(fd, "%lg %lg %lg %lg\n",*/
 /*            job->particles[i].r1x0, job->particles[i].r1y0,*/
 /*            job->particles[i].r2x0, job->particles[i].r2y0);*/
 
         /* Updated particle domain vectors */
-/*        fprintf(fd, "%f %f %f %f\n",*/
+/*        fprintf(fd, "%lg %lg %lg %lg\n",*/
 /*            job->particles[i].r1xn, job->particles[i].r1yn,*/
 /*            job->particles[i].r2xn, job->particles[i].r2yn);*/
 
         /* Corner positions */
-/*        fprintf(fd, "%f %f %f %f %f %f %f %f\n",*/
+/*        fprintf(fd, "%lg %lg %lg %lg %lg %lg %lg %lg\n",*/
 /*            job->particles[i].c1x, job->particles[i].c1y,*/
 /*            job->particles[i].c2x, job->particles[i].c2y,*/
 /*            job->particles[i].c3x, job->particles[i].c3y,*/
 /*            job->particles[i].c4x, job->particles[i].c4y);*/
 
         /* Displacements */
-        fprintf(fd, "%f %f\n", job->particles[i].ux, job->particles[i].uy);
+        fprintf(fd, "%lg %lg\n", job->particles[i].ux, job->particles[i].uy);
 
         /* Color used by splot visualization */
-        fprintf(fd, "%f\n", job->particles[i].color);
+        fprintf(fd, "%lg\n", job->particles[i].color);
 
         /* State Variables (for constitutive law) */
         fprintf(fd, "%d\n", DEPVAR);
         for (j = 0; j < DEPVAR; j++) {
-            fprintf(fd, "%f\n", job->particles[i].state[j]);
+            fprintf(fd, "%lg\n", job->particles[i].state[j]);
         }
 
         /* Flag particle as active or not (used for discharge problems). */
@@ -359,7 +359,7 @@ void write_state(FILE *fd, job_t *job)
     }
 
     for (i = 0; i < job->num_nodes; i++) {
-        fprintf(fd, "%f %f\n", job->nodes[i].x, job->nodes[i].y);
+        fprintf(fd, "%lg %lg\n", job->nodes[i].x, job->nodes[i].y);
     }
 
     for (i = 0; i < job->num_elements; i++) {

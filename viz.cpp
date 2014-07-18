@@ -260,7 +260,7 @@ class Node {
     //        if (xl >= -1 && yl >= -1 && xl <= 1 && yl <= 1) {
                 s = (1 - fabs(xl)) * (1 - fabs(yl));
     //        } else {
-    //            printf("warning s = %f %f %f\n", xl, yl, fabs(xl) * fabs(yl));
+    //            printf("warning s = %g %g %g\n", xl, yl, fabs(xl) * fabs(yl));
     //        }
 
             return s;
@@ -292,7 +292,7 @@ class Node {
         }
         void Print()
         {
-            printf("%p: %f %f %f %f %f %f\n", this, m, x, y, sxx, sxy, syy);
+            printf("%p: %g %g %g %g %g %g\n", this, m, x, y, sxx, sxy, syy);
             fflush(stdout);
             return;
         }
@@ -471,7 +471,7 @@ void parse_scene(double **s, int *n, int *mx, int *my, FILE *scene_file)
 
         /* parse camera */
         if (line[0] == 'C') {
-            sscanf(line, "C %lf,%lf,%lf",
+            sscanf(line, "C %lg,%lg,%lg",
                 &(g_state.camera_view[0]),
                 &(g_state.camera_view[1]),
                 &(g_state.camera_view[2]));
@@ -479,7 +479,7 @@ void parse_scene(double **s, int *n, int *mx, int *my, FILE *scene_file)
 
         /* parse bounding lines */
         if (line[0] == 'L') {
-            sscanf(line, "L %lf,%lf,%lf,%lf", &x1, &y1, &x2, &y2);
+            sscanf(line, "L %lg,%lg,%lg,%lg", &x1, &y1, &x2, &y2);
             num_scene_lines++;
             old_scene_lines = scene_lines;
             scene_lines = (double *)malloc(4 * sizeof(double) * num_scene_lines);
@@ -533,7 +533,7 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
 
         /* parse anchor/color pairs */
         if (line[0] == 'I') {
-            sscanf(line, "I,%f,%d,%d,%d,%d", &f, &r, &g, &b, &a);
+            sscanf(line, "I,%g,%d,%d,%d,%d", &f, &r, &g, &b, &a);
             rf = r / 255.0;
             gf = g / 255.0;
             bf = b / 255.0;
@@ -542,12 +542,12 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
         }
         
         if (line[0] == 'F') {
-            sscanf(line, "F,%f,%f,%f,%f,%f", &f, &rf, &gf, &bf, &af);
+            sscanf(line, "F,%g,%g,%g,%g,%g", &f, &rf, &gf, &bf, &af);
             set_color = true;
         }
 
         if (line[0] == 'H') {
-            sscanf(line, "H,%f,%x", &f, &h);
+            sscanf(line, "H,%g,%x", &f, &h);
             rf = ((h >> 24) & 0xFF) / 255.0;
             gf = ((h >> 16) & 0xFF) / 255.0;
             bf = ((h >> 8) & 0xFF) / 255.0;
@@ -729,8 +729,8 @@ void next_element(FILE *fp, element_t *element)
     i = 0;
     tok = strtok(s, " ,");
     while (tok != NULL) {
-        sscanf(tok, "%lf", &d);
-//        printf("%d: %lf\n", i, d);
+        sscanf(tok, "%lg", &d);
+//        printf("%d: %lg\n", i, d);
         switch (i) {
             case 0:
                 element->x1 = d;
@@ -787,8 +787,8 @@ void next_particle(FILE *fp, aux_particle_t *particle)
     i = 0;
     tok = strtok(s, " ,");
     while (tok != NULL) {
-        sscanf(tok, "%lf", &d);
-//        printf("%d: %lf\n", i, d);
+        sscanf(tok, "%lg", &d);
+//        printf("%d: %lg\n", i, d);
         switch (i) {
             case 0:
                 particle->m = d;
@@ -894,7 +894,7 @@ aux_particle_t *next_frame(FILE *fp, int *num_particles)
     int i;
     aux_particle_t *particles = NULL;
 
-    if (3 != fscanf(fp, "%d %lf %d\n", &current_frame, &current_time, num_particles)) {
+    if (3 != fscanf(fp, "%d %lg %d\n", &current_frame, &current_time, num_particles)) {
         return NULL;
     }
 //    fprintf(stdout, "Read Frame: %d, #Particles = %d\n", current_frame, *num_particles);
@@ -913,7 +913,7 @@ element_t *next_element_frame(FILE *fp, int *num_elements)
     int i;
     element_t *elements = NULL;
 
-    if (3 != fscanf(fp, "%d %lf %d\n", &current_frame, &current_time, num_elements)) {
+    if (3 != fscanf(fp, "%d %lg %d\n", &current_frame, &current_time, num_elements)) {
         return NULL;
     }
 //    fprintf(stdout, "Read Frame: %d, #Particles = %d\n", current_frame, *num_particles);
@@ -1442,7 +1442,7 @@ int draw_particles(void)
             glColor3f(1.0f, 1.0f, 1.0f);
             draw_vector(particles[i].x, particles[i].y, scale*particles[i].vel_mag, particles[i].vel_theta);
 
-//            printf("vel_mag %lf, vel_theta = %lf\n", particles[i].vel_mag, particles[i].vel_theta);
+//            printf("vel_mag %lg, vel_theta = %lg\n", particles[i].vel_mag, particles[i].vel_theta);
 
             if (g_state.mirror_y) {
                 draw_vector(-particles[i].x, particles[i].y, scale*particles[i].vel_mag, M_PI - particles[i].vel_theta);
@@ -1549,7 +1549,7 @@ int draw_elements(void)
         } else if (g_state.data_var == VAR_PRESSURE) {
             p = -0.5 * (elements[i].sxx + elements[i].syy);
 //            if (p != 0) {
-//                printf("p = %f\n", p);
+//                printf("p = %g\n", p);
 //            }
         } else if (g_state.data_var == VAR_MU) {
             double p_t;
@@ -1970,7 +1970,7 @@ int main(int argc, char* argv[])
                     g_state.bgcolor.b = 0.0;
                     g_state.bgcolor.a = 1.0;
                 } else {
-                    sscanf(optarg, "%f,%f,%f,%f",
+                    sscanf(optarg, "%g,%g,%g,%g",
                         &(g_state.bgcolor.r),
                         &(g_state.bgcolor.g),
                         &(g_state.bgcolor.b),
@@ -1995,7 +1995,7 @@ int main(int argc, char* argv[])
                 break;
             case 'd':
                 g_state.particle_size = atof(optarg);
-                printf("Particle size set to: %f.\n", g_state.particle_size);
+                printf("Particle size set to: %g.\n", g_state.particle_size);
                 break;
             case 'm':
                 colormap_file = fopen(optarg, "r");
@@ -2007,11 +2007,11 @@ int main(int argc, char* argv[])
                 break;
             case 'l':
                 g_state.data_min = atof(optarg);
-                printf("Lower bound on variable: %f.\n", g_state.data_min);
+                printf("Lower bound on variable: %g.\n", g_state.data_min);
                 break;
             case 'u':
                 g_state.data_max = atof(optarg);
-                printf("Upper bound on variable: %f.\n", g_state.data_max);
+                printf("Upper bound on variable: %g.\n", g_state.data_max);
                 break;
             case 'p':
                 if (strcmp(optarg, "u") == 0) {
