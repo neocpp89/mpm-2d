@@ -5,6 +5,8 @@
 
     Contains the structure for particles in MPM.
 */
+#include <stddef.h>
+
 #ifndef __PARTICLE_H__
 #define __PARTICLE_H__
 

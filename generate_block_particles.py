@@ -7,7 +7,7 @@ import numpy as np
 # linear material points per pixel (linear, so 2 -> 4 points in 1 pixel)
 lmpp = 2
 rho = 1500
-# cell spacing for material point
+# cell spacing for material point per pixel
 cs = 1.0 / lmpp
 s = map(lambda k: (0.5 + k) * cs, range(0, lmpp))
 xy_s = [(x,y) for x in s for y in s]
@@ -57,7 +57,13 @@ material_points = map(lambda xy: {
                         'sxx':0, 'sxy':0, 'syy':0}, xy_material_points)
 
 print "Have", len(material_points), "material points."
-print "Writing to file", sys.argv[-1]
+print "Writing to file:", sys.argv[-1]
 outfile.write("%d\n" % len(material_points))
 for point in material_points:
-    outfile.write("%g %g %g %g %g %g %g %g %g\n" % (point['m'], point['v'], point['x'], point['y'], point['x_t'], point['y_t'], point['sxx'], point['sxy'], point['syy']))
+    outfile.write("%g %g %g %g %g %g %g %g %g\n" % (
+        point['m'], point['v'],
+        point['x'], point['y'],
+        point['x_t'], point['y_t'],
+        point['sxx'], point['sxy'], point['syy'])
+    )
+print "Done."

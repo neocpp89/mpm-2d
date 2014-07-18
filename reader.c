@@ -24,7 +24,7 @@ int read_grid_params(grid_t *grid, char *fname)
         return -1;
     }
     r = fscanf(fp, "%d", &(grid->N));
-    r += fscanf(fp, "%lf", &(grid->len));
+    r += fscanf(fp, "%lg", &(grid->len));
     if (r != 2) {
         printf("error reading grid!\n");
         exit(-1);
@@ -71,7 +71,7 @@ int read_particles(particle_t **particles, int *num_particles, char *fname)
         field = 0;
         tok = strtok(s, " ,");
         while (tok != NULL) {
-            sscanf(tok, "%lf", &value);
+            sscanf(tok, "%lg", &value);
             switch (field) {
                 case 0:
                     (*particles)[i].m = value;
@@ -130,9 +130,9 @@ job_t *read_state(FILE *fd)
 
     job = (job_t *)malloc(sizeof(job_t));
 
-    r = fscanf(fd, "%lf %lf %lf", &(job->t), &(job->dt), &(job->t_stop));
+    r = fscanf(fd, "%lg %lg %lg", &(job->t), &(job->dt), &(job->t_stop));
     r += fscanf(fd, "%d %d %d", &(job->num_particles), &(job->num_nodes), &(job->num_elements));
-    r += fscanf(fd, "%d %lf", &(job->N), &(job->h));
+    r += fscanf(fd, "%d %lg", &(job->N), &(job->h));
 
     if (r != 8) {
         printf("Error reading state header!\n");
@@ -179,54 +179,54 @@ job_t *read_state(FILE *fd)
 
     for (i = 0; i < job->num_particles; i++) {
         /* Position */
-        r = fscanf(fd, "%lf %lf", &(job->particles[i].x), &(job->particles[i].y));
+        r = fscanf(fd, "%lg %lg", &(job->particles[i].x), &(job->particles[i].y));
 
         /* Local Coordinates */
-        r += fscanf(fd, "%lf %lf", &(job->particles[i].xl), &(job->particles[i].yl));
+        r += fscanf(fd, "%lg %lg", &(job->particles[i].xl), &(job->particles[i].yl));
 
         /* Velocity */
-        r += fscanf(fd, "%lf %lf", &(job->particles[i].x_t), &(job->particles[i].y_t));
+        r += fscanf(fd, "%lg %lg", &(job->particles[i].x_t), &(job->particles[i].y_t));
 
         /* Mass */
-        r += fscanf(fd, "%lf", &(job->particles[i].m));
+        r += fscanf(fd, "%lg", &(job->particles[i].m));
 
         /* Volume */
-        r += fscanf(fd, "%lf", &(job->particles[i].v));
+        r += fscanf(fd, "%lg", &(job->particles[i].v));
 
         /* Initial volume */
-        r += fscanf(fd, "%lf", &(job->particles[i].v0));
+        r += fscanf(fd, "%lg", &(job->particles[i].v0));
 
         /* Stress */
-        r += fscanf(fd, "%lf %lf %lf",
+        r += fscanf(fd, "%lg %lg %lg",
             &(job->particles[i].sxx),
             &(job->particles[i].sxy),
             &(job->particles[i].syy));
 
         /* Strain rate */
-        r += fscanf(fd, "%lf %lf %lf %lf",
+        r += fscanf(fd, "%lg %lg %lg %lg",
             &(job->particles[i].exx_t),
             &(job->particles[i].exy_t),
             &(job->particles[i].eyy_t),
             &(job->particles[i].wxy_t));
 
         /* Body forces */
-        r += fscanf(fd, "%lf %lf", &(job->particles[i].bx), &(job->particles[i].by));
+        r += fscanf(fd, "%lg %lg", &(job->particles[i].bx), &(job->particles[i].by));
 
         /* Deformation gradient tensor */
-        r += fscanf(fd, "%lf %lf %lf %lf",
+        r += fscanf(fd, "%lg %lg %lg %lg",
             &(job->particles[i].Fxx), &(job->particles[i].Fxy),
             &(job->particles[i].Fyx), &(job->particles[i].Fyy));
 
         /* Displacements */
-        r += fscanf(fd, "%lf %lf", &(job->particles[i].ux), &(job->particles[i].uy));
+        r += fscanf(fd, "%lg %lg", &(job->particles[i].ux), &(job->particles[i].uy));
 
         /* Color used by splot visualization */
-        r += fscanf(fd, "%lf", &(job->particles[i].color));
+        r += fscanf(fd, "%lg", &(job->particles[i].color));
 
         /* State Variables (for constitutive law) */
         r += fscanf(fd, "%d", &dep);
         for (j = 0; j < dep; j++) {
-            r += fscanf(fd, "%lf", &(job->particles[i].state[j]));
+            r += fscanf(fd, "%lg", &(job->particles[i].state[j]));
         }
 
         /* Flag particle as active or not (used for discharge problems). */
@@ -238,7 +238,7 @@ job_t *read_state(FILE *fd)
     }
 
     for (i = 0; i < job->num_nodes; i++) {
-        r = fscanf(fd, "%lf %lf", &(job->nodes[i].x), &(job->nodes[i].y));
+        r = fscanf(fd, "%lg %lg", &(job->nodes[i].x), &(job->nodes[i].y));
         if (r != 2) {
             printf("error reading state of node %d\n", i);
         }
