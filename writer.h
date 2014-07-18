@@ -12,6 +12,12 @@
 #include "particle.h"
 #include "process.h"
 
+
+size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
+    size_t (*particle_output_fn)(FILE *, job_t *, particle_t *),
+    size_t (*element_output_fn)(FILE *, job_t *, element_t *));
+size_t v2_write_particle(FILE *fd, job_t *job, particle_t *p);
+
 void write_frame(FILE *fd, int frame, double time, job_t *job);
 void write_element_frame(FILE *fd, int frame, double time, job_t *job);
 void write_state(FILE *fd, job_t *job);

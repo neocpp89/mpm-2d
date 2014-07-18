@@ -7,28 +7,151 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 
 #include "process.h"
 #include "writer.h"
+
+/*
+    Since we don't have reflection in C, make a structure to hold relevant data
+    to output as header information. Also, the macro is used to generate the
+    structure to enforce consistency.
+*/
+typedef struct {
+    size_t offset;
+    const char *format_specifier;
+    const char *fieldname;
+} headerinfo_t;
+#define HEADERINFO(field, format) { offsetof(particle_t, field), format, #field }
+#define NAMEDHEADERINFO(field, format, name) { offsetof(particle_t, field), format, name }
+
+headerinfo_t particle_out_fields[] = {
+    /* Position */
+    HEADERINFO(x, "%g"),
+    HEADERINFO(y, "%g"),
+
+    /* Local Coordinates */
+/*    HEADERINFO(xl, "%g"),*/
+/*    HEADERINFO(yl, "%g"),*/
+
+    /* Volume */
+    HEADERINFO(v, "%g"),
+
+    /* Initial volume */
+/*    HEADERINFO(v0, "%g"),*/
+
+    /* Skip shapefunctions in output. */
+
+    /* Mass */
+    HEADERINFO(m, "%g"),
+
+    /* Velocity */
+    HEADERINFO(x_t, "%g"),
+    HEADERINFO(y_t, "%g"),
+
+    /* Acceleration */
+/*    HEADERINFO(x_tt, "%g"),*/
+/*    HEADERINFO(y_tt, "%g"),*/
+
+    /* Body forces */
+/*    HEADERINFO(bx, "%g"),*/
+/*    HEADERINFO(by, "%g"),*/
+
+    /* Stress */
+    HEADERINFO(sxx, "%g"),
+    HEADERINFO(sxy, "%g"),
+    HEADERINFO(syy, "%g"),
+
+    /* Skip full 3D stress tensor */
+
+    /* Strain rate */
+/*    HEADERINFO(exx_t, "%g"),*/
+/*    HEADERINFO(exy_t, "%g"),*/
+/*    HEADERINFO(eyy_t, "%g"),*/
+/*    HEADERINFO(wxy_t, "%g"),*/
+
+    /* Skip full 3D velocity gradient tensor and Deformation Gradient */
+
+    /* Displacements */
+/*    HEADERINFO(ux, "%g"),*/
+/*    HEADERINFO(uy, "%g"),*/
+
+    /* Color used by splot visualization */
+    HEADERINFO(color, "%g"),
+
+    /* State Variables (for constitutive law) */
+/*    double state[DEPVAR];*/
+    NAMEDHEADERINFO(state[9], "%g", "gammap"), 
+    NAMEDHEADERINFO(state[10], "%g", "gammadotp") /* gammadotp */
+};
 
 /*---Version 2 of output format-----------------------------------------------*/
 size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
     size_t (*particle_output_fn)(FILE *, job_t *, particle_t *),
     size_t (*element_output_fn)(FILE *, job_t *, element_t *))
 {
+    size_t i = 0;
     size_t bytes_out = 0;
+    size_t particles_written = 0;
+    char fp_name[1024];
+    FILE *fp = NULL;
 
-    
+    snprintf(fp_name, 1024, "%sfp_%d.csv", directory, job->frame);
+    fp = fopen(fp_name, "w+");
+    if (fp != NULL) {
+        if (particle_output_fn != NULL) {
+
+            /* Write header lines for csv file. */
+            bytes_out += fprintf(fp, "id");
+            for (i = 0; i < sizeof(particle_out_fields)/sizeof(particle_out_fields[0]); i++) {
+                bytes_out += fprintf(fp, ",%s",
+                    particle_out_fields[i].fieldname);
+            }
+            bytes_out += fprintf(fp, "\n");
+
+            /* Write particle data from simulation. */
+            for (i = 0; i < job->num_particles; i++) {
+                if (job->active[i]) {
+                    bytes_out += (*particle_output_fn)(fp, job, &(job->particles[i]));
+                    particles_written++;
+                }
+            }
+        }
+        fclose(fp);
+    }
+
+    if (element_output_fn != NULL) {
+    }
+
+    /*
+        Write metadata to file (if it exists).
+    */
+    if (metafd != NULL) {
+        bytes_out += fprintf(metafd, "%s,%zu,%d,%g\n",
+            fp_name, particles_written, job->frame, job->t);
+    }
 
     return bytes_out;
 }
 
 size_t v2_write_particle(FILE *fd, job_t *job, particle_t *p)
 {
+    size_t i = 0;
     size_t bytes_out = 0;
+
+    bytes_out += fprintf(fd, "%zu", p->id); 
+    for (i = 0; i < sizeof(particle_out_fields)/sizeof(particle_out_fields[0]); i++) {
+        bytes_out += fprintf(fd, ",");
+        bytes_out += fprintf(fd,
+            particle_out_fields[i].format_specifier,
+            *(double *)((char *)p + particle_out_fields[i].offset));
+    }
+    bytes_out += fprintf(fd, "\n");
 
     return bytes_out;
 }
+
+#undef HEADERINFO
 /*----------------------------------------------------------------------------*/
 
 /*---write_particle-----------------------------------------------------------*/

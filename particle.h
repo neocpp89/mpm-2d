@@ -141,7 +141,7 @@ typedef struct particle_s {
     void *material_data;
     
     /* unique id, so particles can be tracked between frames */
-    int id;
+    size_t id;
 } particle_t;
 
 /*

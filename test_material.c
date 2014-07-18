@@ -40,9 +40,11 @@ void set_velocity_gradient(particle_t *p, double t)
 
     if (t >= 0 && t < 0.25) {
         L[0] = 0;
+/*        L[1] = 0;*/
         L[1] = sh;
         L[2] = 0;
         L[3] = 0;
+/*        L[3] = -sh;*/
     } else if (t >= 0.25 && t < 0.50) {
         L[0] = -1*(0.125 - fabs(t - 0.375))/0.125;
         L[1] = sh;

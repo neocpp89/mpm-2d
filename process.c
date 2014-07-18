@@ -159,6 +159,8 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
         job->particles[i].uy = 0;
 
         job->particles[i].material_data = NULL;
+
+        job->particles[i].id = i;
     }
     fprintf(stderr, "Done setting initial particle data.\n");
 
