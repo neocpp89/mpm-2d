@@ -107,6 +107,16 @@ int main(int argc, char **argv)
     testjob.material.fp64_props = testprops;
     testjob.t = 0;
     testjob.dt = 1e-3;
+
+
+    if (argc > 1) {
+        testjob.dt = atof(argv[1]);
+    }
+
+    if (testjob.dt <= 0) {
+        testjob.dt = 1e-3;
+    }
+
     FILE *fp = fopen("mattest_output.csv", "w");
 
     material_init(&testjob);
