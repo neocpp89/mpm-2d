@@ -120,7 +120,7 @@ int main(int argc, char **argv)
     FILE *fp = fopen("mattest_output.csv", "w");
 
     material_init(&testjob);
-    fprintf(fp, "%g,%g,%g,%g,%g,%g,%g,%g,%g,%g\n",
+    fprintf(fp, "%a,%a,%a,%a,%a,%a,%a,%a,%a,%a\n",
         testjob.t,
         p.exx_t, p.exy_t + p.wxy_t, p.exy_t - p.wxy_t, p.eyy_t,
         p.sxx, p.sxy, p.syy, mu(&p),
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
         calculate_stress(&testjob);
         update_density(&p, testjob.dt);
         testjob.t += testjob.dt;
-        fprintf(fp, "%g,%g,%g,%g,%g,%g,%g,%g,%g,%g\n",
+        fprintf(fp, "%a,%a,%a,%a,%a,%a,%a,%a,%a,%a\n",
             testjob.t,
             p.exx_t, p.exy_t + p.wxy_t, p.exy_t - p.wxy_t, p.eyy_t,
             p.sxx, p.sxy, p.syy, mu(&p),
