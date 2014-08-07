@@ -1722,9 +1722,14 @@ static void init_opengl(void)
 {
     float aspect = (float)screen_width / (float)screen_height;
     glViewport(0, 0, screen_width, screen_height);
+//    glMatrixMode(GL_PROJECTION);
+//    glLoadIdentity();
+//    gluPerspective(60.0, aspect, 0.1, 100.0);
+//    glMatrixMode(GL_MODELVIEW);
+
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(60.0, aspect, 0.1, 100.0);
+    glOrtho(-1.0, 1.0, -1.0/aspect, 1.0/aspect, -2.0, 2.0);
     glMatrixMode(GL_MODELVIEW);
     glClearColor(g_state.bgcolor.r, g_state.bgcolor.g, g_state.bgcolor.b,
                     g_state.bgcolor.a);
@@ -1737,6 +1742,9 @@ void heartbeat(void)
     int start_ticks;
     int delta;
     int delay;
+
+    static bool inMouseDrag = false;
+    static double initialX, initialY;
 
     SDL_Event event;
 
@@ -1801,6 +1809,28 @@ void heartbeat(void)
                     screen_height = event.resize.h;
                     init_opengl();
                     std::cout << "Resized to width: " << event.resize.w << " height: " << event.resize.h << std::endl;
+                    break;
+
+                case SDL_MOUSEBUTTONDOWN:
+                    inMouseDrag = true;
+                    initialX = event.button.x;
+                    initialY = event.button.y;
+                    break;
+
+                case SDL_MOUSEMOTION:
+                    if (inMouseDrag) {
+                        float aspect = screen->w / screen->h;
+                        g_state.camera_view[0] += 2.0 * (event.motion.x - initialX) / (screen->w);
+                        g_state.camera_view[1] += -2.0 * aspect * (event.motion.y - initialY) / (screen->h);
+                        glTranslatef(g_state.camera_view[0], g_state.camera_view[1],
+                            g_state.camera_view[2]);
+                        initialX = event.motion.x;
+                        initialY = event.motion.y;
+                    }
+                    break;
+
+                case SDL_MOUSEBUTTONUP:
+                    inMouseDrag = false;
                     break;
 
                 default:
