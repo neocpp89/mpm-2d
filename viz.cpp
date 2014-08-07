@@ -17,6 +17,8 @@
 #include <getopt.h>
 #include <unistd.h>
 
+#include <assert.h>
+
 #include <confuse.h>
 
 #include "viz_colormap.hpp"
@@ -44,19 +46,76 @@ do { \
     } \
 } while (0)
 
+template <typename fp, size_t dims> 
+class Point
+{
+    private:
+        std::array<fp, dims> coordinates;
+
+    public:
+        void setCoordinate(size_t dim, fp value)
+        {
+            if (dim < dims) {
+                coordinates[dim] = value;
+            }
+            return;
+        }
+
+        fp getCoordinate(size_t dim)
+        {
+            fp r;
+            if (dim < dims) {
+                r = coordinates[dim];
+            }
+            return r;
+        }
+};
+
+template <size_t dims>
 class Renderer
 {
     public:
         virtual ~Renderer();
         virtual void setColor(rgbaColor &color) = 0;
+//        virtual void drawQuad(Point &p0, Point &p1, Point &p2, Point &p3);
+        virtual void drawQuad(Point<double, dims> *begin, Point<double, dims> *end);
+        virtual void drawQuadstrip(Point<double, dims> *begin, Point<double, dims> *end);
 };
 
-class OpenGLRenderer : Renderer
+template <size_t dims>
+class OpenGLRenderer : Renderer<dims>
 {
     public:
         void setColor(rgbaColor &color)
         {
             glColor4f(color.getr(), color.getg(), color.getg(), color.geta());
+        }
+
+        void drawQuad(Point<double, dims> *begin, Point<double, dims> *end)
+        {
+            size_t numPoints = (end - begin);
+
+            assert(numPoints == 4);
+
+            return;
+        }
+
+        void drawQuadstrip(Point<double, dims> *begin, Point<double, dims> *end)
+        {
+
+//            glBegin(GL_QUADS);
+//            for (i = 0; i < gradation; i++) {
+//                apply_colormap(cm, i * delta, &r, &g, &b);
+//                glColor3f(r, g, b);
+//                xq0 = xl;
+//                yq0 = yl + h*i*delta;
+//                glVertex3f(xq0, yq0, -1.0f);
+//                glVertex3f(xq0 + w, yq0, -1.0f);
+//                glVertex3f(xq0 + w, yq0 + delta*h, -1.0f);
+//                glVertex3f(xq0, yq0 + delta*h, -1.0f);
+//            }
+//            glEnd();
+            return;
         }
 };
 
@@ -109,6 +168,8 @@ static struct g_state_s {
 
     char wm_title[1024];
     char loaded_file_path[1024];
+
+//    Colormap colormap;
 } g_state;
 
 typedef struct drawing_object_s {
@@ -245,25 +306,19 @@ class Node {
             double xl, yl, s;
             xl = (xp - x) / w;
             yl = (yp - y) / h;
-            s = 0;
 
-//            if (xl > 0 && yl > 0) {
-//                s = (1 - xl) * fabs(1 - yl);
-//            } else if (xl < 0 && yl > 0) {
-//                s = (1 + xl) * (1 - yl);
-//            } else if (xl > 0 && yl < 0) {
-//                s = (1 - xl) * (1 + yl);
-//            } else if (xl < 0 && yl < 0) {
-//                s = (1 + xl) * (1 + yl);
-//            }
-            
-    //        if (xl >= -1 && yl >= -1 && xl <= 1 && yl <= 1) {
-                s = (1 - fabs(xl)) * (1 - fabs(yl));
-    //        } else {
-    //            printf("warning s = %g %g %g\n", xl, yl, fabs(xl) * fabs(yl));
-    //        }
+            s = (1 - fabs(xl)) * (1 - fabs(yl));
+
+            if (s < 0) {
+                s = 0;
+            }
 
             return s;
+        }
+        void clear()
+        {
+            ClearStress();
+            return;
         }
         void ClearStress()
         {
@@ -304,9 +359,81 @@ class Node {
                 this->syy = this->syy / this->m;
             }
         }
+        friend std::ostream& operator<<(std::ostream& os, const Node& c)
+        {
+            os << "[ m: " << c.m << " x: " << c.x << " y: " << c.y <<
+                " sxx: " << c.sxx << " sxy: " << c.sxy <<
+                " syy: " << c.syy << " ]";
+            return os;
+        }
 };
 
-std::vector<Node> bgmesh;
+class BackgroundMesh {
+    private:
+        std::vector<Node> nodes;
+        size_t xdim;
+        size_t ydim;
+        double width;
+        double height;
+
+        size_t linearIndex(size_t x, size_t y)
+        {
+            return (y * xdim + x);
+        }
+
+    public:
+        BackgroundMesh(size_t _xdim = 0, size_t _ydim = 0, double _w = 1.0, double _h = 1.0)
+            : xdim(_xdim), ydim(_ydim), width(_w), height(_h)
+        {
+            double dx, dy;
+            nodes.reserve(xdim*ydim);
+            dx = width / (xdim - 1);
+            dy = height / (ydim - 1);
+
+            for (size_t j = 0; j < ydim; j++) {
+                for (size_t i = 0; i < xdim; i++) {
+                    nodes.push_back(Node(i * dx, j * dy, dx, dy));
+                }
+            }
+
+            return;
+        }
+
+        void clear()
+        {
+            for (auto &n : nodes) {
+                n.clear();
+            }
+            return;
+        }
+
+        void rescaleStress()
+        {
+            for (auto &n : nodes) {
+                n.RescaleStress();
+            }
+            return;
+        }
+
+        size_t numNodes()
+        {
+            return nodes.size();
+        }
+
+        template <typename Integral>
+        Node &operator()(Integral x, Integral y)
+        {
+            return nodes[linearIndex(x, y)];
+        }
+
+        template <typename Integral> 
+        Node &operator[](Integral lin)
+        {
+            return nodes[lin];
+        }
+};
+
+BackgroundMesh backgroundMesh;
 
 void DrawDisc(GLenum mode, float cx, float cy, float r, int num_segments) 
 { 
@@ -586,6 +713,25 @@ void parse_colormap(cm_t *cm, FILE *cm_file)
 
     return;
 }
+
+class Colorbar
+{
+    private:
+        Renderer<2> *renderer;
+        Colormap *colormap;
+        size_t gradation;
+        float x_bottomleft, y_bottomleft;
+        float width, height;
+
+    public:
+        Colorbar(Renderer<2> *_r, Colormap *_cm, size_t _grad, float _x, float _y, float _w, float _h)
+            : renderer(_r), colormap(_cm), gradation(_grad),
+            x_bottomleft(_x), y_bottomleft(_y), width(_w), height(_h)
+        {
+            return;
+        }
+
+};
 
 void draw_colorbar(cm_t *cm, int gradation, float xl, float yl, float w, float h)
 {
@@ -1153,9 +1299,7 @@ int draw_particles(void)
 //    glBegin(GL_POINTS);
 
     /* compute smoothed stresses */
-    for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
-        it->ClearStress();
-    }
+    backgroundMesh.clear();
 
     for (i = 0; i < np; i++) {
         if (!particles[i].active) {
@@ -1169,24 +1313,12 @@ int draw_particles(void)
         int list[4];
         element_to_node_list(&list[0], elem, bgsize);
 
-//        if (i == 0)
-//            printf("Elem %d: %d %d %d %d\n", elem, list[0], list[2], list[2], list[3]);
-
         for (int k = 0; k < 4; k++) {
-            bgmesh[list[k]].CopyStressFromParticle(&(particles[i]));
+            backgroundMesh[list[k]].CopyStressFromParticle(&(particles[i]));
         }
-
-//        for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
-//            it->CopyStressFromParticle(&(particles[i]));
-//        }
     }
 
-    for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
-        it->RescaleStress();
-//        it->Print();
-    }
-//    exit(0);
-//    printf("XXXXXXXXXXXXXXX\n");
+    backgroundMesh.rescaleStress();
 
     for (i = 0; i < np; i++) {
         if (!particles[i].active) {
@@ -1202,14 +1334,9 @@ int draw_particles(void)
         }
         int list[4];
         element_to_node_list(&list[0], elem, bgsize);
-//        if (i == 0)
-//            printf("Elem %d: %d %d %d %d\n", elem, list[0], list[1], list[2], list[3]);
         for (int k = 0; k < 4; k++) {
-            bgmesh[list[k]].CopyStressToParticle(&(particles[i]));
+            backgroundMesh[list[k]].CopyStressToParticle(&(particles[i]));
         }
-//        for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
-//            it->CopyStressToParticle(&(particles[i]));
-//        }
     }
 
     for (i = 0; i < np; i++) {
@@ -1578,20 +1705,9 @@ int draw_elements(void)
             hue = (hue - data_min) / data_delta;
         }
 
-//        if (p < 0.3819) {
-//            hue = 0;
-//        } else if (p > 0.64) {
-//            hue = 1;
-//        } else {
-//            hue = 0.5;
-//        } 
-
         if (p == 0.0f) {
             continue;
         }
-
-//        matlab_colormap(hue, &r, &g, &b);
-//        glColor3f(r, g, b);
 
         if (g_state.colormap.num_colors <= 0) {
             matlab_colormap(hue, &r, &g, &b);
@@ -1601,15 +1717,6 @@ int draw_elements(void)
             b = g_state.colormap.colors[0].b;
         } else {
             apply_colormap(&(g_state.colormap), hue, &r, &g, &b);
-//            if (hue >= 0.5) {
-//                r = 153/256.0;
-//                g = 255/256.0;
-//                b = 0/256.0;
-//            } else {
-//                r = 102/256.0;
-//                g = 0/256.0;
-//                b = 255/256.0;
-//            }
         }
         if (g_state.color_override == 0) {
             glColor3f(r, g, b);
@@ -2138,17 +2245,9 @@ int main(int argc, char* argv[])
     init_ftgl();
 
     /* Make background mesh */
-    for (int i = 0; i < bgsize; i++) {
-        for (int j = 0; j < bgsize; j++) {
-            bgmesh.push_back(Node(j / (float)(bgsize-1), i / (float)(bgsize-1), 1.0/(bgsize-1), 1.0/(bgsize-1)));
-        }
-    }
+    backgroundMesh = BackgroundMesh(bgsize, bgsize, 1.0, 1.0);
 
-//    for (std::vector<Node>::iterator it = bgmesh.begin(); it != bgmesh.end(); ++it) {
-//        it->Print();
-//    }
-
-    heartbeat();    // SDL main loop
+    heartbeat();
 
     SDL_Quit();
 

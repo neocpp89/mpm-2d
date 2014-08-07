@@ -61,8 +61,19 @@ class Colormap
         void parseColormap(std::istream &str);
 
     public:
-        Colormap() { std::stringstream s; s << viz_default_colormap_str; parseColormap(s); return; }
-        Colormap(std::string colormap_file) { cmapfile.open(colormap_file); parseColormap(cmapfile); return; }
+        Colormap()
+        {
+            std::stringstream s;
+            s << viz_default_colormap_str;
+            parseColormap(s);
+            return;
+        }
+        Colormap(std::string colormap_file) {
+            cmapfile.open(colormap_file);
+            parseColormap(cmapfile);
+            return;
+        }
+
         friend std::ostream& operator<<(std::ostream& os, const Colormap& c)
         {
             os << "colormap = { ";

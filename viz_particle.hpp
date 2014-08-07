@@ -32,7 +32,6 @@ class Particle {
     public:
         Particle(int _id, bool _active) : id(_id), active(_active) { return; }
 
-
         friend std::ostream& operator<<(std::ostream& os, Particle& p)
         {
             std::vector<std::string> keys;
