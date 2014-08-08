@@ -1,0 +1,49 @@
+# Project: mpm_2d.
+CC = gcc
+CXX = g++
+CFLAGS = -fno-omit-frame-pointer -march=native -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -rdynamic
+
+#takes form '-ldl -lpthread' etc.
+LIB = -lrt -lm -pthread -lblas -llapack -lcxsparse -lconfuse -ldl
+
+# modified CFLAGS for libraries
+LDFLAGS = $(LIB) -g
+
+# names of binary targets. we put this in here so the top level file can know
+# what to make and check for
+BIN = mpm_2d
+VIZBIN = viz
+MATERIAL_TEST_BIN = material-test
+
+MATERIAL_SRC = \
+    dp_rd.c \
+    dp_ri.c \
+    dp_ri_mt.c \
+    g_local_mu2.c \
+    g_local_mu2_reverse.c \
+    g_local.c \
+    g_local_mu2_ext.c \
+    g_nonlocal_avg.c \
+    g_nonlocal.c \
+    g_nonlocal_bicgstab.c \
+    g_nonlocal_mu2.c \
+    g_nonlocalxs71.c \
+    isolin.c
+
+SRC = \
+    main.c \
+    bc.c \
+    loading.c \
+    element.c \
+    particle.c \
+    process.c \
+    interpolate.c \
+    reader.c \
+    writer.c \
+    rtsafe.c \
+    material.c \
+    tensor.c \
+    map.c
+
+SOBJ = $(MATERIAL_SRC:.c=.so)
+
