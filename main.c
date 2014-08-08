@@ -30,7 +30,6 @@
 #include "process.h"
 #include "reader.h"
 #include "writer.h"
-#include "visualization.h"
 
 #define dispg(x) printf(#x " = %g\n", x)
 #define dispd(x) printf(#x " = %d\n", x)

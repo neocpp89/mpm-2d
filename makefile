@@ -21,7 +21,6 @@ SRC = \
 	particle.c \
 	process.c \
 	interpolate.c \
-	visualization.c \
 	reader.c \
 	writer.c \
 	rtsafe.c \
