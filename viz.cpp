@@ -765,6 +765,12 @@ void draw_colorbar(cm_t *cm, int gradation, float xl, float yl, float w, float h
 void tga_screendump(char *destFile, short W, short H)
 {
     FILE   *out = fopen(destFile, "w");
+
+    if (out == NULL) {
+        std::cerr << "Couldn't open file " << destFile << "." << std::endl;
+        return;
+    }
+
     char   pixel_data[3*W*H];
     short  TGAhead[] = {0, 2, 0, 0, 0, 0, W, H, 24};
     glReadBuffer(GL_FRONT);
@@ -782,10 +788,11 @@ void tga_screendump(char *destFile, short W, short H)
 int png_screendump(char* filename, int width, int height, char* title)
 {
     int code = 0;
+    char titlekey[] = "Title";
     FILE *fp;
-    png_structp png_ptr;
-    png_infop info_ptr;
-    png_bytep row;
+    png_structp png_ptr = NULL;
+    png_infop info_ptr = NULL;
+    png_bytep row = NULL;
 
     // Open file for writing (binary mode)
     fp = fopen(filename, "wb");
@@ -829,7 +836,7 @@ int png_screendump(char* filename, int width, int height, char* title)
     if (title != NULL) {
         png_text title_text;
         title_text.compression = PNG_TEXT_COMPRESSION_NONE;
-        title_text.key = "Title";
+        title_text.key = titlekey;
         title_text.text = title;
         png_set_text(png_ptr, info_ptr, &title_text, 1);
     }
@@ -841,12 +848,8 @@ int png_screendump(char* filename, int width, int height, char* title)
     row = (png_bytep) malloc(3 * width * sizeof(png_byte));
 
     // Write image data
-    int x, y;
-    for (y=0 ; y<height ; y++) {
-//        for (x=0 ; x<width ; x++) {
-//	        setRGB(&(row[x*3]), buffer[y*width + x]);
-//        }
-            glReadPixels(0, height-y-1, width, 1, GL_RGB, GL_UNSIGNED_BYTE, row);
+    for (int y = 0; y < height; y++) {
+        glReadPixels(0, height-y-1, width, 1, GL_RGB, GL_UNSIGNED_BYTE, row);
         png_write_row(png_ptr, row);
     }
 
@@ -1798,11 +1801,37 @@ bool init_sdl(void)
     return true;
 }
 
-void init_ftgl(void)
+void init_ftgl(std::vector<std::string> &fontlist)
 {
+    font = NULL;
+    small_font = NULL;
+
     /* Create a pixmap font from a TrueType file. */
-    font = ftglCreatePixmapFont("/usr/share/cups/fonts/FreeMono.ttf");
-    small_font = ftglCreatePixmapFont("/usr/share/cups/fonts/FreeMono.ttf");
+    bool got_valid_font = false;
+    for (auto const &s: fontlist) {
+        std::cout << "Attempting to load font " << s << "... ";
+        font = ftglCreatePixmapFont(s.c_str());
+        small_font = ftglCreatePixmapFont(s.c_str());
+        if (font != NULL && small_font != NULL) {
+            got_valid_font = true;
+            std::cout << "Success." << std::endl;
+            break;
+        } else {
+            // Something went wrong with one of the loads; cleanup if necessary.
+            std::cout << "Failure." << std::endl;
+            if (font != NULL) {
+                ftglDestroyFont(font);
+            }
+            if (small_font != NULL) {
+                ftglDestroyFont(small_font);
+            }
+        }
+    }
+
+    if (!got_valid_font) {
+        std::cerr << "FATAL: Couldn't load any fonts." << std::endl;
+        exit(0);
+    }
 
     centered_layout = ftglCreateSimpleLayout();
     small_centered_layout = ftglCreateSimpleLayout();
@@ -2007,6 +2036,7 @@ int main(int argc, char* argv[])
 {
     cfg_opt_t opts[] =
     {
+        CFG_STR_LIST("fonts", "{ /usr/share/cups/fonts/FreeMono.ttf, /usr/share/fonts/google-droid/DroidSansMono.ttf }", CFGF_NONE),
         CFG_INT("override-particle-colors", 0, CFGF_NONE),
         CFG_INT("draw-glyphs", 1, CFGF_NONE),
         CFG_FLOAT_LIST("color-by-index", "{0, 0, 0}", CFGF_NONE),
@@ -2221,11 +2251,14 @@ int main(int argc, char* argv[])
         SDL_WM_SetCaption(g_state.wm_title, g_state.wm_title);
     }
 
-    SimulationReader *s;
-    TXTReader t(leftover_argv[0], leftover_argv[0]);
+//    SimulationReader *s;
+//    TXTReader t(leftover_argv[0], leftover_argv[0]);
 
-    s = &t;
-    s->nextParticles();
+//    s = &t;
+//    auto XX = s->nextParticles();
+//    for (auto & k : XX) {
+//        std::cout << k["tau"] << std::endl;
+//    }
 
     if (g_state.data_file == NULL) {
         std::cout << "No data file. Exiting." << std::endl;
@@ -2241,8 +2274,13 @@ int main(int argc, char* argv[])
         parse_colormap(&(g_state.colormap), colormap_file);
     }
 
+    std::vector<std::string> fontlist;
+    for (int i = 0; i < cfg_size(g_state.cfg, "fonts"); i++) {
+        fontlist.push_back(std::string(cfg_getnstr(g_state.cfg, "fonts", i)));
+    }
+
     init_opengl();
-    init_ftgl();
+    init_ftgl(fontlist);
 
     /* Make background mesh */
     backgroundMesh = BackgroundMesh(bgsize, bgsize, 1.0, 1.0);

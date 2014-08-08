@@ -22,6 +22,7 @@ typedef struct {
     const char *format_specifier;
     const char *fieldname;
 } headerinfo_t;
+#define HEADER_FP64(field) { offsetof(particle_t, field), "%lg", #field }
 #define HEADERINFO(field, format) { offsetof(particle_t, field), format, #field }
 #define NAMEDHEADERINFO(field, format, name) { offsetof(particle_t, field), format, name }
 

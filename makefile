@@ -3,6 +3,7 @@
 
 # Project: mpm_2d.
 CC = gcc
+CXX = g++
 BIN = mpm_2d
 VIZBIN = viz
 CFLAGS = -fno-omit-frame-pointer -c -march=native -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -I/usr/lib/openmpi/include/ -rdynamic
@@ -75,7 +76,7 @@ $(BIN): $(OBJ)
 	$(CC) $(OBJ) -o $@ $(LDFLAGS)
 
 $(VIZBIN): viz.cpp viz_colormap.cpp viz_reader.cpp
-	g++ -std=c++11 -g -O3 -march=native -I/usr/include/freetype2/ -Wall $^ -o $@ -lm -lSDL -lGL -lGLU -lftgl -lpng -lSDL_image -lconfuse
+	$(CXX) -std=c++11 -g -O3 -march=native -I/usr/include/freetype2/ -Wall $^ -o $@ -lm -lSDL -lGL -lGLU -lftgl -lpng -lSDL_image -lconfuse
 
 %.o : %.c
 	$(CC) $(CFLAGS) $< -o $@

@@ -127,9 +127,9 @@ class Particle {
             bool set = false;
             if (keyExists("tau") && keyExists("p")) {
                 if (data["p"] > 0) {
-                    data["tau"] = data["tau"] / data["p"];
+                    data["mu"] = data["tau"] / data["p"];
                 } else {
-                    data["tau"] = 1e16;
+                    data["mu"] = 1e16;
                 }
                 set = true;
             }
