@@ -47,6 +47,43 @@ class InfoFileParser
         */
         size_t totalFrames;
 
+        void extractFromKVPairs()
+        {
+            /*
+                Set some members of this class according to what we stored in
+                the dictionary.
+            */
+//            std:string k;
+
+//            k = "totalFrames";
+//            if (std::find(dict.begin(), dict.end(), k) != dict.end()) {
+//                totalFrames = std::stoull(dict[k]);
+//            }
+
+            totalFrames = dict.size();
+
+            return;
+        }
+
+    public:
+        InfoFileParser(bool _strict = true)
+            : strict(_strict), totalFrames(0)
+        {
+            return;
+        }
+
+        InfoFileParser(std::string const &_infoFile, bool _strict = true)
+            : infoFile(_infoFile), strict(_strict), totalFrames(0)
+        {
+            readInfoFile(infoFile);
+            return;
+        }
+
+        ~InfoFileParser()
+        {
+            return;
+        }
+
         void readInfoFile(std::string const &cfgfile)
         {
             infoStream.open(cfgfile);
@@ -80,37 +117,6 @@ class InfoFileParser
             } while (true);
             infoStream.close();
             extractFromKVPairs();
-            return;
-        }
-
-        void extractFromKVPairs()
-        {
-            /*
-                Set some members of this class according to what we stored in
-                the dictionary.
-            */
-//            std:string k;
-
-//            k = "totalFrames";
-//            if (std::find(dict.begin(), dict.end(), k) != dict.end()) {
-//                totalFrames = std::stoull(dict[k]);
-//            }
-
-            totalFrames = dict.size();
-
-            return;
-        }
-
-    public:
-        InfoFileParser(std::string const &_infoFile, bool _strict = true)
-            : infoFile(_infoFile), strict(_strict), totalFrames(0)
-        {
-            readInfoFile(infoFile);
-            return;
-        }
-
-        ~InfoFileParser()
-        {
             return;
         }
 
