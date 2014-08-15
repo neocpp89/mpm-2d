@@ -7,6 +7,10 @@
 #include <cctype>
 #include <locale>
 
+#include "tokenizer.hpp"
+
+#ifndef __INFOPARSER_HPP__
+#define __INFOPARSER_HPP__
 /*
     Trimming code from:
     http://stackoverflow.com/questions/216823/whats-the-best-way-to-trim-stdstring
@@ -27,11 +31,6 @@ static inline std::string &rtrim(std::string &s) {
 static inline std::string &trim(std::string &s) {
         return ltrim(rtrim(s));
 }
-
-#include "tokenizer.hpp"
-
-#ifndef __INFOPARSER_HPP__
-#define __INFOPARSER_HPP__
 
 class InfoFileParser
 {
