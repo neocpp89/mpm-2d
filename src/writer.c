@@ -95,9 +95,11 @@ size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
     size_t bytes_out = 0;
     size_t particles_written = 0;
     char fp_name[1024];
+    char fp_name_nobase[1024];
     FILE *fp = NULL;
 
-    snprintf(fp_name, 1024, "%sfp_%d.csv", directory, job->frame);
+    snprintf(fp_name_nobase, 1024, "fp_%d.h,csv", job->frame);
+    snprintf(fp_name, 1024, "%s%s", directory, fp_name_nobase);
     fp = fopen(fp_name, "w+");
     if (fp != NULL) {
         if (particle_output_fn != NULL) {
@@ -128,8 +130,8 @@ size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
         Write metadata to file (if it exists).
     */
     if (metafd != NULL) {
-        bytes_out += fprintf(metafd, "%s,%zu,%d,%lg\n",
-            fp_name, particles_written, job->frame, job->t);
+        bytes_out += fprintf(metafd, "frame-%d = %s,%zu,%d,%lg\n",
+            job->frame, fp_name_nobase, particles_written, job->frame, job->t);
     }
 
     return bytes_out;
@@ -156,7 +158,7 @@ size_t v2_write_particle(FILE *fd, job_t *job, particle_t *p)
 /*----------------------------------------------------------------------------*/
 
 /*---write_particle-----------------------------------------------------------*/
-void inline write_particle(FILE *fd, particle_t p, double active)
+void write_particle(FILE *fd, particle_t p, double active)
 {
     int i, j;
     fprintf(fd, "%lg %lg %lg %lg %lg %lg ",
