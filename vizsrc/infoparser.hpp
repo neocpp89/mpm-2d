@@ -39,7 +39,7 @@ class InfoFileParser
         std::string infoFile;
         std::string basename;
         bool strict;
-        std::istream infoStream;
+        std::ifstream infoStream;
 
         std::unordered_map<std::string, std::string> dict; // key-value pairs
 
@@ -80,7 +80,7 @@ class InfoFileParser
                 }
             } while (true);
             infoStream.close();
-            extractFromDict();
+            extractFromKVPairs();
             return;
         }
 
@@ -90,12 +90,14 @@ class InfoFileParser
                 Set some members of this class according to what we stored in
                 the dictionary.
             */
-            std:string k;
+//            std:string k;
 
-            k = "totalFrames";
-            if (std::find(dict.begin(), dict.end(), k) != dict.end()) {
-                totalFrames = std::stoull(dict[k]);
-            }
+//            k = "totalFrames";
+//            if (std::find(dict.begin(), dict.end(), k) != dict.end()) {
+//                totalFrames = std::stoull(dict[k]);
+//            }
+
+            totalFrames = dict.size();
 
             return;
         }
@@ -104,7 +106,6 @@ class InfoFileParser
         InfoFileParser(std::string const &_infoFile, bool _strict = true)
             : infoFile(_infoFile), strict(_strict), totalFrames(0)
         {
-            basename = 
             readInfoFile(infoFile);
             return;
         }
@@ -115,6 +116,8 @@ class InfoFileParser
         }
 
         size_t getTotalFrames() { return totalFrames; }
+
+        std::string getFrameCSVFilename(size_t frame) { return "fp_"+std::to_string(frame)+".h.csv"; }
 
         friend std::ostream& operator<<(std::ostream& os, const InfoFileParser& ip)
         {

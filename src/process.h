@@ -66,6 +66,8 @@ typedef struct op_control_s {
     FILE *state_fd;
     FILE *log_fd;
 
+    FILE *info_fd;
+
     char *job_name;
     char *job_description;
     int job_id;

@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 
+#include "infoparser.hpp"
 #include "tokenizer.hpp"
 #include "viz_particle.hpp"
 #include "viz_element.hpp"
@@ -66,6 +67,8 @@ class CSVReader : public RandomAccessSimulationReader
             infoStream.open(infoFile);
             return;
         }
+        std::vector<Particle> nextParticles();
+        std::vector<Element> nextElements();
 
     private:
         std::string infoFile;

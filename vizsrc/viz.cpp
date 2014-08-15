@@ -1992,7 +1992,7 @@ void heartbeat(void)
         }
         SDL_UnlockSurface(screen);
         delta = SDL_GetTicks() - start_ticks;
-        delay = (1000.0f / g_state.wanted_fps - delta);
+        delay = ((1000.0f / g_state.wanted_fps) - delta);
 
         if (delay > 0) {
             SDL_Delay(delay);

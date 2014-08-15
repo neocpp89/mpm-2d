@@ -98,7 +98,7 @@ size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
     char fp_name_nobase[1024];
     FILE *fp = NULL;
 
-    snprintf(fp_name_nobase, 1024, "fp_%d.h,csv", job->frame);
+    snprintf(fp_name_nobase, 1024, "fp_%d.h.csv", job->frame);
     snprintf(fp_name, 1024, "%s%s", directory, fp_name_nobase);
     fp = fopen(fp_name, "w+");
     if (fp != NULL) {

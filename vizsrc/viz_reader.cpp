@@ -76,3 +76,15 @@ std::vector<Element> TXTReader::nextElements()
     return next;
 }
 
+std::vector<Particle> CSVReader::nextParticles()
+{
+    std::vector<Particle> next; 
+    return next;
+}
+
+std::vector<Element> CSVReader::nextElements()
+{
+    std::vector<Element> next;
+    return next;
+}
+
