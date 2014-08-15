@@ -21,12 +21,12 @@ SOBJ = $(MATERIAL_SRC:.c=.so)
 all: $(BIN) $(VIZBIN) $(SOBJ) $(MATERIAL_TEST_BIN)
 
 clean:
-	make -f makefile -C $(VIZDIR) clean
-	make -f makefile -C $(MATERIALDIR) clean
-	make -f makefile -C $(MPMDIR) clean
+	${MAKE} -f makefile -C $(VIZDIR) clean
+	${MAKE} -f makefile -C $(MATERIALDIR) clean
+	${MAKE} -f makefile -C $(MPMDIR) clean
 
 $(MATERIAL_TEST_BIN): 
-	make -f makefile -C $(MATERIALDIR) ../$@
+	${MAKE} -f makefile -C $(MATERIALDIR) ../$@
 
 backup-nogit:
 	tar --exclude-vcs --exclude=jobs -cvzf ../mpm_2d_`date +%Y%m%d`.tar.gz ../`basename $(CURDIR)`;
@@ -35,7 +35,7 @@ backup:
 	tar --exclude=jobs --exclude=figs -cvzf ../mpm_2d_`date +%Y%m%d`.tar.gz ../`basename $(CURDIR)`;
 
 distbackup: clean
-	make backup-nogit
+	${MAKE} backup-nogit
 
 doc: Doxyfile
 	doxygen
@@ -44,12 +44,12 @@ Doxyfile:
 	doxygen -g
 
 $(BIN):
-	make -f makefile -C $(MPMDIR) ../$@
+	${MAKE} -f makefile -C $(MPMDIR) ../$@
 
 $(VIZBIN):
-	make -f makefile -C $(VIZDIR)
+	${MAKE} -f makefile -C $(VIZDIR)
 
 materials: $(SOBJ)
 
 $(SOBJ):
-	make -f makefile -C $(MATERIALDIR) ../$@
+	${MAKE} -f makefile -C $(MATERIALDIR) ../$@
