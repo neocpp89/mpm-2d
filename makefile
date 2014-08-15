@@ -13,6 +13,9 @@ SOBJ = $(MATERIAL_SRC:.c=.so)
 
 .PHONY: clean
 .PHONY: backup
+.PHONY: $(VIZBIN)
+.PHONY: $(BIN)
+.PHONY: $(SOBJ)
 
 # Default target(s)
 all: $(BIN) $(VIZBIN) $(SOBJ) $(MATERIAL_TEST_BIN)
@@ -46,5 +49,7 @@ $(BIN):
 $(VIZBIN):
 	make -f makefile -C $(VIZDIR)
 
-%.so : $(MATERIALDIR)/%.c
+materials: $(SOBJ)
+
+$(SOBJ):
 	make -f makefile -C $(MATERIALDIR) ../$@

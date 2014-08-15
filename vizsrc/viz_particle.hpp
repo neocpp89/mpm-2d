@@ -55,29 +55,6 @@ class Particle {
 
             return os;
         }
-//        void print()
-//        {
-//            std::vector<std::string> keys;
-//            keys.reserve(data.size());
-
-//            std::cout << id << (active?": { ":"[inactive]: { ");
-//            for (int i = 0; i < 2; i++) {
-//                std::cout << "stress-eigenvalue[" << i << "]:" << eigvals[i] << " ";
-//                std::cout << "stress-eigenvector-angle[" << i << "]:" << eigangs[i] << " ";
-//            }
-//            std::cout << "data = { ";
-//            for (auto const &kv: data) {
-//                keys.push_back(kv.first);
-//            }
-//            std::sort(keys.begin(), keys.end());
-//            for (auto const &k: keys) {
-//                std::cout << k << ":" << data[k] << " ";
-//            }
-//            std::cout << "} ";
-//            std::cout << "}" << std::endl;
-
-//            return;
-//        }
 
         bool keyExists(std::string key) const { return (data.count(key) == 1); }
         void setKeyValuePair(std::string key, double val) { data[key] = val; }

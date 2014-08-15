@@ -6,24 +6,9 @@
 #include <limits>
 #include <cmath>
 
+#include "tokenizer.hpp"
+#include "viz_particle.hpp"
 #include "viz_reader.hpp"
-
-/* from http://stackoverflow.com/questions/1120140/how-can-i-read-and-parse-csv-files-in-c */
-std::vector<std::string> Tokenizer::splitNextLine(std::istream& str, const char delim)
-{
-    std::vector<std::string>   result;
-    std::string line;
-    std::getline(str,line);
-
-    std::stringstream lineStream(line);
-    std::string cell;
-
-    while(std::getline(lineStream,cell,delim)) {
-        result.push_back(cell);
-    }
-
-    return result;
-}
 
 std::vector<Particle> TXTReader::nextParticles()
 {
@@ -80,25 +65,8 @@ std::vector<Particle> TXTReader::nextParticles()
         p.calculateStressEigenvalues();
         p.calculateStressEigenvectors();
 
-//        if (p.keyExists("sxx") && p.keyExists("sxy") && p.keyExists("syy")) {
-//            p["p"] = -0.5 * (p["sxx"] + p["syy"]);
-//            p["s0xx"] = p["sxx"] + p["p"];
-//            p["s0xy"] = p["sxy"];
-//            p["s0yy"] = p["syy"] + p["p"];
-//            p["tau"] = std::sqrt(0.5 * (p["s0xx"]*p["s0xx"] + 2*p["s0xy"]*p["s0xy"] + p["s0yy"]*p["s0yy"]));
-//            if (p["p"] > 0) {
-//                p["mu"] = p["tau"] / p["p"];
-//            } else {
-//                p["mu"] = 1e16;
-//            }
-//        }
-
-//        std::cout << p << std::endl;
-
-//        p.print();
     }
-//    std::cout << "Current Frame: " << frame << std::endl;
-//    std::cout << "Current Time: " << time << std::endl;
+
     return next;
 }
 

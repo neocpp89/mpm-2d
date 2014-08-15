@@ -11,6 +11,7 @@ CXXFLAGS += -I../src
 LDFLAGS = -lm -lSDL -lGL -lGLU -lftgl -lpng -lSDL_image -lconfuse
 
 SRC = \
+    tokenizer.cpp \
     viz.cpp \
     viz_colormap.cpp \
     viz_reader.cpp

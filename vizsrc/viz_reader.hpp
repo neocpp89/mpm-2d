@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 
+#include "tokenizer.hpp"
 #include "viz_particle.hpp"
 #include "viz_element.hpp"
 
@@ -16,6 +17,13 @@ class SimulationReader
         virtual std::vector<Element> nextElements() = 0;
         virtual double currentTime() = 0;
         virtual size_t currentFrame() = 0;
+};
+
+class RandomAccessSimulationReader: public SimulationReader
+{
+    public:
+        virtual ~RandomAccessSimulationReader() { return; }
+        virtual std::vector<Particle> loadParticles(size_t frame) = 0;
 };
 
 class TXTReader : public SimulationReader
@@ -49,12 +57,19 @@ class TXTReader : public SimulationReader
 
 };
 
-class Tokenizer
+class CSVReader : public RandomAccessSimulationReader
 {
     public:
-        Tokenizer() { return; }
-        static std::vector<std::string> splitNextLine(std::istream& str, const char delim = ' ');
-};
+        CSVReader(std::string const & _infoFile) :
+            infoFile(_infoFile)
+        {
+            infoStream.open(infoFile);
+            return;
+        }
 
+    private:
+        std::string infoFile;
+        std::ifstream infoStream;
+};
 #endif
 
