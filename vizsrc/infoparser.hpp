@@ -65,6 +65,18 @@ class InfoFileParser
             return;
         }
 
+        std::string getBasename(std::string const &path)
+        {
+            std::string r;
+            size_t idx = path.find_last_of('/');
+            if (idx != path.npos) {
+                r = path.substr(0, idx);
+            } else {
+                r = "";
+            }
+            return r;
+        }
+
     public:
         InfoFileParser(bool _strict = true)
             : strict(_strict), totalFrames(0)
@@ -117,12 +129,13 @@ class InfoFileParser
             } while (true);
             infoStream.close();
             extractFromKVPairs();
+            basename = getBasename(cfgfile);
             return;
         }
 
         size_t getTotalFrames() { return totalFrames; }
 
-        std::string getFrameCSVFilename(size_t frame) { return "fp_"+std::to_string(frame)+".h.csv"; }
+        std::string getFrameCSVFilename(size_t frame) { return basename+"/fp_"+std::to_string(frame)+".h.csv"; }
 
         friend std::ostream& operator<<(std::ostream& os, const InfoFileParser& ip)
         {

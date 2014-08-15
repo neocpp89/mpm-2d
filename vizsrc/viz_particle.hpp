@@ -30,6 +30,8 @@ class Particle {
 //        double velocity_angle;
 
     public:
+        void setId(int _id) { id = _id; return; }
+
         Particle(int _id, bool _active) : id(_id), active(_active) { return; }
 
         friend std::ostream& operator<<(std::ostream& os, Particle& p)

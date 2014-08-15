@@ -47,7 +47,7 @@ class TXTReader : public SimulationReader
         std::string particle_filename;
         std::string element_filename;
 
-        double frame;
+        size_t frame;
         double time;
 
         enum ReaderState { FRAME, PARTICLE, ELEMENT };
@@ -62,17 +62,30 @@ class CSVReader : public RandomAccessSimulationReader
 {
     public:
         CSVReader(std::string const & _infoFile) :
-            infoFile(_infoFile)
+            infoFile(_infoFile), time(0), frame(0)
         {
+            ifp.readInfoFile(infoFile);
             infoStream.open(infoFile);
             return;
         }
         std::vector<Particle> nextParticles();
         std::vector<Element> nextElements();
+        std::vector<Particle> loadParticles(size_t frame);
+
+        double currentTime() { return time; }
+        size_t currentFrame() { return frame; }
 
     private:
         std::string infoFile;
         std::ifstream infoStream;
+
+        InfoFileParser ifp;
+
+        double time;
+        size_t frame;
+
+        template <typename Iterator>
+        void readSingleFrame(Iterator particleIt, std::ifstream &dataStream, bool has_header = true);
 };
 #endif
 

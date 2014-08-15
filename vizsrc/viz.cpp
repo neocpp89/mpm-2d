@@ -1658,16 +1658,7 @@ int draw_elements(void)
     data_max = g_state.data_max;
     data_min = g_state.data_min;
     data_delta = data_max - data_min;
-    double p;
-//    for (i = 0; i < ne; i++) {
-//        p = elements[i].syy + elements[i].sxx;
-//        if (p > data_max) {
-//            data_max = p;
-//        }
-//        if (p < data_min) {
-//            data_min = p;
-//        }
-//    }
+    double p = 0;
 
     for (i = 0; i < ne; i++) {
         if (g_state.data_var == VAR_SXY) {
@@ -1678,9 +1669,6 @@ int draw_elements(void)
             p = elements[i].sxx;
         } else if (g_state.data_var == VAR_PRESSURE) {
             p = -0.5 * (elements[i].sxx + elements[i].syy);
-//            if (p != 0) {
-//                printf("p = %g\n", p);
-//            }
         } else if (g_state.data_var == VAR_MU) {
             double p_t;
             double t0xx;
@@ -2252,12 +2240,13 @@ int main(int argc, char* argv[])
     }
 
 //    SimulationReader *s;
-//    TXTReader t(leftover_argv[0], leftover_argv[0]);
+//    CSVReader t(leftover_argv[0]);
 
 //    s = &t;
 //    auto XX = s->nextParticles();
+//    std::cout << "read particle size: " << XX.size() << std::endl;
 //    for (auto & k : XX) {
-//        std::cout << k["tau"] << std::endl;
+//        std::cout << k << std::endl;
 //    }
 
     if (g_state.data_file == NULL) {
@@ -2275,7 +2264,7 @@ int main(int argc, char* argv[])
     }
 
     std::vector<std::string> fontlist;
-    for (int i = 0; i < cfg_size(g_state.cfg, "fonts"); i++) {
+    for (size_t i = 0; i < cfg_size(g_state.cfg, "fonts"); i++) {
         fontlist.push_back(std::string(cfg_getnstr(g_state.cfg, "fonts", i)));
     }
 
