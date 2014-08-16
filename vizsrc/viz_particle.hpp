@@ -62,10 +62,11 @@ class Particle {
         void setKeyValuePair(std::string key, double val) { data[key] = val; }
         double getValue(std::string key) { if (keyExists(key)) { return data[key]; } return 0; }
         double &operator[](const std::string key) { return data[key]; }
+        double operator[](const std::string key) const { return data.at(key); }
 
         void setActive() { active = true; return; }
         void setInactive() { active = false; return; }
-        bool isActive() { return active; }
+        bool isActive() const { return active; }
 
         bool calculatePressure()
         {

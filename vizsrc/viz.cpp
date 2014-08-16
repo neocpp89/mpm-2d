@@ -53,6 +53,13 @@ class Point
         std::array<fp, dims> coordinates;
 
     public:
+        Point(fp x = 0, fp y = 0, fp z = 0)
+        {
+            setCoordinate(0, x);
+            setCoordinate(1, y);
+            setCoordinate(2, z);
+            return;
+        }
         void setCoordinate(size_t dim, fp value)
         {
             if (dim < dims) {
@@ -70,6 +77,8 @@ class Point
             return r;
         }
 };
+
+typedef Point<float, 2> Point2f;
 
 template <size_t dims>
 class Renderer
@@ -172,7 +181,8 @@ static struct g_state_s {
     char wm_title[1024];
     char loaded_file_path[1024];
 
-//    Colormap colormap;
+    Colormap *cmap;
+    SimulationReader *reader;
 } g_state;
 
 typedef struct drawing_object_s {
@@ -298,36 +308,56 @@ enum e_particle_variables {
 
 BackgroundMesh backgroundMesh;
 
-void DrawDisc(GLenum mode, float cx, float cy, float r, int num_segments) 
-{ 
-    //from http://slabode.exofire.net/circle_draw.shtml
-    float theta = 2 * M_PI / float(num_segments); 
-    float c = cosf(theta);//precalculate the sine and cosine
-    float s = sinf(theta);
-    float t;
-
-    float x = r;//we start at angle = 0 
-    float y = 0; 
-    
-    glBegin(mode); 
-    for(int ii = 0; ii < num_segments; ii++) 
-    { 
-        glVertex3f(x + cx, y + cy, -1.001f);//output vertex 
-        
-        //apply the rotation matrix
-        t = x;
-        x = c * x - s * y;
-        y = s * t + c * y;
-    } 
-    glEnd();
-    return;
-}
-
-void DrawCircle(float cx, float cy, float r, int num_segments) 
+class GLGraphicsPrimitive
 {
-    DrawDisc(GL_LINE_LOOP, cx, cy, r, num_segments);
-    return;
-}
+    public:
+        virtual ~GLGraphicsPrimitive() { return; };
+        virtual void draw(GLenum mode) = 0;
+};
+
+class GLGPDisc: public GLGraphicsPrimitive
+{
+    Point2f center;
+    float r;
+    size_t numSegments;
+    
+    public:
+        GLGPDisc(Point2f const &_center, float _r, size_t _numSegments = 10) :
+            center(_center), r(_r), numSegments(_numSegments)
+        {
+            return;
+        }
+
+        void draw(GLenum mode = GL_POLYGON)
+        {
+            //from http://slabode.exofire.net/circle_draw.shtml
+            float cx = center.getCoordinate(0);
+            float cy = center.getCoordinate(1);
+            float theta = 2 * M_PI / float(numSegments); 
+            float c = cosf(theta);//precalculate the sine and cosine
+            float s = sinf(theta);
+            float t;
+
+            float x = r;//we start at angle = 0 
+            float y = 0; 
+            
+            glBegin(mode); 
+            for(size_t i = 0; i < numSegments; i++) 
+            { 
+                glVertex3f(x + cx, y + cy, -1.001f);//output vertex 
+                
+                //apply the rotation matrix
+                t = x;
+                x = c * x - s * y;
+                y = s * t + c * y;
+            } 
+            glEnd();
+            return;
+        }
+
+        void setCenter(Point2f &p) { center = p; }
+
+};
 
 void calc_stress_eigenvalues(aux_particle_t *p)
 {
@@ -1341,8 +1371,9 @@ int draw_particles(void)
         }
 #endif
 //        glVertex3f(particles[i].x, particles[i].y, -1.0f);
-#define NUM_SEGS 20
-        DrawDisc(GL_POLYGON, particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+
+//#define NUM_SEGS 20
+//        DrawDisc(GL_POLYGON, particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
 
         if (particles[i].has_corners && (g_state.draw_glyphs != 0)) {
             glBegin(GL_LINE_LOOP);
@@ -1352,20 +1383,20 @@ int draw_particles(void)
             glEnd();
         }
 
-        if (g_state.mirror_x) {
+//        if (g_state.mirror_x) {
 //            glVertex3f(particles[i].x, -particles[i].y, -1.0f);
-            DrawDisc(GL_POLYGON, particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
-        }
+//            DrawDisc(GL_POLYGON, particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+//        }
 
-        if (g_state.mirror_y) {
+//        if (g_state.mirror_y) {
 //            glVertex3f(-particles[i].x, particles[i].y, -1.0f);
-            DrawDisc(GL_POLYGON, -particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
-        }
+//            DrawDisc(GL_POLYGON, -particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+//        }
 
-        if (g_state.mirror_x && g_state.mirror_y) {
+//        if (g_state.mirror_x && g_state.mirror_y) {
 //            glVertex3f(-particles[i].x, -particles[i].y, -1.0f);
-            DrawDisc(GL_POLYGON, -particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
-        }
+//            DrawDisc(GL_POLYGON, -particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+//        }
 
 //        glColor3f(1.0 - g_state.bgcolor.r, 1.0 - g_state.bgcolor.g, 1.0 - g_state.bgcolor.b);
 //        DrawCircle(particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
@@ -1839,7 +1870,18 @@ void heartbeat(void)
         if (g_state.is_element_file) {
             draw_elements();
         } else {
-            draw_particles();
+            auto particles = g_state.reader->nextParticles();
+            glClearColor(0,0,0,0);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glLoadIdentity();
+            glColor3f(1,0,1);
+            for (auto const &p : particles) {
+                if (p.isActive()) {
+                    auto g = GLGPDisc(Point2f(p["x"], p["y"]), 0.01);
+                    g.draw();
+                }
+            }
+//            draw_particles();
         }
         SDL_UnlockSurface(screen);
         delta = SDL_GetTicks() - start_ticks;
@@ -2102,10 +2144,10 @@ int main(int argc, char* argv[])
         SDL_WM_SetCaption(g_state.wm_title, g_state.wm_title);
     }
 
-//    SimulationReader *s;
+    TXTReader t(leftover_argv[0], leftover_argv[0]);
 //    CSVReader t(leftover_argv[0]);
 
-//    s = &t;
+    g_state.reader = &t;
 //    auto XX = s->nextParticles();
 //    std::cout << "read particle size: " << XX.size() << std::endl;
 //    for (auto & k : XX) {
