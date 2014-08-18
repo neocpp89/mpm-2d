@@ -47,7 +47,7 @@ else:
     toks = sys.argv[3].split(':')
     ftoks = map(int, toks)
     if (len(toks) == 1):
-        framevars = ftoks[0]
+        framevars = [ftoks[0]]
     elif (len(toks) == 2):
         framevars = list(range(ftoks[0], ftoks[1]))
     elif (len(toks) == 3):
@@ -58,6 +58,10 @@ print framevars
 print 'Using input file:', infile
 
 pvars = plotvars.split(',')
+try:
+    pvars.index('active')
+except:
+    pvars.append('active')
 
 i = 0
 with open(infile, 'r') as f_in:
@@ -84,6 +88,7 @@ with open(infile, 'r') as f_in:
                 with open(outfile, 'w') as f_csv:
                     wcsv = csv.writer(f_csv)
                     row = ['Particle ID at ' + str(frame['time']) + 's']
+
                     for var in pvars:
                         row.append(var)
                     wcsv.writerow(row)
@@ -92,7 +97,7 @@ with open(infile, 'r') as f_in:
                         for var in pvars:
                             row.append(frame[var][j])
                         wcsv.writerow(row)
-            if i > max(framevars):
+            if i >= max(framevars):
                 break
             i = i + 1
 
