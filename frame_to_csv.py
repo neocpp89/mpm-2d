@@ -33,9 +33,6 @@ def particle_callback(particle):
         particle['mu'] = numpy.inf
     return particle
 
-
-
-
 if (len(sys.argv) <= 3):
     print 'usage: FRAME_DATA plotvariables frame [outfile]'
     print '       plotvariables are of the form \'xdata,ydata,...\'.'
@@ -43,14 +40,22 @@ if (len(sys.argv) <= 3):
 
 infile = sys.argv[1]
 plotvars = sys.argv[2]
-framevar = int(sys.argv[3])
-if (len(sys.argv) > 4):
-    outfile = sys.argv[4]
+
+if (sys.argv[3] == '*'):
+    framevars == None
 else:
-    outfile = ".".join(infile.split('.')[:-1]) + str(framevar) + '.csv'
+    toks = sys.argv[3].split(':')
+    ftoks = map(int, toks)
+    if (len(toks) == 1):
+        framevars = ftoks[0]
+    elif (len(toks) == 2):
+        framevars = list(range(ftoks[0], ftoks[1]))
+    elif (len(toks) == 3):
+        framevars = list(range(ftoks[0], ftoks[2], ftoks[1]))
+
+print framevars
 
 print 'Using input file:', infile
-print 'Creating output file:', outfile
 
 pvars = plotvars.split(',')
 
@@ -64,26 +69,32 @@ with open(infile, 'r') as f_in:
             break
         else:
             print "Read Frame:", i
-            if ((framevar != -1 and i >= framevar)):
+            if (framevars == None or i in framevars):
+                if (len(pvars) > 1):
+                    print 'Writing', ', '.join(pvars[:-1]), 'and', pvars[-1], 'of frame', i, 'to csv file.'
+                else:
+                    print 'Writing', pvars[-1], 'of frame', i, 'to csv file.'
+
+                if (len(sys.argv) > 4):
+                    outfile = sys.argv[4]
+                else:
+                    outfile = ".".join(infile.split('.')[:-1]) + str(i) + '.csv'
+
+                print 'Creating output file:', outfile
+                with open(outfile, 'w') as f_csv:
+                    wcsv = csv.writer(f_csv)
+                    row = ['Particle ID at ' + str(frame['time']) + 's']
+                    for var in pvars:
+                        row.append(var)
+                    wcsv.writerow(row)
+                    for j in xrange(0, len(frame[pvars[0]])):
+                        row = [j]
+                        for var in pvars:
+                            row.append(frame[var][j])
+                        wcsv.writerow(row)
+            if len(framevars) == 0:
                 break
             i = i + 1
-
-if (len(pvars) > 1):
-    print 'Writing', ', '.join(pvars[:-1]), 'and', pvars[-1], 'of frame', i, 'to csv file.'
-else:
-    print 'Writing', pvars[-1], 'of frame', i, 'to csv file.'
-
-with open(outfile, 'w') as f_csv:
-    wcsv = csv.writer(f_csv)
-    row = ['Particle ID at ' + str(frame['time']) + 's']
-    for var in pvars:
-        row.append(var)
-    wcsv.writerow(row)
-    for i in xrange(0, len(frame[pvars[0]])):
-        row = [i]
-        for var in pvars:
-            row.append(frame[var][i])
-        wcsv.writerow(row)
 
 print "Bye."
 
