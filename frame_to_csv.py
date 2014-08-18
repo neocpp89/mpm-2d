@@ -34,7 +34,7 @@ def particle_callback(particle):
     return particle
 
 if (len(sys.argv) <= 3):
-    print 'usage: FRAME_DATA plotvariables frame [outfile]'
+    print 'usage: FRAME_DATA plotvariables frame [outprefix]'
     print '       plotvariables are of the form \'xdata,ydata,...\'.'
     exit(127)
 
@@ -76,9 +76,9 @@ with open(infile, 'r') as f_in:
                     print 'Writing', pvars[-1], 'of frame', i, 'to csv file.'
 
                 if (len(sys.argv) > 4):
-                    outfile = sys.argv[4]
+                    outfile = sys.argv[4] + '_' + str(i) + '.csv'
                 else:
-                    outfile = ".".join(infile.split('.')[:-1]) + str(i) + '.csv'
+                    outfile = ".".join(infile.split('.')[:-1]) + '_' + str(i) + '.csv'
 
                 print 'Creating output file:', outfile
                 with open(outfile, 'w') as f_csv:
@@ -92,7 +92,7 @@ with open(infile, 'r') as f_in:
                         for var in pvars:
                             row.append(frame[var][j])
                         wcsv.writerow(row)
-            if len(framevars) == 0:
+            if i > max(framevars):
                 break
             i = i + 1
 
