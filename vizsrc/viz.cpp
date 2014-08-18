@@ -322,6 +322,8 @@ class GLGPDisc: public GLGraphicsPrimitive
     size_t numSegments;
     
     public:
+        GLGPDisc() : r(0.03), numSegments(10) { center = Point2f(0,0); return; }
+
         GLGPDisc(Point2f const &_center, float _r, size_t _numSegments = 10) :
             center(_center), r(_r), numSegments(_numSegments)
         {
@@ -356,6 +358,7 @@ class GLGPDisc: public GLGraphicsPrimitive
         }
 
         void setCenter(Point2f &p) { center = p; }
+        void setCenter(float x, float y) { center.setCoordinate(0, x); center.setCoordinate(1, y); }
 
 };
 
@@ -1755,6 +1758,27 @@ static void init_opengl(void)
     glDisable(GL_DEPTH_TEST);
 }
 
+template <typename pIterator, typename gIterator>
+gIterator drawParticles(pIterator pbegin, pIterator pend, gIterator gbegin)
+{
+    glClearColor(0,0,0,0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLoadIdentity();
+    glColor3f(1,0,1);
+    while (pbegin != pend) {
+        Particle &p = *pbegin;
+        if (p.isActive()) {
+            (*gbegin).setCenter(p["x"], p["y"]);
+            (*gbegin).draw();
+            gbegin++;
+        }
+        pbegin++;
+    }
+    return gbegin; //now points to one beyond the last element
+}
+
+std ::vector<GLGPDisc> GLGPDiscs;
+
 void heartbeat(void)
 {
     int start_ticks;
@@ -1871,16 +1895,17 @@ void heartbeat(void)
             draw_elements();
         } else {
             auto particles = g_state.reader->nextParticles();
-            glClearColor(0,0,0,0);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            glLoadIdentity();
-            glColor3f(1,0,1);
-            for (auto const &p : particles) {
-                if (p.isActive()) {
-                    auto g = GLGPDisc(Point2f(p["x"], p["y"]), 0.01);
-                    g.draw();
-                }
+            if (GLGPDiscs.size() < particles.size()) {
+                GLGPDiscs.resize(particles.size());
             }
+            drawParticles(particles.begin(), particles.end(), GLGPDiscs.begin());
+
+//            for (auto const &p : particles) {
+//                if (p.isActive()) {
+//                    auto g = GLGPDisc(Point2f(p["x"], p["y"]), 0.01);
+//                    g.draw();
+//                }
+//            }
 //            draw_particles();
         }
         SDL_UnlockSurface(screen);
@@ -1943,6 +1968,10 @@ int main(int argc, char* argv[])
 
     FILE *scene_file = NULL;
     FILE *colormap_file = NULL;
+
+    std::ofstream::sync_with_stdio(false);
+    std::ifstream::sync_with_stdio(false);
+    std::ios::sync_with_stdio(false);
 
     if( init_sdl() != false )
     {

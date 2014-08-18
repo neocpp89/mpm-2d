@@ -5,10 +5,14 @@
 #include <vector>
 #include <limits>
 #include <cmath>
+#include <ios>
 
 #include "tokenizer.hpp"
 #include "viz_particle.hpp"
 #include "viz_reader.hpp"
+
+//std::ifstream::sync_with_stdio(false);
+//std::ios::sync_with_stdio(false);
 
 std::vector<Particle> TXTReader::nextParticles()
 {
@@ -28,6 +32,7 @@ std::vector<Particle> TXTReader::nextParticles()
         "corner_3x", "corner_3y"
     };
 
+
     std::vector<std::string> tokens = Tokenizer::splitNextLine(pfstream);
     if (tokens.size() != 3) {
         //TODO: throw exception
@@ -37,11 +42,15 @@ std::vector<Particle> TXTReader::nextParticles()
     num_particles = std::stoull(tokens[2]);
 
     const size_t num_known_keys = sizeof(known_keys) / sizeof(known_keys[0]);
+    tokens.resize(num_known_keys);
+
     std::vector<Particle> next;
     for (size_t j = 0; j < num_particles; j++) {
-        tokens.clear();
-        tokens = Tokenizer::splitNextLine(pfstream);
-        size_t num_keys = std::min(num_known_keys, tokens.size());
+//        tokens = Tokenizer::splitNextLine(pfstream);
+//        size_t num_keys = std::min(num_known_keys, tokens.size());
+
+        auto end = Tokenizer::splitNextLineIt(pfstream, ' ', tokens.begin(), tokens.end());
+        size_t num_keys = end - tokens.begin();
 
         /*
             Default to active state, we will correct later if the version of

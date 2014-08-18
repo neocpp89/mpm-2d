@@ -55,7 +55,6 @@ class TXTReader : public SimulationReader
 
         std::ifstream pfstream;
         std::ifstream efstream;
-
 };
 
 class CSVReader : public RandomAccessSimulationReader
