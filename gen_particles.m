@@ -5,8 +5,8 @@ p.E = 1e6;
 p.nu = 0.3;
 p.g = -0.8;
 % p.Np = 4 * 2.5;
-p.Np = 40;
-p.N = 41;
+p.Np = 80;
+p.N = 81;
 p.rhop = 3;
 p.tol = 1e-12;
 p.T = 2;
@@ -27,10 +27,10 @@ Nn = N*N;
 
 % set up material points
 %bar_w = 1.0; Nbx = Np; %
-bar_w = 0.5; Nbx = Np; %
+bar_w = 0.25; Nbx = Np; %
 % Nbx = ceil(p.rhop*bar_w/h);
 bar_h = 1.0; Nby = (bar_h/bar_w)*Nbx;
-%bar_h = 0.5; Nby = (bar_h/bar_w)*Nbx;
+bar_h = 0.25; Nby = (bar_h/bar_w)*Nbx;
 
 bxtmp = linspace(0, bar_w, Nbx+1);
 % bar_x = (0.5 - bar_w/2) + bxtmp(1:end-1) + bxtmp(2)/2;
@@ -92,7 +92,7 @@ ylim([min(y), max(y)]);
 fp = fopen('generated_particles.txt', 'w');
 fprintf(fp, '%d\n', numel(mp));
 for i=1:numel(mp)
-    fprintf(fp, '%f %f %f %f %f %f %f %f %f\n', mp(i), vp(i),
+    fprintf(fp, '%g %g %g %g %g %g %g %g %g\n', mp(i), vp(i),
         xp(i), yp(i), xp_t(i), yp_t(i),
         sxxp(i), sxyp(i), syyp(i));
 end
