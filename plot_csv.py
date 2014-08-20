@@ -12,10 +12,6 @@ if (len(sys.argv) <= 2):
 
 infile = sys.argv[1]
 pvar = sys.argv[2]
-framevar = -1
-
-if len(sys.argv) > 3:
-    framevar = int(sys.argv[3])
 
 print 'Using input file:', infile
 
@@ -49,7 +45,7 @@ x,y,c,a = zip(*tups)
 #matplotlib.cm.get_cmap('summer')
 cm = matplotlib.cm.get_cmap("YlOrBr", 100) #generate a jet map with 10 values
 v = cm(numpy.arange(100)) #extract those values as an array
-tcm = matplotlib.colors.LinearSegmentedColormap.from_list("truncPuBuGn", v[30:]) 
+tcm = matplotlib.colors.LinearSegmentedColormap.from_list("YlOrBr_t", v[30:]) 
 
 pylab.scatter(x,y,s=30,c=c, cmap=tcm, edgecolor='none', linewidth=1)
 pylab.title('Framefile: ' + infile)
