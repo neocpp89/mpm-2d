@@ -362,6 +362,28 @@ class GLGPDisc: public GLGraphicsPrimitive
 
 };
 
+void DrawDisc(GLenum mode, float cx, float cy, float r, int num_segments)
+{
+    //from http://slabode.exofire.net/circle_draw.shtml
+    float theta = 2 * M_PI / float(num_segments);
+    float c = cosf(theta);//precalculate the sine and cosine
+    float s = sinf(theta);
+    float t;
+    float x = r;//we start at angle = 0
+    float y = 0;
+    glBegin(mode);
+    for(int ii = 0; ii < num_segments; ii++)
+    {
+        glVertex3f(x + cx, y + cy, -1.001f);//output vertex
+        //apply the rotation matrix
+        t = x;
+        x = c * x - s * y;
+        y = s * t + c * y;
+    }
+    glEnd();
+    return;
+}
+
 void calc_stress_eigenvalues(aux_particle_t *p)
 {
     p->s_p = 0.5*(p->sxx+p->syy + sqrt((p->sxx-p->syy)*(p->sxx-p->syy) + 4*p->sxy*p->sxy));
@@ -1375,8 +1397,8 @@ int draw_particles(void)
 #endif
 //        glVertex3f(particles[i].x, particles[i].y, -1.0f);
 
-//#define NUM_SEGS 20
-//        DrawDisc(GL_POLYGON, particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+#define NUM_SEGS 10
+        DrawDisc(GL_POLYGON, particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
 
         if (particles[i].has_corners && (g_state.draw_glyphs != 0)) {
             glBegin(GL_LINE_LOOP);
@@ -1386,20 +1408,20 @@ int draw_particles(void)
             glEnd();
         }
 
-//        if (g_state.mirror_x) {
-//            glVertex3f(particles[i].x, -particles[i].y, -1.0f);
-//            DrawDisc(GL_POLYGON, particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
-//        }
+        if (g_state.mirror_x) {
+            glVertex3f(particles[i].x, -particles[i].y, -1.0f);
+            DrawDisc(GL_POLYGON, particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+        }
 
-//        if (g_state.mirror_y) {
-//            glVertex3f(-particles[i].x, particles[i].y, -1.0f);
-//            DrawDisc(GL_POLYGON, -particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
-//        }
+        if (g_state.mirror_y) {
+            glVertex3f(-particles[i].x, particles[i].y, -1.0f);
+            DrawDisc(GL_POLYGON, -particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+        }
 
-//        if (g_state.mirror_x && g_state.mirror_y) {
-//            glVertex3f(-particles[i].x, -particles[i].y, -1.0f);
-//            DrawDisc(GL_POLYGON, -particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
-//        }
+        if (g_state.mirror_x && g_state.mirror_y) {
+            glVertex3f(-particles[i].x, -particles[i].y, -1.0f);
+            DrawDisc(GL_POLYGON, -particles[i].x, -particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
+        }
 
 //        glColor3f(1.0 - g_state.bgcolor.r, 1.0 - g_state.bgcolor.g, 1.0 - g_state.bgcolor.b);
 //        DrawCircle(particles[i].x, particles[i].y, g_state.particle_size * 1e-3, NUM_SEGS);
@@ -1894,11 +1916,11 @@ void heartbeat(void)
         if (g_state.is_element_file) {
             draw_elements();
         } else {
-            auto particles = g_state.reader->nextParticles();
-            if (GLGPDiscs.size() < particles.size()) {
-                GLGPDiscs.resize(particles.size());
-            }
-            drawParticles(particles.begin(), particles.end(), GLGPDiscs.begin());
+//            auto particles = g_state.reader->nextParticles();
+//            if (GLGPDiscs.size() < particles.size()) {
+//                GLGPDiscs.resize(particles.size());
+//            }
+//            drawParticles(particles.begin(), particles.end(), GLGPDiscs.begin());
 
 //            for (auto const &p : particles) {
 //                if (p.isActive()) {
@@ -1906,7 +1928,7 @@ void heartbeat(void)
 //                    g.draw();
 //                }
 //            }
-//            draw_particles();
+            draw_particles();
         }
         SDL_UnlockSurface(screen);
         delta = SDL_GetTicks() - start_ticks;
