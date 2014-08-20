@@ -1,61 +1,32 @@
+# Project: mpm_2d.
 # automatically parallelize build
 # MAKEFLAGS+="-j 4"
 
-# Project: mpm_2d.
-CC = gcc
-CXX = g++
-BIN = mpm_2d
-VIZBIN = viz
-CFLAGS = -fno-omit-frame-pointer -c -march=native -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -I/usr/lib/openmpi/include/ -rdynamic
-#CFLAGS = -fno-omit-frame-pointer -c -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -funroll-loops -I/usr/lib/openmpi/include/ -rdynamic
-#takes form '-ldl -lpthread' etc.
-LIB = -lrt -lm -lhdf5 -pthread -lblas -llapack -lcxsparse -lconfuse -ldl
-# modified CFLAGS for libraries
-LDFLAGS = $(LIB) -g
-# CFLAGS = -o $(BIN) -I<dir> -L<dir> -Wall -Wstrict-prototypes -ansi -pedantic
-SRC = \
-	main.c \
-	bc.c \
-	loading.c \
-	element.c \
-	particle.c \
-	process.c \
-	interpolate.c \
-	visualization.c \
-	reader.c \
-	writer.c \
-	rtsafe.c \
-	material.c \
-	tensor.c \
-	map.c
+# include definitions such as CC, CXX
+include ./makefile.common
 
-MATERIAL_SRC = \
-	dp_ri.c \
-	isolin.c \
-	g_local_mu2.c
+VIZDIR = vizsrc
+MATERIALDIR = materialsrc
+MPMDIR = src
 
-# Need to fix this; test each material separately
-MATERIAL_TEST_SRC = \
-	test_material.c \
-	g_local_mu2.c
-
-MATERIAL_TEST_BIN = material-test
-
-OBJ = $(SRC:.c=.o)
 SOBJ = $(MATERIAL_SRC:.c=.so)
 
 .PHONY: clean
 .PHONY: backup
+.PHONY: $(VIZBIN)
+.PHONY: $(BIN)
+.PHONY: $(SOBJ)
 
 # Default target(s)
-all: $(BIN) $(VIZBIN) $(SOBJ)
+all: $(BIN) $(VIZBIN) $(SOBJ) $(MATERIAL_TEST_BIN)
 
 clean:
-	-rm $(SOBJ) $(OBJ) $(BIN) $(VIZBIN) $(MATERIAL_TEST_BIN);
+	${MAKE} -f makefile -C $(VIZDIR) clean
+	${MAKE} -f makefile -C $(MATERIALDIR) clean
+	${MAKE} -f makefile -C $(MPMDIR) clean
 
-$(MATERIAL_TEST_BIN): $(MATERIAL_TEST_SRC)
-	$(CC) -march=native -g $^ -o $@ -lm
-	./$@
+$(MATERIAL_TEST_BIN): 
+	${MAKE} -f makefile -C $(MATERIALDIR) ../$@
 
 backup-nogit:
 	tar --exclude-vcs --exclude=jobs -cvzf ../mpm_2d_`date +%Y%m%d`.tar.gz ../`basename $(CURDIR)`;
@@ -64,7 +35,7 @@ backup:
 	tar --exclude=jobs --exclude=figs -cvzf ../mpm_2d_`date +%Y%m%d`.tar.gz ../`basename $(CURDIR)`;
 
 distbackup: clean
-	make backup-nogit
+	${MAKE} backup-nogit
 
 doc: Doxyfile
 	doxygen
@@ -72,14 +43,13 @@ doc: Doxyfile
 Doxyfile:
 	doxygen -g
 
-$(BIN): $(OBJ)
-	$(CC) $(OBJ) -o $@ $(LDFLAGS)
+$(BIN):
+	${MAKE} -f makefile -C $(MPMDIR) ../$@
 
-$(VIZBIN): viz.cpp viz_colormap.cpp viz_reader.cpp
-	$(CXX) -std=c++11 -g -O3 -march=native -I/usr/include/freetype2/ -Wall $^ -o $@ -lm -lSDL -lGL -lGLU -lftgl -lpng -lSDL_image -lconfuse
+$(VIZBIN):
+	${MAKE} -f makefile -C $(VIZDIR)
 
-%.o : %.c
-	$(CC) $(CFLAGS) $< -o $@
+materials: $(SOBJ)
 
-%.so : %.c
-	$(CC) -g -O3 -Wall -march=native -fPIC -shared -nostartfiles $< -o $@
+$(SOBJ):
+	${MAKE} -f makefile -C $(MATERIALDIR) ../$@

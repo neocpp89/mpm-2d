@@ -12,6 +12,7 @@
 #include <time.h>
 #include "particle.h"
 
+#include "tensor.h"
 #include <assert.h>
 
 /*----------------------------------------------------------------------------*/
