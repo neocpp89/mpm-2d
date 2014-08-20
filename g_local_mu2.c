@@ -230,26 +230,30 @@ void calculate_stress_threaded(threadtask_t *task)
             S0 = MU_S * p_tr;
             if (tau_tr <= S0) {
                 tau_tau = tau_tr;
+		scale_factor = 1.0;
             } else {
                 S2 = MU_2 * p_tr;
                 alpha = G * I_0 * job->dt * sqrt(p_tr / GRAINS_RHO) / GRAINS_D;
                 B = -(S2 + tau_tr + alpha);
                 H = S2 * tau_tr + S0 * alpha;
                 tau_tau = negative_root(1.0, B, H);
+                scale_factor = (tau_tau / tau_tr);
             }
 
             nup_tau = ((tau_tr - tau_tau) / G) / job->dt;
             beta = 0;
 
-            scale_factor = (tau_tau / tau_tr);
             job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
             job->particles[i].sxy = scale_factor * t0xy_tr;
             job->particles[i].syy = scale_factor * t0yy_tr - p_tr;
         } else {
-/*            fprintf(stderr, "u %zu %3.3g %3.3g %d ", i, f, p_tr, density_flag);*/
-            fprintf(stderr, "u"); 
+		fprintf(stderr, "u %zu %3.3g %d ", i, p_tr, density_flag);
             nup_tau = 0;
         }
+
+	if (isnan(job->particles[i].sxx) || isnan(job->particles[i].sxy) || isnan(job->particles[i].syy)) {
+		fprintf(stderr, "TA %zu %d %3.3g %3.3g %3.3g %3.3g %3.3g",i, density_flag, tau_tau, p_tr, job->particles[i].sxx, job->particles[i].sxy, job->particles[i].syy);
+	}
 
         /* use strain rate to calculate stress increment */
         gammap += nup_tau * job->dt;

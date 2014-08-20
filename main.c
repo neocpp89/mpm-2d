@@ -461,7 +461,7 @@ int main(int argc, char **argv)
         job->material.fp64_props[i] = cfg_getnfloat(cfg_material, "properties", i);
     }
     for (i = 0; i < job->material.num_int_props; i++) {
-        job->material.int_props[i] = cfg_getnfloat(cfg_material, "integer-properties", i);
+        job->material.int_props[i] = cfg_getnint(cfg_material, "integer-properties", i);
     }
 
     fprintf(stderr, "\nMaterial options set:\n");
@@ -493,7 +493,7 @@ int main(int argc, char **argv)
         job->boundary.fp64_props[i] = cfg_getnfloat(cfg_boundary, "properties", i);
     }
     for (i = 0; i < job->boundary.num_int_props; i++) {
-        job->boundary.int_props[i] = cfg_getnfloat(cfg_boundary, "integer-properties", i);
+        job->boundary.int_props[i] = cfg_getnint(cfg_boundary, "integer-properties", i);
     }
 
     fprintf(stderr, "\nBoundary options set:\n");

@@ -1904,9 +1904,9 @@ start_implicit:
 
         sldb = slda;
         if (k == 0) {
-            q0_norm = dnrm2_(&sldb, sb, &incx);
+            //q0_norm = dnrm2_(&sldb, sb, &incx);
         }
-        q_norm = dnrm2_(&sldb, sb, &incx);
+        //q_norm = dnrm2_(&sldb, sb, &incx);
 
         if (!cs_lusol(1, smat, sb, 1e-12)) {
             fprintf(stderr, "lusol error!\n");
@@ -1917,9 +1917,9 @@ start_implicit:
         }
 
         if (k == 0) {
-            du0_norm = dnrm2_(&sldb, sb, &incx);
+            //du0_norm = dnrm2_(&sldb, sb, &incx);
         }
-        du_norm = dnrm2_(&sldb, sb, &incx);
+        //du_norm = dnrm2_(&sldb, sb, &incx);
 
         /* stopping timer */
         clock_gettime(CLOCK_REALTIME, &requestEnd);

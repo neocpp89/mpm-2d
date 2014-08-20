@@ -35,11 +35,12 @@ void tent(double *h1, double *h2, double *h3, double *h4,
 /*    *h3 = 0.25 * (1 - cos(PI*(x_local - 1))) * (1 - cos(PI*(y_local - 1)));*/
 /*    *h4 = 0.25 * (1 - cos(PI*(x_local))) * (1 - cos(PI*(y_local - 1)));*/
 
+/*
     SF_WARNING4(h1);
     SF_WARNING4(h2);
     SF_WARNING4(h3);
     SF_WARNING4(h4);
-
+*/
     return;
 }
 /*----------------------------------------------------------------------------*/

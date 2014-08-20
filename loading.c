@@ -16,7 +16,7 @@
 #include "process.h"
 
 #define G_MAG 9.80
-#define RAMP_TIME 0.0f
+#define RAMP_TIME 0.1
 
 /*----------------------------------------------------------------------------*/
 void initial_loads(job_t *job)
@@ -134,7 +134,15 @@ void time_varying_loads(job_t *job)
                 gravity = -G_MAG;
             }
 
-#define theta (M_PI * 25.0 / 180.0)
+#define DEG_TO_RAD (M_PI / 180.0)
+
+        /* this is a horrible abuse of the configuration file...  */
+	if (job->boundary.num_int_props != 1) {
+		fprintf(stderr, "You forgot to specify the angle of gravity (boundary->int_props[0])\n");
+		exit(1);
+	}
+        double theta = (double)(job->boundary.int_props[0]);
+	theta *= DEG_TO_RAD;
 
             for (i = 0; i < job->num_particles; i++) {
                 job->particles[i].bx = -gravity * sin(theta);
