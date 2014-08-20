@@ -15,7 +15,7 @@
 #include "point.h"
 #include "process.h"
 
-#define G_MAG 0.80
+#define G_MAG 9.80
 #define RAMP_TIME 0.0f
 
 /*----------------------------------------------------------------------------*/
@@ -134,9 +134,11 @@ void time_varying_loads(job_t *job)
                 gravity = -G_MAG;
             }
 
+#define theta (M_PI * 25.0 / 180.0)
+
             for (i = 0; i < job->num_particles; i++) {
-                job->particles[i].bx = 0;
-                job->particles[i].by = gravity;
+                job->particles[i].bx = -gravity * sin(theta);
+                job->particles[i].by = gravity  * cos(theta);
             }
         break;
     }

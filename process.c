@@ -2541,13 +2541,13 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
 /*        job->particles[i].ux += dux;*/
 /*        job->particles[i].uy += duy;*/
 
-/*
+
         while(job->particles[i].x < 0) { job->particles[i].x += -floor(job->particles[i].x); }
         while(job->particles[i].x > 1) { job->particles[i].x -= floor(job->particles[i].x); }
 
         while(job->particles[i].y < 0) { job->particles[i].y += -floor(job->particles[i].y); }
         while(job->particles[i].y > 1) { job->particles[i].y -= floor(job->particles[i].y); }
-*/
+
     }
     return;
 }

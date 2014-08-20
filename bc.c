@@ -80,9 +80,9 @@ void generate_dirichlet_bcs(job_t *job)
     for (n = 0; n < job->N; n++) {
 
         /* trapdoor */
-        if (job->nodes[n].x <= hole_radius && job->t > open_time) {
-            continue;
-        }
+/*        if (job->nodes[n].x <= hole_radius && job->t > open_time) {*/
+/*            continue;*/
+/*        }*/
 
         /* bottom of hourglass */
         job->u_dirichlet[NODAL_DOF * n + XDOF_IDX] = 0;
@@ -90,30 +90,18 @@ void generate_dirichlet_bcs(job_t *job)
         job->u_dirichlet_mask[NODAL_DOF * n + XDOF_IDX] = 1;
         job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;
 
-#if 0
-        /* hourglass hole */
-        job->u_dirichlet[NODAL_DOF * (n + (job->N / 2) * job->N) + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * (n + (job->N / 2) * job->N) + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * (n + (job->N / 2) * job->N) + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * (n + (job->N / 2) * job->N) + YDOF_IDX] = 1;
-#endif
-
-/*        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 0;*/
-/*        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 0;*/
-/*        job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 1;*/
-/*        job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 1;*/
     }
 
     /* Side walls. */
     for (n = 0; n < job->N; n++) {
-        job->u_dirichlet[NODAL_DOF * (0 + n*job->N) + XDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * (0 + n*job->N) + XDOF_IDX] = 1;
+/*        job->u_dirichlet[NODAL_DOF * (0 + n*job->N) + XDOF_IDX] = 0;*/
+/*        job->u_dirichlet_mask[NODAL_DOF * (0 + n*job->N) + XDOF_IDX] = 1;*/
 
 /*        job->u_dirichlet[NODAL_DOF * (0 + n*job->N) + YDOF_IDX] = 0;*/
 /*        job->u_dirichlet_mask[NODAL_DOF * (0+ n*job->N) + YDOF_IDX] = 1;*/
 
-        job->u_dirichlet[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 1;
+/*        job->u_dirichlet[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 0;*/
+/*        job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 1;*/
 
 /*        job->u_dirichlet[NODAL_DOF * (off + n*job->N) + YDOF_IDX] = 0;*/
 /*        job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + YDOF_IDX] = 1;*/
@@ -136,12 +124,12 @@ void generate_node_number_override(job_t *job)
     }
 
     /* x direction is periodic */
-/*    for (i = 0; i < job->N; i++) {*/
-/*        for (j = 0; j < NODAL_DOF; j++) {*/
-/*            job->node_number_override[NODAL_DOF * (off + i*job->N) + j] =*/
-/*                (NODAL_DOF * (i*job->N) + j);*/
-/*        }*/
-/*    }*/
+    for (i = 0; i < job->N; i++) {
+        for (j = 0; j < NODAL_DOF; j++) {
+            job->node_number_override[NODAL_DOF * (off + i*job->N) + j] =
+                (NODAL_DOF * (i*job->N) + j);
+        }
+    }
 
     /* y direction is periodic */
 /*    for (i = 0; i < job->N; i++) {*/

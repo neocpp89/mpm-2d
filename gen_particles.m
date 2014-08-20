@@ -26,10 +26,10 @@ tol = p.tol;
 Nn = N*N;
 
 % set up material points
-%bar_w = 1.0; Nbx = Np; %
-bar_w = 0.25; Nbx = Np; %
+bar_w = 1.0; Nbx = Np; %
+%bar_w = 0.25; Nbx = Np; %
 % Nbx = ceil(p.rhop*bar_w/h);
-bar_h = 1.0; Nby = (bar_h/bar_w)*Nbx;
+%bar_h = 1.0; Nby = (bar_h/bar_w)*Nbx;
 bar_h = 0.25; Nby = (bar_h/bar_w)*Nbx;
 
 bxtmp = linspace(0, bar_w, Nbx+1);
