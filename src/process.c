@@ -1044,39 +1044,7 @@ void move_grid_split(job_t *job, size_t n_start, size_t n_stop)
             job->nodes[i].x_t = 0;
             job->nodes[i].y_t = 0;
         }
-
-/*        if (i == 0 && fabs(-0.5 *(job->particles[0].sxx + job->particles[0].syy)) > 1) {*/
-/*            printf("\n[%zu:%f %f %f %f %f]", i, job->t, job->particles[0].x, job->particles[0].y, job->particles[0].xl, job->particles[0].yl);*/
-/*            printf(" sigma=[%f %f %f], p=%f", job->particles[0].sxx, job->particles[0].sxy, job->particles[0].syy, -0.5 *(job->particles[0].sxx + job->particles[0].syy));*/
-/*        }*/
-
-/*        if (i == 0 && job->t < 0.2) {*/
-/*            printf("\n[%zu:%f] %f %f %f", job->in_element[0], job->t, m, job->nodes[i].x_t, job->nodes[i].y_t);*/
-/*            printf(" sigma=[%f %f %f], p=%f, \tLyy[%g], L=[%g %g %g %g]", job->particles[0].sxx, job->particles[0].sxy, job->particles[0].syy, -0.5 *(job->particles[0].sxx + job->particles[0].syy), job->particles[0].eyy_t, job->particles[0].exx_t, job->particles[0].eyy_t, job->particles[0].exy_t, job->particles[0].wxy_t);*/
-/*        }*/
-
-/*        if (job->nodes[i].y_t > 1.0 || job->nodes[i].x_t > 1.0) {*/
-/*            printf("\n[%zu:%f] %f %f %f", i, job->t, m, job->nodes[i].x_t, job->nodes[i].y_t);*/
-/*            printf(" sigma=[%f %f %f], p=%f, L=[%f %f %f %f]", job->particles[0].sxx, job->particles[0].sxy, job->particles[0].syy, -0.5 *(job->particles[0].sxx + job->particles[0].syy), job->particles[0].exx_t, job->particles[0].eyy_t, job->particles[0].exy_t, job->particles[0].wxy_t);*/
-/*        }*/
     }
-
-
-/*    int i_new;*/
-/*    for (i = 0; i < job->num_nodes; i++) {*/
-/*        i_new = job->node_number_override[NODAL_DOF * i] / NODAL_DOF;*/
-
-/*        if (i == i_new) { continue; }*/
-
-/*        assert(job->nodes[i].fx == job->nodes[i_new].fx);*/
-/*        assert(job->nodes[i].fy == job->nodes[i_new].fy);*/
-/*        assert(job->nodes[i].x_tt == job->nodes[i_new].x_tt);*/
-/*        assert(job->nodes[i].y_tt == job->nodes[i_new].y_tt);*/
-/*        assert(job->nodes[i].x_t == job->nodes[i_new].x_t);*/
-/*        assert(job->nodes[i].y_t == job->nodes[i_new].y_t);*/
-/*        assert(job->nodes[i].ux == job->nodes[i_new].ux);*/
-/*        assert(job->nodes[i].uy == job->nodes[i_new].uy);*/
-/*    }*/
 
     return;
 }
@@ -1107,7 +1075,7 @@ void create_particle_to_element_map_split(job_t *job, size_t p_start, size_t p_s
 
         if (p != job->in_element[i]) {
             fprintf(job->output.log_fd, 
-                "[%g] Particle %d @(%g, %g) left element %d, now in element %d.\n",
+                "[%g] Particle %zu @(%g, %g) left element %d, now in element %d.\n",
                 job->t, i, job->particles[i].x, job->particles[i].y,
                 job->in_element[i], p);
         }
@@ -1117,7 +1085,7 @@ void create_particle_to_element_map_split(job_t *job, size_t p_start, size_t p_s
 
         if (p == -1) {
             fprintf(job->output.log_fd,
-                "[%g] Particle %d outside of grid (%g, %g), marking as inactive.\n",
+                "[%g] Particle %zu outside of grid (%g, %g), marking as inactive.\n",
                 job->t, i, job->particles[i].x, job->particles[i].y);
             job->active[i] = 0;
             continue;
@@ -1149,7 +1117,7 @@ void create_particle_to_element_map_threaded(threadtask_t *task)
         if (p != job->in_element[i]) {
             changed = 1;
             fprintf(job->output.log_fd, 
-                "[%g] Particle %d @(%g, %g) left element %d, now in element %d.\n",
+                "[%g] Particle %zu @(%g, %g) left element %d, now in element %d.\n",
                 job->t, i, job->particles[i].x, job->particles[i].y,
                 job->in_element[i], p);
         }
@@ -1159,7 +1127,7 @@ void create_particle_to_element_map_threaded(threadtask_t *task)
 
         if (p == -1) {
             fprintf(job->output.log_fd,
-                "[%g] Particle %d outside of grid (%g, %g), marking as inactive.\n",
+                "[%g] Particle %zu outside of grid (%g, %g), marking as inactive.\n",
                 job->t, i, job->particles[i].x, job->particles[i].y);
             job->active[i] = 0;
             continue;
@@ -1186,7 +1154,6 @@ void find_filled_elements(job_t *job)
 
     for (i = 0; i < job->num_particles; i++) {
         CHECK_ACTIVE(job, i);
-
         p = job->in_element[i];
 
         /* Mark element as occupied. */
@@ -1219,20 +1186,6 @@ void find_filled_elements(job_t *job)
         job->particle_by_element_color_lists[tc_idx][curr_len] = i;
         job->particle_by_element_color_lengths[tc_idx]++;
     }
-
-    #if 0
-    /*derp*/
-    printf("filled elem\n");
-    for (t_idx = 0; t_idx < job->num_threads; t_idx++) {
-        for (c_idx = 0; c_idx < job->num_colors; c_idx++) {
-            printf("%zu %zu: ", t_idx, c_idx);
-            for (i = 0; i < job->particle_by_element_color_lengths[t_idx * job->num_colors + c_idx]; i++) {
-                printf("%zu ", job->particle_by_element_color_lists[t_idx * job->num_colors + c_idx][i]);
-            }
-            printf("\n");
-        }
-    }
-    #endif
 
     return;
 }
@@ -1270,7 +1223,7 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
             &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
             xl, yl, job->h);
         if (xl < 0.0f || xl > 1.0f || yl < 0.0f || yl > 1.0f) {
-            fprintf(stderr, "Particle %d outside of element %d (%g, %g).\n", i,
+            fprintf(stderr, "Particle %zu outside of element %d (%g, %g).\n", i,
                 p, xl, yl);
         }
         job->particles[i].xl = xl;
@@ -1499,54 +1452,9 @@ void update_internal_stress(job_t *job)
                     job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxy + 
                     job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].syy);
 
-
-/*                    printf("update_stress: %d\n", nn[k]);*/
-/*                    printf("vol %g\ngrad_sc [%g %g]\ns [%g %g %g]\n", job->particles[i].v,*/
-/*                     job->particles[i].grad_sc[j][k][S_XIDX], job->particles[i].grad_sc[j][k][S_YIDX], job->particles[i].sxx, job->particles[i].sxy, job->particles[i].syy);*/
-
-/*                    for (s = 0; s < job->num_nodes; s++) {*/
-/*                        printf("f[%d] = [%g %g]^T\n", s,*/
-/*                            job->f_int_grid[NODAL_DOF * s + XDOF_IDX],*/
-/*                            job->f_int_grid[NODAL_DOF * s + YDOF_IDX]);*/
-/*                    }*/
-
                 }
-/*                exit(254);*/
             }
         } else {
-#if 0
-            dudx = job->u_grid[NODAL_DOF * nn[0] + XDOF_IDX]*job->b11[i];
-            dudx += job->u_grid[NODAL_DOF * nn[1] + XDOF_IDX]*job->b12[i];
-            dudx += job->u_grid[NODAL_DOF * nn[2] + XDOF_IDX]*job->b13[i];
-            dudx += job->u_grid[NODAL_DOF * nn[3] + XDOF_IDX]*job->b14[i];
-
-            dudy = job->u_grid[NODAL_DOF * nn[0] + XDOF_IDX]*job->b21[i];
-            dudy += job->u_grid[NODAL_DOF * nn[1] + XDOF_IDX]*job->b22[i];
-            dudy += job->u_grid[NODAL_DOF * nn[2] + XDOF_IDX]*job->b23[i];
-            dudy += job->u_grid[NODAL_DOF * nn[3] + XDOF_IDX]*job->b24[i];
-
-            dvdx = job->u_grid[NODAL_DOF * nn[0] + YDOF_IDX]*job->b11[i];
-            dvdx += job->u_grid[NODAL_DOF * nn[1] + YDOF_IDX]*job->b12[i];
-            dvdx += job->u_grid[NODAL_DOF * nn[2] + YDOF_IDX]*job->b13[i];
-            dvdx += job->u_grid[NODAL_DOF * nn[3] + YDOF_IDX]*job->b14[i];
-
-            dvdy = job->u_grid[NODAL_DOF * nn[0] + YDOF_IDX]*job->b21[i];
-            dvdy += job->u_grid[NODAL_DOF * nn[1] + YDOF_IDX]*job->b22[i];
-            dvdy += job->u_grid[NODAL_DOF * nn[2] + YDOF_IDX]*job->b23[i];
-            dvdy += job->u_grid[NODAL_DOF * nn[3] + YDOF_IDX]*job->b24[i];
-
-            jdet = 1 + dudx + dvdy;
-
-            sxx = job->particles[i].sxx;
-            sxy = job->particles[i].sxy;
-            syy = job->particles[i].syy;
-
-            pxx = jdet * ((1 - dudx) * sxx - dudy * sxy);
-            pxy = jdet * ((-dvdx) * sxx + (1 - dvdy) * sxy);
-            pyx = jdet * ((1 - dudx) * sxy - dudy * syy);
-            pyy = jdet * ((-dvdx) * sxy + (1 - dvdy) * syy);
-#endif
-
             sxx = job->particles[i].sxx;
             sxy = job->particles[i].sxy;
             syy = job->particles[i].syy;
@@ -2476,7 +2384,6 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
     for (i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
 
-#if 1
 /*        job->particles[i].x_tt = (N_TO_P(job, x_tt, i));*/
 /*        job->particles[i].y_tt = (N_TO_P(job, y_tt, i));*/
 
@@ -2513,41 +2420,7 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
         job->particles[i].y += duy;
         job->particles[i].ux += dux;
         job->particles[i].uy += duy;
-#endif
 
-/*        job->particles[i].x_t = (N_TO_P(job, x_t, i)) + job->dt * job->particles[i].x_tt;*/
-/*        job->particles[i].y_t = (N_TO_P(job, y_t, i)) + job->dt * job->particles[i].y_tt;*/
-
-/*        job->particles[i].x_tt = (N_TO_P(job, x_tt, i));*/
-/*        job->particles[i].y_tt = (N_TO_P(job, y_tt, i));*/
-
-/*        dux = job->dt * (N_TO_P(job, x_t, i));*/
-/*        duy = job->dt * (N_TO_P(job, y_t, i));*/
-/*        job->particles[i].x += dux;*/
-/*        job->particles[i].y += duy;*/
-/*        job->particles[i].ux += dux;*/
-/*        job->particles[i].uy += duy;*/
-
-/*        dux = job->dt * (N_TO_P(job, x_t, i));*/
-/*        duy = job->dt * (N_TO_P(job, y_t, i));*/
-/*        job->particles[i].x_tt = (N_TO_P(job, x_tt, i));*/
-/*        job->particles[i].y_tt = (N_TO_P(job, y_tt, i));*/
-
-/*        job->particles[i].x += dux;*/
-/*        job->particles[i].y += duy;*/
-/*        job->particles[i].x_t += job->dt * job->particles[i].x_tt;*/
-/*        job->particles[i].y_t += job->dt * job->particles[i].y_tt;*/
-
-/*        job->particles[i].ux += dux;*/
-/*        job->particles[i].uy += duy;*/
-
-/*
-        while(job->particles[i].x < 0) { job->particles[i].x += -floor(job->particles[i].x); }
-        while(job->particles[i].x > 1) { job->particles[i].x -= floor(job->particles[i].x); }
-
-        while(job->particles[i].y < 0) { job->particles[i].y += -floor(job->particles[i].y); }
-        while(job->particles[i].y > 1) { job->particles[i].y -= floor(job->particles[i].y); }
-*/
     }
     return;
 }
@@ -2783,119 +2656,6 @@ void update_particle_densities(job_t *job)
 void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop)
 {
     size_t i;
-#if 0
-    int j;
-
-    double left, right, top, bottom;
-    double h_spacing, v_spacing;
-
-    for (i = 0; i < job->num_elements; i++) {
-        job->elements[i].filled = 0;
-        job->elements[i].n = 0;
-        job->elements[i].m = 0;
-    }
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-        job->elements[job->in_element[i]].filled = 1;
-        job->elements[job->in_element[i]].n++;
-        job->elements[job->in_element[i]].m += job->particles[i].m;
-        
-    }
-
-    for (i = 0; i < job->num_nodes; i++) {
-        job->nodes[i].num_filled_element_neighbors = 0;
-        job->nodes[i].mass_filled_element_neighbors = 0;
-    }
-
-    for (i = 0; i < job->num_elements; i++) {
-        if (job->elements[i].filled) {
-            for (j = 0; j < 4; j++) {
-                job->nodes[job->elements[i].nodes[j]].num_filled_element_neighbors++;
-                job->nodes[job->elements[i].nodes[j]].mass_filled_element_neighbors += job->elements[i].m;
-            }
-        }
-    }
-
-    for (i = 0; i < job->num_elements; i++) {
-        h_spacing = 2.0f;
-        v_spacing = 2.0f;
-
-        if (job->elements[i].neighbors[0] == -1) {
-            right = job->elements[i].n;
-            h_spacing = 1.0f;
-        } else {
-            right = job->elements[job->elements[i].neighbors[0]].n;
-        }
-
-        if (job->elements[i].neighbors[4] == -1) {
-            left = job->elements[i].n;
-            h_spacing = 1.0f;
-        } else {
-            left = job->elements[job->elements[i].neighbors[4]].n;
-        }
-
-        if (job->elements[i].neighbors[2] == -1) {
-            top = job->elements[i].n;
-            v_spacing = 1.0f;
-        } else {
-            top = job->elements[job->elements[i].neighbors[2]].n;
-        }
-
-        if (job->elements[i].neighbors[6] == -1) {
-            bottom = job->elements[i].n;
-            v_spacing = 1.0f;
-        } else {
-            bottom = job->elements[job->elements[i].neighbors[6]].n;
-        }
-
-        job->elements[i].grad_x = (right - left) / h_spacing;
-        job->elements[i].grad_y = (top - bottom) / v_spacing;
-
-        job->elements[i].grad_mag = hypot(job->elements[i].grad_x, job->elements[i].grad_y);
-
-        /* point normal outward from body (negative of gradient). */
-        if (job->elements[i].grad_mag > 0) {
-            job->elements[i].n_x = -job->elements[i].grad_x / job->elements[i].grad_mag;
-            job->elements[i].n_y = -job->elements[i].grad_y / job->elements[i].grad_mag;
-            job->elements[i].n_theta = atan2(job->elements[i].n_y, job->elements[i].n_x);
-        }
-
-        /* printing */
-/*        if (job->elements[i].grad_mag > 1.0f) {*/
-/*            printf("%d: %f %f %f %f\n", i, left, right, top, bottom);*/
-/*            printf("%d: %f\n", i, job->elements[i].grad_mag);*/
-/*            printf("%d: %f %f\n", i, job->elements[i].n_x, job->elements[i].n_y);*/
-/*        }*/
-
-    }
-
-        #define GRAD_THRESHOLD 0.50f
-
-    for (i = 0; i < job->num_nodes; i++) {
-        job->nodes[i].rho = job->nodes[i].mass_filled_element_neighbors / (job->nodes[i].num_filled_element_neighbors * job->h * job->h);
-    }
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        /* Fixed version */
-/*        if (job->elements[job->in_element[i]].grad_mag > GRAD_THRESHOLD) {*/
-/*            job->particles[i].v = job->particles[i].v * exp (job->dt * (job->particles[i].exx_t + job->particles[i].eyy_t));*/
-/*        } else {*/
-/*            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);*/
-/*        }*/
-
-        if (job->use_cpdi) {
-            job->particles[i].v = job->particles[i].v0 *
-                ((job->particles[i].Fxx * job->particles[i].Fyy) - 
-                job->particles[i].Fxy * job->particles[i].Fyx);
-        } else {
-            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);
-        }
-    }
-#endif
-
 
     if (job->use_cpdi) {
         for (i = p_start; i < p_stop; i++) {
@@ -2907,36 +2667,7 @@ void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop)
     } else {
         for (i = p_start; i < p_stop; i++) {
             CHECK_ACTIVE(job, i);
-/*            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);*/
             job->particles[i].v = job->particles[i].v * exp (job->dt * (job->particles[i].exx_t + job->particles[i].eyy_t));
-#if 0
-            size_t j, el, n, r, c, nvols;
-            double rho, s[4];
-            el = job->in_element[i];
-            rho = 0;
-            s[0] = job->h1[i];
-            s[1] = job->h2[i];
-            s[2] = job->h3[i];
-            s[3] = job->h4[i];
-            for (j = 0; j < 4; j++) {
-                nvols = 4;
-                n = job->elements[el].nodes[j];
-                r = n / job->N;
-                c = n % job->N;
-                if (r == 0 || r == (job->N - 1)) {
-                    nvols -= 2;
-                } 
-                if (c == 0 || c == (job->N / 2) || c == (job->N - 1)) {
-                    nvols -= 2;
-                }
-                if (nvols == 0) {
-                    nvols = 1;
-                }
-                rho += s[j] * job->nodes[n].m / (0.25 * nvols * job->h * job->h);
-            }
-/*            printf("rho = %f, ", rho);*/
-            job->particles[i].v = job->particles[i].m / rho;
-#endif
         }
     }
 

@@ -6,10 +6,7 @@
     mpm_2d -- An implementation of the Material Point Method in 2D.
 */
 #include <stdio.h>
-#include <math.h>
 #include "interpolate.h"
-
-#define PI 3.14159
 
 #define SF_WARNING4(tok) \
     if (*tok > 1 || *tok < 0) { \
@@ -29,11 +26,6 @@ void tent(double *h1, double *h2, double *h3, double *h4,
     *h2 = (x_local) * (1 - y_local);
     *h3 = (x_local) * (y_local);
     *h4 = (1 - x_local) * (y_local);
-
-/*    *h1 = 0.25 * (1 - cos(PI*(x_local))) * (1 - cos(PI*(y_local)));*/
-/*    *h2 = 0.25 * (1 - cos(PI*(x_local - 1))) * (1 - cos(PI*(y_local)));*/
-/*    *h3 = 0.25 * (1 - cos(PI*(x_local - 1))) * (1 - cos(PI*(y_local - 1)));*/
-/*    *h4 = 0.25 * (1 - cos(PI*(x_local))) * (1 - cos(PI*(y_local - 1)));*/
 
     SF_WARNING4(h1);
     SF_WARNING4(h2);
@@ -93,6 +85,7 @@ void grad_tent(double *b11, double *b12, double *b13, double *b14,
 {
     double dxl_dx = (1.0f / h);
     double dyl_dy = (1.0f / h);
+
     /*
         d/dx1
     */
@@ -100,6 +93,7 @@ void grad_tent(double *b11, double *b12, double *b13, double *b14,
     *b12 = (1 - y_local) * dxl_dx;
     *b13 = (y_local) * dxl_dx;
     *b14 = -(y_local) * dxl_dx;
+
     /*
         d/dx2
     */
@@ -107,6 +101,7 @@ void grad_tent(double *b11, double *b12, double *b13, double *b14,
     *b22 = -(x_local) * dyl_dy;
     *b23 = (x_local) * dyl_dy;
     *b24 = (1 - x_local) * dyl_dy;
+
     return;
 }
 /*----------------------------------------------------------------------------*/
@@ -171,33 +166,6 @@ void grad_paraboloid(
     *b29 = -2 * y_local * (1 - x_local * x_local) * dyl_dy;
 
     return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*---Si---------------------------------------------------------------------*/
-double si(double xp, double xi, double h)
-{
-    double r;
-    double xl;
-    
-    xl = xp - xi;
-    
-    if (0 <= xl  && xl <= h) {
-        r = 1 - (xl / h);
-    } else if (-h <= xl && xl <= 0) {
-        r = 1 + (xl / h);
-    } else {
-        r = 0;
-    }
-
-    return r;
-}
-/*----------------------------------------------------------------------------*/
-
-/*---Si2---------------------------------------------------------------------*/
-double si2(double xp, double yp, double xi, double yi, double h)
-{
-    return si(xp, xi, h)*si(yp, yi, h);
 }
 /*----------------------------------------------------------------------------*/
 
