@@ -2515,38 +2515,9 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
         job->particles[i].uy += duy;
 #endif
 
-/*        job->particles[i].x_t = (N_TO_P(job, x_t, i)) + job->dt * job->particles[i].x_tt;*/
-/*        job->particles[i].y_t = (N_TO_P(job, y_t, i)) + job->dt * job->particles[i].y_tt;*/
-
-/*        job->particles[i].x_tt = (N_TO_P(job, x_tt, i));*/
-/*        job->particles[i].y_tt = (N_TO_P(job, y_tt, i));*/
-
-/*        dux = job->dt * (N_TO_P(job, x_t, i));*/
-/*        duy = job->dt * (N_TO_P(job, y_t, i));*/
-/*        job->particles[i].x += dux;*/
-/*        job->particles[i].y += duy;*/
-/*        job->particles[i].ux += dux;*/
-/*        job->particles[i].uy += duy;*/
-
-/*        dux = job->dt * (N_TO_P(job, x_t, i));*/
-/*        duy = job->dt * (N_TO_P(job, y_t, i));*/
-/*        job->particles[i].x_tt = (N_TO_P(job, x_tt, i));*/
-/*        job->particles[i].y_tt = (N_TO_P(job, y_tt, i));*/
-
-/*        job->particles[i].x += dux;*/
-/*        job->particles[i].y += duy;*/
-/*        job->particles[i].x_t += job->dt * job->particles[i].x_tt;*/
-/*        job->particles[i].y_t += job->dt * job->particles[i].y_tt;*/
-
-/*        job->particles[i].ux += dux;*/
-/*        job->particles[i].uy += duy;*/
-
-
-        while(job->particles[i].x < 0) { job->particles[i].x += -floor(job->particles[i].x); }
-        while(job->particles[i].x > 1) { job->particles[i].x -= floor(job->particles[i].x); }
-
-        while(job->particles[i].y < 0) { job->particles[i].y += -floor(job->particles[i].y); }
-        while(job->particles[i].y > 1) { job->particles[i].y -= floor(job->particles[i].y); }
+        double h = 1.0 / job->N;
+        while(job->particles[i].x < 0) { job->particles[i].x += h; }
+        while(job->particles[i].x > h) { job->particles[i].x -= h; }
 
     }
     return;
