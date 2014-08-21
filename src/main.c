@@ -855,9 +855,9 @@ void *mpm_run_until(void *_task)
             job->stepcount++;
 
             if (job->t >= (job->frame / job->output.sample_rate_hz)) {
-                v2_write_frame(job->output.directory, job->output.info_fd, job, v2_write_particle, NULL);
-/*                write_frame(job->output.particle_fd, job->frame, job->t, job);*/
-/*                write_element_frame(job->output.element_fd, job->frame, job->t, job);*/
+                // v2_write_frame(job->output.directory, job->output.info_fd, job, v2_write_particle, NULL);
+                write_frame(job->output.particle_fd, job->frame, job->t, job);
+                write_element_frame(job->output.element_fd, job->frame, job->t, job);
 
                 job->frame++;
                 clock_gettime(CLOCK_REALTIME, &(job->toc));
