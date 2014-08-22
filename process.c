@@ -1026,7 +1026,7 @@ void move_grid_split(job_t *job, size_t n_start, size_t n_stop)
     for (i = n_start; i < n_stop; i++) {
         m = job->nodes[i].m;
 
-        if (m > TOL) {
+        if (m > 0.0) {
             job->nodes[i].x_tt = job->nodes[i].fx / m;
             job->nodes[i].y_tt = job->nodes[i].fy / m;
 
@@ -1044,7 +1044,14 @@ void move_grid_split(job_t *job, size_t n_start, size_t n_stop)
             job->nodes[i].x_t = 0;
             job->nodes[i].y_t = 0;
         }
-
+            assert(isfinite(job->nodes[i].x_tt));
+            assert(isfinite(job->nodes[i].y_tt));
+            assert(isfinite(job->nodes[i].x_t));
+            assert(isfinite(job->nodes[i].y_t));
+            assert(isfinite(job->nodes[i].mx_t));
+            assert(isfinite(job->nodes[i].my_t));
+            assert(isfinite(job->nodes[i].fx));
+            assert(isfinite(job->nodes[i].fy));
 /*        if (i == 0 && fabs(-0.5 *(job->particles[0].sxx + job->particles[0].syy)) > 1) {*/
 /*            printf("\n[%zu:%f %f %f %f %f]", i, job->t, job->particles[0].x, job->particles[0].y, job->particles[0].xl, job->particles[0].yl);*/
 /*            printf(" sigma=[%f %f %f], p=%f", job->particles[0].sxx, job->particles[0].sxy, job->particles[0].syy, -0.5 *(job->particles[0].sxx + job->particles[0].syy));*/
@@ -2494,8 +2501,10 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
         for (j = 0; j < 4; j++) {
             n = job->elements[el].nodes[j];
             m = job->nodes[n].m;
-            job->particles[i].x_tt += ((s[j] * job->nodes[n].fx) / m);
-            job->particles[i].y_tt += ((s[j] * job->nodes[n].fy) / m);
+		if (m > 0.0) {
+            		job->particles[i].x_tt += ((s[j] * job->nodes[n].fx) / m);
+            		job->particles[i].y_tt += ((s[j] * job->nodes[n].fy) / m);
+		}
         }
 
         job->particles[i].x_t += job->dt * job->particles[i].x_tt;
@@ -2507,8 +2516,10 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
         for (j = 0; j < 4; j++) {
             n = job->elements[el].nodes[j];
             m = job->nodes[n].m;
+		if (m > 0.0) {
             dux += ((s[j] * job->nodes[n].mx_t) / m);
             duy += ((s[j] * job->nodes[n].my_t) / m);
+		}
         }
         dux *= job->dt;
         duy *= job->dt;

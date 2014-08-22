@@ -32,7 +32,7 @@
 
 /* from Jop (modified I_0) */
 #define MU_2 0.6435
-#define I_0 (0.278 / 10.0)
+#define I_0 (0.278 / 1.0)
 
 /*
     from geometric considerations -- artificially increased to make
@@ -251,7 +251,7 @@ void calculate_stress_threaded(threadtask_t *task)
             job->particles[i].sxy = scale_factor * t0xy_tr;
             job->particles[i].syy = scale_factor * t0yy_tr - p_tr;
         } else {
-		fprintf(stderr, "u %zu %3.3g %d ", i, p_tr, density_flag);
+		fprintf(stderr, "u %zu %d %3.3g %3.3g %3.3g %3.3g %3.3g",i, density_flag, tau_tau, p_tr, job->particles[i].sxx, job->particles[i].sxy, job->particles[i].syy);
             nup_tau = 0;
         }
 
