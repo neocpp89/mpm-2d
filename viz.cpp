@@ -506,10 +506,10 @@ void inline draw_vector(double x0, double y0, double mag, double theta)
     glVertex3f(x0 + mag*cos(theta), y0 + mag*sin(theta), -1.0f);
 
     //arrowheads
-    glVertex3f(x0 + mag*cos(theta + M_PI_4)/2.0, y0 + mag*sin(theta + M_PI_4)/2.0, -1.0f);
+    /*glVertex3f(x0 + mag*cos(theta + M_PI_4)/2.0, y0 + mag*sin(theta + M_PI_4)/2.0, -1.0f);
     glVertex3f(x0 + mag*cos(theta), y0 + mag*sin(theta), -1.0f);
     glVertex3f(x0 + mag*cos(theta - M_PI_4)/2.0, y0 + mag*sin(theta - M_PI_4)/2.0, -1.0f);
-    glVertex3f(x0 + mag*cos(theta), y0 + mag*sin(theta), -1.0f);
+    glVertex3f(x0 + mag*cos(theta), y0 + mag*sin(theta), -1.0f);*/
     return;
 }
 
@@ -1327,9 +1327,9 @@ int draw_particles(void)
         if (!particles[i].active) {
             continue;
         }
-        particles[i].sxx = 0;
-        particles[i].sxy = 0;
-        particles[i].syy = 0;
+        //particles[i].sxx = 0;
+        //particles[i].sxy = 0;
+        //particles[i].syy = 0;
 
         int elem = which_element(particles[i].x, particles[i].y, bgsize);
         if (elem < 0 || elem >= (bgsize - 1) * (bgsize - 1)) {
@@ -1338,7 +1338,7 @@ int draw_particles(void)
         int list[4];
         element_to_node_list(&list[0], elem, bgsize);
         for (int k = 0; k < 4; k++) {
-            backgroundMesh[list[k]].CopyStressToParticle(&(particles[i]));
+            // backgroundMesh[list[k]].CopyStressToParticle(&(particles[i]));
         }
     }
 
@@ -1567,7 +1567,8 @@ int draw_particles(void)
                 continue;
             }
             calc_vel_vector(&particles[i]);
-            scale = 1;
+            scale = 0.05;
+
 
             glColor3f(1.0f, 1.0f, 1.0f);
             draw_vector(particles[i].x, particles[i].y, scale*particles[i].vel_mag, particles[i].vel_theta);

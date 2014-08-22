@@ -16,6 +16,8 @@
 #include "material.h"
 #include "exitcodes.h"
 
+#include <assert.h>
+
 #define jp(x) job->particles[i].x
 
 #undef EMOD
@@ -30,7 +32,7 @@
 
 /* from Jop (modified I_0) */
 #define MU_2 0.6435
-#define I_0 (0.278 / 1.0)
+#define I_0 (0.278 / 10.0)
 
 /*
     from geometric considerations -- artificially increased to make
@@ -230,7 +232,7 @@ void calculate_stress_threaded(threadtask_t *task)
             S0 = MU_S * p_tr;
             if (tau_tr <= S0) {
                 tau_tau = tau_tr;
-		scale_factor = 1.0;
+                scale_factor = 1.0;
             } else {
                 S2 = MU_2 * p_tr;
                 alpha = G * I_0 * job->dt * sqrt(p_tr / GRAINS_RHO) / GRAINS_D;
@@ -239,6 +241,8 @@ void calculate_stress_threaded(threadtask_t *task)
                 tau_tau = negative_root(1.0, B, H);
                 scale_factor = (tau_tau / tau_tr);
             }
+
+            assert(scale_factor >= 0.0);
 
             nup_tau = ((tau_tr - tau_tau) / G) / job->dt;
             beta = 0;
