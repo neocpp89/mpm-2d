@@ -9,7 +9,7 @@ VIZBIN = viz
 CFLAGS = -fno-omit-frame-pointer -c -march=native -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -I/usr/lib/openmpi/include/ -rdynamic
 #CFLAGS = -fno-omit-frame-pointer -c -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -funroll-loops -I/usr/lib/openmpi/include/ -rdynamic
 #takes form '-ldl -lpthread' etc.
-LIB = -lrt -lm -pthread -lcxsparse -lconfuse -ldl
+LIB = -lrt -lm -pthread -lconfuse -ldl
 # modified CFLAGS for libraries
 LDFLAGS = $(LIB) -g
 # CFLAGS = -o $(BIN) -I<dir> -L<dir> -Wall -Wstrict-prototypes -ansi -pedantic

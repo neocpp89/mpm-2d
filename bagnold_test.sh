@@ -8,7 +8,7 @@ FLOWSTART=0.1
 
 MODEL_SO=g_local_mu2.so
 THREADS=1
-SIMTIME=10.0
+SIMTIME=50.0
 
 EMOD=1e9
 NUMOD=0.3
@@ -18,7 +18,7 @@ NUMOD=0.3
 for opening_size in `seq $MIN_SIZE $STEP $MAX_SIZE`;
 do {
     # preprocessing
-    OUTDIR=/home/$USER/backup/forward/bagnold-$opening_size
+    OUTDIR=/home/$USER/backup/forward/bagnold-sc-$opening_size
     mkdir -p $OUTDIR
 
     cat << EOF > $OUTDIR/runcfg
@@ -26,7 +26,7 @@ timestep
 {
     dt-max = 1e-2
     dt-min = 1e-10
-    dt = 3e-6
+    dt = 1e-5
     automatic-dt = 0 
     allow-dt-increase = 0
     stable-dt-threshold = 4
@@ -87,4 +87,4 @@ EOF
 }; done;
     OUTDIR=
 
-parallel --progress ./mpm_2d -c /home/$USER/backup/forward/bagnold-{}/runcfg -t$THREADS $SIMTIME  ::: `seq $MIN_SIZE $STEP $MAX_SIZE`;
+parallel --progress ./mpm_2d -c /home/$USER/backup/forward/bagnold-htr-{}/runcfg -t$THREADS $SIMTIME  ::: `seq $MIN_SIZE $STEP $MAX_SIZE`;

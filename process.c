@@ -1573,6 +1573,9 @@ void update_internal_stress(job_t *job)
 /*----------------------------------------------------------------------------*/
 void implicit_solve(job_t *job)
 {
+
+ return;
+
     int i, j;
     int i_new, j_new;
     int r, s;
@@ -2918,6 +2921,7 @@ void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop)
 /*----------------------------------------------------------------------------*/
 void generate_mappings(job_t *job)
 {
+	return;
     size_t p_idx;
     size_t e_idx;
     size_t i_idx;
