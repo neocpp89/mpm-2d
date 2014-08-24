@@ -36,7 +36,7 @@
     from geometric considerations -- artificially increased to make
     velocity field reasonable in chute.
 */
-#define GRAINS_D (0.01 * 5)
+#define GRAINS_D (0.001 * 5)
 
 #define mu_y jp(state[0])
 /*#define Epxy jp(state[1])*/

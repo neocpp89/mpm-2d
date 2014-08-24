@@ -5,8 +5,8 @@ p.E = 1e6;
 p.nu = 0.3;
 p.g = -0.8;
 % p.Np = 4 * 2.5;
-p.Np = 40;
-p.N = 41;
+p.Np = 100;
+p.N = 101;
 p.rhop = 3;
 p.tol = 1e-12;
 p.T = 2;
@@ -92,7 +92,7 @@ ylim([min(y), max(y)]);
 fp = fopen('generated_particles.txt', 'w');
 fprintf(fp, '%d\n', numel(mp));
 for i=1:numel(mp)
-    fprintf(fp, '%f %f %f %f %f %f %f %f %f\n', mp(i), vp(i),
+    fprintf(fp, '%g %g %g %g %g %g %g %g %g\n', mp(i), vp(i),
         xp(i), yp(i), xp_t(i), yp_t(i),
         sxxp(i), sxyp(i), syyp(i));
 end

@@ -64,6 +64,7 @@ void generate_dirichlet_bcs(job_t *job)
 /*    off_col = job->boundary.int_props[1];*/
 
     int off = ((job->N - 1)/ 2);
+/*    off = ((job->N - 1)/ 4); */
 /*    int off = job->N - 1; */
 
     for (i = 0; i < job->num_nodes; i++) {
@@ -78,7 +79,6 @@ void generate_dirichlet_bcs(job_t *job)
 
     /* Floor (and ceiling commented out). */
     for (n = 0; n < job->N; n++) {
-
         /* trapdoor */
         if (job->nodes[n].x <= hole_radius && job->t > open_time) {
             continue;
@@ -90,14 +90,29 @@ void generate_dirichlet_bcs(job_t *job)
         job->u_dirichlet_mask[NODAL_DOF * n + XDOF_IDX] = 1;
         job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;
 
-#if 0
+#if 0        
+	size_t row = 0;
+        
         /* hourglass hole */
-        job->u_dirichlet[NODAL_DOF * (n + (job->N / 2) * job->N) + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * (n + (job->N / 2) * job->N) + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * (n + (job->N / 2) * job->N) + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * (n + (job->N / 2) * job->N) + YDOF_IDX] = 1;
-#endif
+        if (job->nodes[n].x > hole_radius && job->t > open_time) {
+            job->u_dirichlet[NODAL_DOF * (n + (row) * job->N) + XDOF_IDX] = 0;
+            job->u_dirichlet[NODAL_DOF * (n + (row) * job->N) + YDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * (n + (row) * job->N) + XDOF_IDX] = 1;
+            job->u_dirichlet_mask[NODAL_DOF * (n + (row) * job->N) + YDOF_IDX] = 1;
+        }
 
+        // steps
+        #define MIN(x,y) (((x) < (y))?((x)):((y)))
+        job->u_dirichlet[NODAL_DOF * (n + (MIN(job->N, n + row)) * job->N) + XDOF_IDX] = 0;
+        job->u_dirichlet[NODAL_DOF * (n + (MIN(job->N, n + row)) * job->N) + YDOF_IDX] = 0;
+        job->u_dirichlet_mask[NODAL_DOF * (n + (MIN(job->N, n + row)) * job->N) + XDOF_IDX] = 1;
+        job->u_dirichlet_mask[NODAL_DOF * (n + (MIN(job->N, n + row)) * job->N) + YDOF_IDX] = 1;
+        job->u_dirichlet[NODAL_DOF * (n + (MIN(job->N, n + row-1)) * job->N) + XDOF_IDX] = 0;
+        job->u_dirichlet[NODAL_DOF * (n + (MIN(job->N, n + row-1)) * job->N) + YDOF_IDX] = 0;
+        job->u_dirichlet_mask[NODAL_DOF * (n + (MIN(job->N, n + row-1)) * job->N) + XDOF_IDX] = 1;
+        job->u_dirichlet_mask[NODAL_DOF * (n + (MIN(job->N, n + row-1)) * job->N) + YDOF_IDX] = 1;
+#endif
+        
 /*        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 0;*/
 /*        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 0;*/
 /*        job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 1;*/
