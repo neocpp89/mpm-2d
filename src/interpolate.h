@@ -28,7 +28,7 @@ void grad_paraboloid(
     double *b29,
     double x_local, double y_local, double h);
 
-inline double si(double xp, double xi, double h)
+static inline double si(double xp, double xi, double h)
 {
     double r = 0;
     double xl;
@@ -44,7 +44,7 @@ inline double si(double xp, double xi, double h)
     return r;
 }
 
-inline double si2d(double xp, double yp, double xi, double yi, double h)
+static inline double si2d(double xp, double yp, double xi, double yi, double h)
 {
     return si(xp, xi, h)*si(yp, yi, h);
 }
