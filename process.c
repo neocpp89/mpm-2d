@@ -876,13 +876,6 @@ void explicit_mpm_step_usl_threaded(void *_task)
         /* Zero perpendicular momentum at edge nodes. */
         zero_momentum_bc(job);
 
-        /*
-            This is poorly named -- it actually calculates diverence of stress to
-            get nodal force.
-        */
-        /* XXX: moved to map_to_grid_explicit_split. */
-/*        update_stress(job);*/
-
         /* Zero perpendicular forces at edge nodes. */
         zero_force_bc(job);
 
@@ -1044,14 +1037,15 @@ void move_grid_split(job_t *job, size_t n_start, size_t n_stop)
             job->nodes[i].x_t = 0;
             job->nodes[i].y_t = 0;
         }
+            assert(m >= 0.0);
+            assert(isfinite(job->nodes[i].fx));
+            assert(isfinite(job->nodes[i].fy));
             assert(isfinite(job->nodes[i].x_tt));
             assert(isfinite(job->nodes[i].y_tt));
             assert(isfinite(job->nodes[i].x_t));
             assert(isfinite(job->nodes[i].y_t));
             assert(isfinite(job->nodes[i].mx_t));
             assert(isfinite(job->nodes[i].my_t));
-            assert(isfinite(job->nodes[i].fx));
-            assert(isfinite(job->nodes[i].fy));
 /*        if (i == 0 && fabs(-0.5 *(job->particles[0].sxx + job->particles[0].syy)) > 1) {*/
 /*            printf("\n[%zu:%f %f %f %f %f]", i, job->t, job->particles[0].x, job->particles[0].y, job->particles[0].xl, job->particles[0].yl);*/
 /*            printf(" sigma=[%f %f %f], p=%f", job->particles[0].sxx, job->particles[0].sxy, job->particles[0].syy, -0.5 *(job->particles[0].sxx + job->particles[0].syy));*/
@@ -1276,6 +1270,22 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
             &(job->b11[i]), &(job->b12[i]), &(job->b13[i]), &(job->b14[i]),
             &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
             xl, yl, job->h);
+
+        assert(isfinite(xl));
+        assert(isfinite(yl));
+        assert(isfinite(job->h1[i]));
+        assert(isfinite(job->h2[i]));
+        assert(isfinite(job->h3[i]));
+        assert(isfinite(job->h4[i]));
+        assert(isfinite(job->b11[i]));
+        assert(isfinite(job->b12[i]));
+        assert(isfinite(job->b13[i]));
+        assert(isfinite(job->b14[i]));
+        assert(isfinite(job->b21[i]));
+        assert(isfinite(job->b22[i]));
+        assert(isfinite(job->b23[i]));
+        assert(isfinite(job->b24[i]));
+
         if (xl < 0.0f || xl > 1.0f || yl < 0.0f || yl > 1.0f) {
             fprintf(stderr, "Particle %d outside of element %d (%g, %g).\n", i,
                 p, xl, yl);
@@ -2160,6 +2170,8 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
 
             p = job->in_element[p_idx];
 
+            assert(p >= 0 && p < job->num_elements);
+
             s[0] = job->h1[p_idx];
             s[1] = job->h2[p_idx];
             s[2] = job->h3[p_idx];
@@ -2180,10 +2192,26 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
             pdata[5] = job->particles[p_idx].bx * job->particles[p_idx].m;
             pdata[6] = job->particles[p_idx].by * job->particles[p_idx].m;
 
+            assert(isfinite(pdata[0]));
+            assert(isfinite(pdata[1]));
+            assert(isfinite(pdata[2]));
+            assert(isfinite(pdata[3]));
+            assert(isfinite(pdata[4]));
+            assert(isfinite(pdata[5]));
+            assert(isfinite(pdata[6]));
+
             /* Stress. */
             stressdata[0] = -job->particles[p_idx].sxx * job->particles[p_idx].v;
             stressdata[1] = -job->particles[p_idx].sxy * job->particles[p_idx].v;
             stressdata[2] = -job->particles[p_idx].syy * job->particles[p_idx].v;
+
+            assert(isfinite(job->particles[p_idx].v));
+            assert(isfinite(job->particles[p_idx].sxx));
+            assert(isfinite(job->particles[p_idx].sxy));
+            assert(isfinite(job->particles[p_idx].syy));
+            assert(isfinite(stressdata[0]));
+            assert(isfinite(stressdata[1]));
+            assert(isfinite(stressdata[2]));
 
             accumulate_p_to_n_ds_list(job->nodes,
                 node_field_offsets, job->elements[p].nodes, s, 
@@ -2194,6 +2222,11 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
             ds[2] = job->b13[p_idx];
             ds[3] = job->b14[p_idx];
 
+            assert(isfinite(ds[0]));
+            assert(isfinite(ds[1]));
+            assert(isfinite(ds[2]));
+            assert(isfinite(ds[3]));
+
             accumulate_p_to_n_ds_list(job->nodes,
                 node_d_offsets, job->elements[p].nodes, ds, 
                 NODES_PER_ELEMENT, &(stressdata[0]), 2);
@@ -2203,9 +2236,19 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
             ds[2] = job->b23[p_idx];
             ds[3] = job->b24[p_idx];
 
+            assert(isfinite(ds[0]));
+            assert(isfinite(ds[1]));
+            assert(isfinite(ds[2]));
+            assert(isfinite(ds[3]));
+
             accumulate_p_to_n_ds_list(job->nodes,
                 node_d_offsets, job->elements[p].nodes, ds, 
                 NODES_PER_ELEMENT, &(stressdata[1]), 2);
+
+            for (int k = 0; k < NODES_PER_ELEMENT; k++) {
+                assert(isfinite(job->nodes[job->elements[p].nodes[k]].fx));
+                assert(isfinite(job->nodes[job->elements[p].nodes[k]].fy));
+            }
         }
 
         /*
@@ -2893,7 +2936,12 @@ void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop)
         for (i = p_start; i < p_stop; i++) {
             CHECK_ACTIVE(job, i);
 /*            job->particles[i].v = job->h * job->h / (job->elements[job->in_element[i]].n);*/
-            job->particles[i].v = job->particles[i].v * exp (job->dt * (job->particles[i].exx_t + job->particles[i].eyy_t));
+            double trL = (job->particles[i].exx_t + job->particles[i].eyy_t);
+            assert(isfinite(trL));
+            assert(isfinite(job->particles[i].v));
+/*            printf("%g ", job->particles[i].v);*/
+/*            fflush(stdout);*/
+            job->particles[i].v = job->particles[i].v * exp (job->dt * trL);
 #if 0
             size_t j, el, n, r, c, nvols;
             double rho, s[4];

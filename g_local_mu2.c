@@ -255,7 +255,7 @@ void calculate_stress_threaded(threadtask_t *task)
             nup_tau = 0;
         }
 
-	if (isnan(job->particles[i].sxx) || isnan(job->particles[i].sxy) || isnan(job->particles[i].syy)) {
+	if (!isfinite(job->particles[i].sxx) || !isfinite(job->particles[i].sxy) || !isfinite(job->particles[i].syy)) {
 		fprintf(stderr, "TA %zu %d %3.3g %3.3g %3.3g %3.3g %3.3g",i, density_flag, tau_tau, p_tr, job->particles[i].sxx, job->particles[i].sxy, job->particles[i].syy);
 	}
 

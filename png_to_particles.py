@@ -5,7 +5,7 @@ import Image
 import numpy as np
 
 # linear material points per pixel (linear, so 2 -> 4 points in 1 pixel)
-lmpp = 4
+lmpp = 2
 rho = 1500
 # cell spacing for material point
 cs = 1.0 / lmpp
