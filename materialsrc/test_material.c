@@ -97,7 +97,7 @@ int main(int argc, char **argv)
     p.sxx = -1;
     p.sxy = 0;
     p.syy = -1;
-    p.m = 1500;
+    p.m = 2450;
     p.v = 1;
 
     testjob.num_particles = 1;
