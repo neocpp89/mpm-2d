@@ -54,17 +54,15 @@ void generate_dirichlet_bcs(job_t *job)
     double open_time;
 
     /**/
-    int off_row;
-    int off_col;
+    int off_row = job->N - 1;
+    int off_col = job->N - 1;
+/*    int off_col = ((job->N - 1)/ 2);*/
 
     hole_radius = job->boundary.fp64_props[0];
     open_time = job->boundary.fp64_props[1];
 
 /*    off_row = job->boundary.int_props[0];*/
 /*    off_col = job->boundary.int_props[1];*/
-
-    int off = ((job->N - 1)/ 2);
-/*    int off = job->N - 1; */
 
     for (i = 0; i < job->num_nodes; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
@@ -112,11 +110,11 @@ void generate_dirichlet_bcs(job_t *job)
 /*        job->u_dirichlet[NODAL_DOF * (0 + n*job->N) + YDOF_IDX] = 0;*/
 /*        job->u_dirichlet_mask[NODAL_DOF * (0+ n*job->N) + YDOF_IDX] = 1;*/
 
-        job->u_dirichlet[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + XDOF_IDX] = 1;
+        job->u_dirichlet[NODAL_DOF * (off_col + n*job->N) + XDOF_IDX] = 0;
+        job->u_dirichlet_mask[NODAL_DOF * (off_col + n*job->N) + XDOF_IDX] = 1;
 
-/*        job->u_dirichlet[NODAL_DOF * (off + n*job->N) + YDOF_IDX] = 0;*/
-/*        job->u_dirichlet_mask[NODAL_DOF * (off + n*job->N) + YDOF_IDX] = 1;*/
+/*        job->u_dirichlet[NODAL_DOF * (off_col + n*job->N) + YDOF_IDX] = 0;*/
+/*        job->u_dirichlet_mask[NODAL_DOF * (off_col + n*job->N) + YDOF_IDX] = 1;*/
     }
 
     return;
