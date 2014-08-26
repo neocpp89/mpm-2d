@@ -87,4 +87,4 @@ EOF
 }; done;
     OUTDIR=
 
-parallel --progress ./mpm_2d -c /home/$USER/backup/forward/bagnold-htr-{}/runcfg -t$THREADS $SIMTIME  ::: `seq $MIN_SIZE $STEP $MAX_SIZE`;
+parallel --progress ./mpm_2d -c /home/$USER/backup/forward/bagnold-sc-{}/runcfg -t$THREADS $SIMTIME  ::: `seq $MIN_SIZE $STEP $MAX_SIZE`;
