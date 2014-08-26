@@ -8,7 +8,8 @@ FLOWSTART=0.1
 
 MODEL_SO=g_local_mu2.so
 THREADS=1
-SIMTIME=50.0
+SIMTIME=500.0
+
 
 EMOD=1e9
 NUMOD=0.3
@@ -26,7 +27,7 @@ timestep
 {
     dt-max = 1e-2
     dt-min = 1e-10
-    dt = 1e-5
+    dt = 3e-6
     automatic-dt = 0 
     allow-dt-increase = 0
     stable-dt-threshold = 4
@@ -67,8 +68,8 @@ implicit
 
 input
 {
-    initial-particle-file = "generated_particles.txt"
-    grid-file = "generated_grid.txt"
+    initial-particle-file = "column_40d.txt"
+    grid-file = "grid_200d.txt"
 }
 
 output
