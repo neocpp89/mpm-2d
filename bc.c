@@ -28,18 +28,18 @@ int validate_bc_properties(job_t *job)
 /*----------------------------------------------------------------------------*/
 void generate_dirichlet_bcs(job_t *job)
 {
-    for (int i = 0; i < job->num_nodes; i++) {
+    for (int i = 0; i < 4 * job->N; i++) {
         for (int j = 0; j < NODAL_DOF; j++) {
             job->u_dirichlet_mask[NODAL_DOF * i + j] = 0;
         }
     }
 
-    /* Floor. */
+    /* Left side. */
     for (int n = 0; n < job->N; n++) {
-        job->u_dirichlet[NODAL_DOF * n + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * n + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * n + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;
+        job->u_dirichlet[NODAL_DOF * (n * job->N) + XDOF_IDX] = 0;
+        job->u_dirichlet[NODAL_DOF * (n * job->N) + YDOF_IDX] = 0;
+        job->u_dirichlet_mask[NODAL_DOF * (n * job->N) + XDOF_IDX] = 1;
+        job->u_dirichlet_mask[NODAL_DOF * (n * job->N) + YDOF_IDX] = 1;
 
     }
 
@@ -53,17 +53,17 @@ void generate_node_number_override(job_t *job)
     int i, j;
     int off = 1; //single column
 
-    for (i = 0; i < job->num_nodes; i++) {
+    for (i = 0; i < 4 * job->N; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
             job->node_number_override[NODAL_DOF * i + j] = (NODAL_DOF * i + j);
         }
     }
 
-    /* x direction is periodic */
+    /* y direction is periodic */
     for (i = 0; i < job->N; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
-            job->node_number_override[NODAL_DOF * (off + i*job->N) + j] =
-                (NODAL_DOF * (i*job->N) + j);
+            job->node_number_override[NODAL_DOF * (off*job->N + i) + j] =
+                (NODAL_DOF * (i) + j);
         }
     }
 

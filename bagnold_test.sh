@@ -2,7 +2,7 @@
 
 MIN_SIZE=19
 STEP=1
-MAX_SIZE=34
+MAX_SIZE=41
 
 FLOWSTART=0.1
 
@@ -68,7 +68,7 @@ implicit
 
 input
 {
-    initial-particle-file = "column_40d.txt"
+    initial-particle-file = "column_40d_horizontal.txt"
     grid-file = "grid_200d.txt"
 }
 

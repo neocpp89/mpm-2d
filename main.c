@@ -669,6 +669,9 @@ job_start:
     dispd(job->num_nodes);
     dispd(job->num_elements);
 
+    // force number of threads
+    num_threads = 1;
+
     job->threads = (pthread_t *)malloc(sizeof(pthread_t) * num_threads);
     tasks = (threadtask_t *)malloc(sizeof(threadtask_t) * num_threads);
     job->step_barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t));
@@ -698,6 +701,11 @@ job_start:
             fprintf(stderr, "WARNING: blocksize for task is < 256! This may result in lower performance compared to a single threaded instance.\n");
         }
     }
+
+    // force reduced range for node/element lists
+    tasks[0].n_blocksize = 2 * job->N;
+    tasks[0].e_blocksize = job->N + 1;
+
     job->num_threads = num_threads;
     threads = (pthread_t *)malloc(sizeof(pthread_t) * job->num_threads);
     printf("Using %d %s.\n", num_threads, (num_threads > 1)?"threads":"thread");

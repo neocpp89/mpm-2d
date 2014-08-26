@@ -145,8 +145,8 @@ void time_varying_loads(job_t *job)
 	theta *= DEG_TO_RAD;
 
             for (i = 0; i < job->num_particles; i++) {
-                job->particles[i].bx = -gravity * sin(theta);
-                job->particles[i].by = gravity  * cos(theta);
+                job->particles[i].bx = gravity * cos(theta);
+                job->particles[i].by = -gravity * sin(theta);
             }
         break;
     }

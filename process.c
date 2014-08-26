@@ -369,6 +369,8 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 void zero_momentum_bc(job_t *job)
 {
     int i, j, m, n;
+    size_t _store = job->num_nodes;
+    job->num_nodes = 2 * job->N;
 
     for (i = 0; i < job->num_nodes; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
@@ -441,6 +443,7 @@ void zero_momentum_bc(job_t *job)
         }
     }
 
+    job->num_nodes = _store;
     return;
 }
 /*----------------------------------------------------------------------------*/
@@ -449,6 +452,8 @@ void zero_momentum_bc(job_t *job)
 void zero_force_bc(job_t *job)
 {
     int i, j, m, n;
+    size_t _store = job->num_nodes;
+    job->num_nodes = 2 * job->N;
 
     for (i = 0; i < job->num_nodes; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
@@ -496,6 +501,7 @@ void zero_force_bc(job_t *job)
         }
     }
 
+    job->num_nodes = _store;
     return;
 }
 /*----------------------------------------------------------------------------*/
@@ -2573,8 +2579,8 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
 #endif
 
         double h = 1.0 / job->N;
-        while(job->particles[i].x < 0) { job->particles[i].x += h; }
-        while(job->particles[i].x > h) { job->particles[i].x -= h; }
+        while(job->particles[i].y < 0) { job->particles[i].y += h; }
+        while(job->particles[i].y > h) { job->particles[i].y -= h; }
 
     }
     return;
