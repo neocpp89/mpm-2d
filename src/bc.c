@@ -93,13 +93,13 @@ void generate_dirichlet_bcs(job_t *job)
 #if 1        
 	size_t row = ((job->N - 1) / 2);
         
-        /* hourglass hole */
-        if (job->nodes[n].x > hole_radius && job->t > open_time) {
+        /* divider */
+        /* if (job->nodes[n].x > hole_radius && job->t > open_time) {
             job->u_dirichlet[NODAL_DOF * (n + (row) * job->N) + XDOF_IDX] = 0;
             job->u_dirichlet[NODAL_DOF * (n + (row) * job->N) + YDOF_IDX] = 0;
             job->u_dirichlet_mask[NODAL_DOF * (n + (row) * job->N) + XDOF_IDX] = 1;
             job->u_dirichlet_mask[NODAL_DOF * (n + (row) * job->N) + YDOF_IDX] = 1;
-        }
+        } */
 
         // steps
         #define MIN(x,y) (((x) < (y))?((x)):((y)))
