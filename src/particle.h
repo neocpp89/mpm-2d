@@ -144,6 +144,14 @@ typedef struct particle_s {
     
     /* unique id, so particles can be tracked between frames */
     size_t id;
+    
+    /* time-averaged stress quantities */
+    double sxx_bar;
+    double sxy_bar;
+    double syy_bar;
+    double solid_state;
+    size_t steps;
+    
 } particle_t;
 
 /*

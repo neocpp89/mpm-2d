@@ -83,7 +83,12 @@ headerinfo_t particle_out_fields[] = {
     /* State Variables (for constitutive law) */
 /*    double state[DEPVAR];*/
     NAMEDHEADERINFO(state[9], "%lg", "gammap"), 
-    NAMEDHEADERINFO(state[10], "%lg", "gammadotp") /* gammadotp */
+    NAMEDHEADERINFO(state[10], "%lg", "gammadotp"), /* gammadotp */
+    
+    HEADER_FP64(sxx_bar),
+    HEADER_FP64(sxy_bar),
+    HEADER_FP64(syy_bar),
+    HEADER_FP64(solid_state)
 };
 
 /*---Version 2 of output format-----------------------------------------------*/

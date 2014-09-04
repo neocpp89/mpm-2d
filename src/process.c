@@ -930,6 +930,17 @@ void explicit_mpm_step_usl_threaded(void *_task)
     /* Calculate stress. */
     (*(job->material.calculate_stress_threaded))(task);
 
+    /* update time averaged stresses */
+    for (size_t i = p_start; i < p_stop; i++) {
+        job->particles[i].steps++;
+        job->particles[i].sxx_bar += (job->particles[i].sxx - job->particles[i].sxx_bar) / job->particles[i].steps;
+        job->particles[i].sxy_bar += (job->particles[i].sxy - job->particles[i].sxy_bar) / job->particles[i].steps;
+        job->particles[i].syy_bar += (job->particles[i].syy - job->particles[i].syy_bar) / job->particles[i].steps;
+        double p = -0.5 * (job->particles[i].sxx + job->particles[i].syy);
+        double s = (p == 0)?(0.0):1.0;
+        job->particles[i].solid_state += (s - job->particles[i].solid_state) / job->particles[i].steps;
+    }
+
     return;
 }
 /*----------------------------------------------------------------------------*/
