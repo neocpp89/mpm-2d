@@ -64,7 +64,7 @@ void generate_dirichlet_bcs(job_t *job)
 /*    off_col = job->boundary.int_props[1];*/
 
     int off = ((job->N - 1)/ 2);
-/*    off = ((job->N - 1)/ 4); */
+    off = ((job->N - 1)/ 4);
 /*    int off = job->N - 1; */
 
     for (i = 0; i < job->num_nodes; i++) {
@@ -79,19 +79,19 @@ void generate_dirichlet_bcs(job_t *job)
 
     /* Floor (and ceiling commented out). */
     for (n = 0; n < job->N; n++) {
-        /* trapdoor */
-        if (job->nodes[n].x <= hole_radius && job->t > open_time) {
-            continue;
-        }
-
         /* bottom of hourglass */
         job->u_dirichlet[NODAL_DOF * n + XDOF_IDX] = 0;
         job->u_dirichlet[NODAL_DOF * n + YDOF_IDX] = 0;
         job->u_dirichlet_mask[NODAL_DOF * n + XDOF_IDX] = 1;
         job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;
+        
+        /* trapdoor */
+        if (job->nodes[n].x <= hole_radius && job->t > open_time) {
+            continue;
+        }
 
-#if 0        
-	size_t row = 0;
+#if 1        
+	size_t row = ((job->N - 1) / 2);
         
         /* hourglass hole */
         if (job->nodes[n].x > hole_radius && job->t > open_time) {
