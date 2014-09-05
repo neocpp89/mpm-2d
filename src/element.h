@@ -64,6 +64,8 @@ typedef struct element_s {
     double f_element[NODAL_DOF * NODES_PER_ELEMENT];
 
     double jacobian[2][2];
+    
+    int solid_state;
 } element_t;
 
 /*
