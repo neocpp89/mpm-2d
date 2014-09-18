@@ -1,7 +1,7 @@
 /**
-    \file g_local.c
+    \file g_nonlocal_mu2.c
     \author Sachith Dunatunga
-    \date 23.10.13
+    \date 10.09.2014
 
     mpm_2d -- An implementation of the Material Point Method in 2D.
 */
@@ -28,31 +28,17 @@
 #undef EMOD
 #undef NUMOD
 
-#define EMOD 1e8
-#define NUMOD 0.3
-
-#define G (EMOD / (2.0f * (1.0f + NUMOD)))
-#define K (EMOD / (3.0f * (1.0f - 2*NUMOD)))
-
-#undef G
-#undef K
-
-#define PI 3.1415926535897932384626433
-#define PHI (30.0*PI/180.0)
-
-/* from Dave + Ken's paper (modified B) */
+/* from Dave + Ken's paper */
 #define MU_S 0.3819
 #define GRAINS_RHO 2450
-#define B (0.9377 * 20)
 #define A 0.48
 
-/* from Jop (modified I_0) */
+/* from Jop */
 #define MU_2 0.6435
-#define I_0 (0.278 / 1.0)
+#define I_0 0.278
 
 /* from geometric considerations */
-#define GRAINS_D (0.01 * 5)
-
+#define GRAINS_D 0.005
 
 #define Epxx jp(state[0])
 #define Epxy jp(state[1])
@@ -66,9 +52,9 @@
 #define gammap jp(state[9])
 #define gammadotp jp(state[10])
 
-#define TOL 1e-10
+#define TOL 0
 
-#define MAT_VERSION_STRING "1.11 " __DATE__ " " __TIME__
+#define MAT_VERSION_STRING "1.0 " __DATE__ " " __TIME__
 
 void calculate_stress(job_t *job);
 void calculate_bulk_granular_fluidity(job_t *job);
@@ -92,9 +78,6 @@ void material_init(job_t *job)
         Epxx = 0;
         Epxy = 0;
         Epyy = 0;
-/*        Etxx = 0;*/
-/*        Etxy = 0;*/
-/*        Etyy = 0;*/
         eta = 0;
         gammap = 0;
         gammadotp = 0;
@@ -154,9 +137,9 @@ void calculate_stress(job_t *job)
     double t0xx_tr, t0xy_tr, t0yy_tr;
     double p_tr, tau_tr;
 
-    double beta, nup_tau;
+    double nup_tau;
 
-    double const c = 1e-2;
+    double const c = 0;
 
     double f;
     int density_flag;
@@ -164,8 +147,8 @@ void calculate_stress(job_t *job)
     size_t i;
 
     double inertial_num;
-
-/*    fprintf(stderr, "processing particle ids [%zu %zu].\n", p_start, p_stop);*/
+    
+    double trD, lambda;
 
     /* solve for g_local */
     calculate_bulk_granular_fluidity(job);
@@ -178,6 +161,59 @@ void calculate_stress(job_t *job)
             continue;
         }
 
+        /* Calculate tau and p trial values. */
+        trD = job->particles[i].exx_t + job->particles[i].eyy_t;
+        dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
+        dsjxy = 2.0 * G * job->particles[i].exy_t;
+        dsjyy = lambda * trD + 2.0 * G * job->particles[i].eyy_t;
+        dsjxx += 2 * job->particles[i].wxy_t * job->particles[i].sxy;
+        dsjxy -= job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
+        dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
+
+        sxx_tr = job->particles[i].sxx + job->dt * dsjxx;
+        sxy_tr = job->particles[i].sxy + job->dt * dsjxy;
+        syy_tr = job->particles[i].syy + job->dt * dsjyy;
+
+        p_tr = -0.5 * (sxx_tr + syy_tr);
+        t0xx_tr = sxx_tr + p_tr;
+        t0xy_tr = sxy_tr;
+        t0yy_tr = syy_tr + p_tr;
+        tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
+
+        if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
+            density_flag = 1;
+/*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
+        } else {
+            density_flag = 0;
+        }
+
+        if (density_flag || p_tr <= c) {
+            nup_tau = (tau_tr) / (G * job->dt);
+
+            job->particles[i].sxx = 0;
+            job->particles[i].sxy = 0;
+            job->particles[i].syy = 0;
+        } else if (p_tr > c) {
+            scale_factor = p_tr / (G * job->dt * gf + p_tr);
+            tau_tau = tau_tr * scale_factor;
+
+            nup_tau = ((tau_tr - tau_tau) / G) / job->dt;
+
+            job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
+            job->particles[i].sxy = scale_factor * t0xy_tr;
+            job->particles[i].syy = scale_factor * t0yy_tr - p_tr;
+        } else {
+/*            fprintf(stderr, "u %zu %3.3g %3.3g %d ", i, f, p_tr, density_flag);*/
+            fprintf(stderr, "u"); 
+            nup_tau = 0;
+        }
+
+        /* use strain rate to calculate stress increment */
+        gammap += nup_tau * job->dt;
+        gammadotp = nup_tau;
+        
+        #if 0
+        
         /* Calculate p at beginning of timestep. */
         p_t = -0.5 * (job->particles[i].sxx + job->particles[i].syy);
 
@@ -200,16 +236,16 @@ void calculate_stress(job_t *job)
         tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
 
         inertial_num = gammadotp * GRAINS_D * sqrt(GRAINS_RHO);
-/*        if (p_t <= 0) {*/
-/*            mu_t = MU_2;*/
-/*        } else {*/
-/*            inertial_num = inertial_num / sqrt(p_t);*/
-/*            if (inertial_num <= 0) {*/
-/*                mu_t = MU_S;*/
-/*            } else {*/
-/*                mu_t = MU_S + (MU_2 - MU_S) / ((I_0 / inertial_num) + 1.0);*/
-/*            }*/
-/*        }*/
+        if (p_t <= 0) {
+            mu_t = MU_2;
+        } else {
+            inertial_num = inertial_num / sqrt(p_t);
+            if (inertial_num <= 0) {
+                mu_t = MU_S;
+            } else {
+                mu_t = MU_S + (MU_2 - MU_S) / ((I_0 / inertial_num) + 1.0);
+            }
+        }
 
         tau_tau = mu_t*(p_tr + c);
         f = tau_tr - tau_tau;
@@ -223,29 +259,25 @@ void calculate_stress(job_t *job)
 
         if (density_flag) {
             nup_tau = (tau_tr) / (G * job->dt);
-            beta = -p_tr / (K * job->dt);
 
             job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
             job->particles[i].syy = 0;
         } else if (f < 0) {
             nup_tau = 0;
-            beta = 0;
 
             job->particles[i].sxx = t0xx_tr - p_tr;
             job->particles[i].sxy = t0xy_tr;
             job->particles[i].syy = t0yy_tr - p_tr;
-        } else if (f >= 0 && p_tr > -c/mu_t) {
+        } else if (f >= 0 && p_tr > -c) {
             nup_tau = (tau_tr - tau_tau) / (G * job->dt);
-            beta = 0;
 
             scale_factor = (tau_tau / tau_tr);
             job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
             job->particles[i].sxy = scale_factor * t0xy_tr;
             job->particles[i].syy = scale_factor * t0yy_tr - p_tr;
-        } else if (p_tr <= -c/mu_t) {
+        } else if (p_tr <= -c) {
             nup_tau = tau_tr / (G * job->dt);
-            beta = ((c/mu_t) - p_tr) / (K * job->dt);
 
             job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
@@ -259,56 +291,109 @@ void calculate_stress(job_t *job)
         /* use strain rate to calculate stress increment */
         gammap += nup_tau * job->dt;
         gammadotp = nup_tau;
+        
+        #endif
     }
 
     return;
 }
 /*----------------------------------------------------------------------------*/
 
+double negative_root(double a, double b, double c);
+
+double negative_root(double a, double b, double c)
+{
+    double x;
+    if (b > 0) {
+        x = (-b - sqrt(b*b - 4*a*c)) / (2*a);
+    } else {
+        x = (2*c) / (-b + sqrt(b*b - 4*a*c));
+    }
+    return x;
+}
 
 /*----------------------------------------------------------------------------*/
 void calculate_bulk_granular_fluidity(job_t *job)
 {
-    size_t i;
-    double p_t;
-    double tau_t;
-    double S0;
+    /* value at end of timestep */
+    double tau_tau;
+    double scale_factor;
 
-    double sxx_tr0;
-    double sxy_tr0;
-    double syy_tr0;
+    /* increment using jaumann rate */
+    double dsjxx, dsjxy, dsjyy;
 
-    double const p_min = 1e-2;
+    /* trial values */
+    double sxx_tr, sxy_tr, syy_tr;
+    double t0xx_tr, t0xy_tr, t0yy_tr;
+    double p_tr, tau_tr;
+
+    double const c = 0;
+
+    int density_flag;
+   
+    size_t i = 0;
+ 
+    double trD;
+    const double lambda = K - 2.0 * G / 3.0;
+
+    double S0, S2;
+    double B, H;
+    double alpha;
 
     for (i = 0; i < job->num_particles; i++) {
-
-        /* Calculate pressure at beginning of step. */
-        p_t = -0.5 * (job->particles[i].sxx + job->particles[i].syy);
-
-        sxx_tr0 = job->particles[i].sxx + p_t;
-        sxy_tr0 = job->particles[i].sxy;
-        syy_tr0 = job->particles[i].syy + p_t;
-
-        /* Calculate equivalent shear at beginning of step. */
-        tau_t = sqrt(0.5*(sxx_tr0*sxx_tr0 + 2*sxy_tr0*sxy_tr0 + syy_tr0*syy_tr0));
-
-        if (p_t < p_min) {
-/*            job->particles[i].sxx = -0.5 * p_cap;*/
-/*            job->particles[i].sxy = 0;*/
-/*            job->particles[i].syy = -0.5 * p_cap;*/
-            p_t = p_min;
-/*            printf("%s:%s: Particle %zu pressure less than cohesion, results may be inaccurate.\n", __FILE__, __func__, i);*/
-/*            continue;*/
+        if (job->active[i] == 0) {
+            continue;
         }
 
-        S0 = p_t * MU_S;
-        eta = B * GRAINS_D * sqrt(p_t * GRAINS_RHO);
-        xisq_inv = fabs(tau_t / p_t - MU_S)/ (GRAINS_D * GRAINS_D * A * A);
+        /* Calculate tau and p trial values. */
+        trD = job->particles[i].exx_t + job->particles[i].eyy_t;
+        dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
+        dsjxy = 2.0 * G * job->particles[i].exy_t;
+        dsjyy = lambda * trD + 2.0 * G * job->particles[i].eyy_t;
+        dsjxx += 2 * job->particles[i].wxy_t * job->particles[i].sxy;
+        dsjxy -= job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
+        dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
 
-        if (tau_t > S0) { 
-            gf_local = (p_t / eta) * (1 - S0 / tau_t);
+        sxx_tr = job->particles[i].sxx + job->dt * dsjxx;
+        sxy_tr = job->particles[i].sxy + job->dt * dsjxy;
+        syy_tr = job->particles[i].syy + job->dt * dsjyy;
+
+        p_tr = -0.5 * (sxx_tr + syy_tr);
+        t0xx_tr = sxx_tr + p_tr;
+        t0xy_tr = sxy_tr;
+        t0yy_tr = syy_tr + p_tr;
+        tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
+
+        if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
+            density_flag = 1;
+/*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
         } else {
+            density_flag = 0;
+        }
+
+        if (density_flag || p_tr <= c) {
             gf_local = 0;
+            xisq_inv = 0;
+        } else if (p_tr > c) {
+            S0 = MU_S * p_tr;
+            if (tau_tr <= S0) {
+                tau_tau = tau_tr;
+                scale_factor = 1.0;
+            } else {
+                S2 = MU_2 * p_tr;
+                alpha = G * I_0 * job->dt * sqrt(p_tr / GRAINS_RHO) / GRAINS_D;
+                B = -(S2 + tau_tr + alpha);
+                H = S2 * tau_tr + S0 * alpha;
+                tau_tau = negative_root(1.0, B, H);
+                scale_factor = (tau_tau / tau_tr);
+            }
+            gf_local = (p_tr / (G * job->dt)) * ((1.0 / scale_factor) - 1.0);
+            xisq_inv = fabs((tau_tau / p_tr) - MU_S) / (A * A * GRAINS_D * GRAINS_D);
+        } else {
+/*            fprintf(stderr, "u %zu %3.3g %3.3g %d ", i, f, p_tr, density_flag);*/
+            fprintf(stderr, "u");
+            gf_local = 0;
+            xisq_inv = 0;
         }
     }
 
@@ -375,7 +460,7 @@ void solve_diffusion_part(job_t *job)
         }
     }
 
-    if (slda <= 0) {
+    if (slda == 0) {
         fprintf(stderr, "%s:%s: Invalid size, slda = %zu.\n",
             __FILE__, __func__, slda);
         exit(-1);
@@ -419,22 +504,21 @@ void solve_diffusion_part(job_t *job)
 
         nn = job->elements[p].nodes;
 
+        assert(isfinite(gf_local));
+        assert(isfinite(xisq_inv));
+        
         for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
             gi = nn[ei];
             gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
             sgi = node_map[gi];
+            
+            assert(sgi != -1);
 
             m_total_nodes[sgi] += job->particles[i].m * s[ei];
-/*            f[sgi] += job->particles[i].m * gf_local * xisq_inv * s[ei];*/
             f[sgi] += (job->particles[i].v) * gf_local * xisq_inv * s[ei];
         }
     }
-
-    /* unweight load f */
-/*    for (i = 0; i < slda; i++) {*/
-/*        f[i] = f[i] / m_total_nodes[i];*/
-/*    }*/
-
+    
     /* create stiffness matrix. */
     for (i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
@@ -473,9 +557,7 @@ void solve_diffusion_part(job_t *job)
 
                 sgi = node_map[gi];
                 sgj = node_map[gj];
-
-/*                m_frac = (job->particles[i].m * job->particles[i].m) / (m_total_nodes[sgi] * m_total_nodes[sgj]);*/
-
+                
                 cs_entry(triplets, sgi, sgj,
                     job->particles[i].v * (xisq_inv * s[ei] * s[ej] + 
                         (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]))
