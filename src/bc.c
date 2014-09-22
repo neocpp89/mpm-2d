@@ -86,14 +86,14 @@ void generate_dirichlet_bcs(job_t *job)
 
         /* bottom of hourglass */
         job->u_dirichlet[NODAL_DOF * n + XDOF_IDX] = 0;
-        //job->u_dirichlet[NODAL_DOF * n + YDOF_IDX] = 0;
+        job->u_dirichlet[NODAL_DOF * n + YDOF_IDX] = 0;
         job->u_dirichlet_mask[NODAL_DOF * n + XDOF_IDX] = 1;
-        //job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;
+        job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;
 
-        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 0;
-        //job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 1;
-        //job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 1;
+        //job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 0;
+        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 0;
+        //job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 1;
+        job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 1;
     }
 
     /* Side walls. */
