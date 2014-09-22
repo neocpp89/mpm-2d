@@ -857,7 +857,6 @@ void *mpm_run_until(void *_task)
             if (job->t >= (job->frame / job->output.sample_rate_hz)) {
                 v2_write_frame(job->output.directory, job->output.info_fd, job, v2_write_particle, NULL);
                 write_frame(job->output.particle_fd, job->frame, job->t, job);
-                // write_element_frame(job->output.element_fd, job->frame, job->t, job);
 
                 job->frame++;
                 clock_gettime(CLOCK_REALTIME, &(job->toc));
@@ -872,6 +871,13 @@ void *mpm_run_until(void *_task)
                 memcpy(&(job->tic), &(job->toc), sizeof(struct timespec));
                 fflush(stdout);
                 fflush(job->output.log_fd);
+                for(size_t i = 0; i < job->num_particles; i++) {
+                    job->particles[i].sxx_bar = 0;
+                    job->particles[i].sxy_bar = 0;
+                    job->particles[i].syy_bar = 0;
+                    job->particles[i].solid_state = 0;
+                    job->particles[i].steps = 0;
+                }
             }
 
             time_varying_loads(job);

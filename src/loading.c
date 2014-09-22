@@ -15,7 +15,7 @@
 #include "point.h"
 #include "process.h"
 
-#define G_MAG 9.8
+#define G_MAG 9.80
 #define RAMP_TIME 0.1
 
 /*----------------------------------------------------------------------------*/

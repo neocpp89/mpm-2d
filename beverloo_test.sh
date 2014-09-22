@@ -8,9 +8,9 @@ FLOWSTART=0.1
 
 MODEL_SO=g_local_mu2.so
 THREADS=4
-SIMTIME=50.0
+SIMTIME=10.0
 
-EMOD=1e8
+EMOD=1e9
 NUMOD=0.3
 
 # global preprocessing
@@ -19,7 +19,7 @@ octave beverloo_genp.m
 for opening_size in `seq $MIN_SIZE $STEP $MAX_SIZE`;
 do {
     # preprocessing
-    OUTDIR=/home/$USER/backup/forward/bev-$opening_size
+    OUTDIR=/home/mit/backup/forward-param/bev-$opening_size
     #mkdir -p $OUTDIR
 
     cat << EOF > $OUTDIR/runcfg
@@ -27,7 +27,7 @@ timestep
 {
     dt-max = 1e-2
     dt-min = 1e-10
-    dt = 1e-5
+    dt = 3e-6
     automatic-dt = 0 
     allow-dt-increase = 0
     stable-dt-threshold = 4
