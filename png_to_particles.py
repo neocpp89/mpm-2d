@@ -8,8 +8,8 @@ except:
 import numpy as np
 
 # linear material points per pixel (linear, so 2 -> 4 points in 1 pixel)
-lmpp = 2
-rho = 1500
+lmpp = 1
+rho = 1200 
 # cell spacing for material point
 cs = 1.0 / lmpp
 s = map(lambda k: (0.5 + k) * cs, range(0, lmpp))

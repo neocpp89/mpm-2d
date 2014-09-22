@@ -4,15 +4,15 @@ p.rho = 1200;
 p.E = 1e6;
 p.nu = 0.3;
 p.g = -0.8;
-p.Np = 40;
-p.N = 41;
+p.Np = 60;
+p.N = 61;
 p.rhop = 3;
 p.tol = 1e-12;
 p.T = 2;
 
 % shot angle
-angle = 30 * pi / 180.0;
-mag = 10.0;
+angle = 0 * pi / 180.0;
+mag = 0;
 
 % make an NxN computational grid
 N = p.N;
@@ -30,16 +30,16 @@ Nn = N*N;
 
 % set up material points
 %bar_w = 1.0; Nbx = Np; %
-bar_w = 0.05; Nbx = Np; %
+bar_w = 0.4; Nbx = Np; %
 % Nbx = ceil(p.rhop*bar_w/h);
 bar_h = 1.0; Nby = (bar_h/bar_w)*Nbx;
-bar_h = 0.05; Nby = (bar_h/bar_w)*Nbx;
+bar_h = 0.4; Nby = (bar_h/bar_w)*Nbx;
 
 bxtmp = linspace(0, bar_w, Nbx+1);
 % bar_x = (0.5 - bar_w/2) + bxtmp(1:end-1) + bxtmp(2)/2;
-bar_x = 0.1 + bxtmp(1:end-1) + bxtmp(2)/2;
+bar_x = 0.5 + bxtmp(1:end-1) + bxtmp(2)/2;
 bytmp = linspace(0, bar_h, Nby+1);
-bar_y = 0.1 + bytmp(1:end-1) + bytmp(2)/2;
+bar_y = 0.2 + bytmp(1:end-1) + bytmp(2)/2;
 
 % initialize position
 Np = Nbx*Nby;
