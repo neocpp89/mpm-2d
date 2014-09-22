@@ -64,6 +64,8 @@ void generate_dirichlet_bcs(job_t *job)
 /*    off_row = job->boundary.int_props[0];*/
 /*    off_col = job->boundary.int_props[1];*/
 
+    int off = job->N - 1;
+
     for (i = 0; i < job->num_nodes; i++) {
         for (j = 0; j < NODAL_DOF; j++) {
             job->u_dirichlet_mask[NODAL_DOF * i + j] = 0;
@@ -74,7 +76,7 @@ void generate_dirichlet_bcs(job_t *job)
         }
     }
 
-    /* Floor (and ceiling commented out). */
+    /* Floor and ceiling. */
     for (n = 0; n < job->N; n++) {
 
         /* trapdoor */
@@ -84,22 +86,14 @@ void generate_dirichlet_bcs(job_t *job)
 
         /* bottom of hourglass */
         job->u_dirichlet[NODAL_DOF * n + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * n + YDOF_IDX] = 0;
+        //job->u_dirichlet[NODAL_DOF * n + YDOF_IDX] = 0;
         job->u_dirichlet_mask[NODAL_DOF * n + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;
+        //job->u_dirichlet_mask[NODAL_DOF * n + YDOF_IDX] = 1;
 
-#if 0
-        /* hourglass hole */
-        job->u_dirichlet[NODAL_DOF * (n + (job->N / 2) * job->N) + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * (n + (job->N / 2) * job->N) + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * (n + (job->N / 2) * job->N) + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * (n + (job->N / 2) * job->N) + YDOF_IDX] = 1;
-#endif
-
-/*        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 0;*/
-/*        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 0;*/
-/*        job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 1;*/
-/*        job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 1;*/
+        job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 0;
+        //job->u_dirichlet[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 0;
+        job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + XDOF_IDX] = 1;
+        //job->u_dirichlet_mask[NODAL_DOF * (job->num_nodes - n - 1) + YDOF_IDX] = 1;
     }
 
     /* Side walls. */
