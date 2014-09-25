@@ -16,7 +16,6 @@
 #include "process.h"
 
 #define G_MAG 9.80
-#define RAMP_TIME 0.0
 
 /*----------------------------------------------------------------------------*/
 void initial_loads(job_t *job)
@@ -128,11 +127,7 @@ void time_varying_loads(job_t *job)
         case 2:
 #endif
         default:
-            if ((RAMP_TIME + job->step_start_time) > job->t) {
-                gravity = -G_MAG * ((job->t - job->step_start_time) / RAMP_TIME);
-            } else {
-                gravity = -G_MAG;
-            }
+            gravity = -G_MAG;
 
             for (i = 0; i < job->num_particles; i++) {
                 job->particles[i].bx = 0;
