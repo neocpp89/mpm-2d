@@ -19,7 +19,7 @@ NUMOD=0.3
 for opening_size in `seq $MIN_SIZE $STEP $MAX_SIZE`;
 do {
     # preprocessing
-    OUTDIR=/home/$USER/backup/forward/bagnold-sc-$opening_size
+    OUTDIR=/home/$USER/backup/forward/bagnold-sc-3d-$opening_size
     mkdir -p $OUTDIR
 
     cat << EOF > $OUTDIR/runcfg
@@ -88,4 +88,4 @@ EOF
 }; done;
     OUTDIR=
 
-parallel --progress ./mpm_2d -c /home/$USER/backup/forward/bagnold-sc-{}/runcfg -t$THREADS $SIMTIME  ::: `seq $MIN_SIZE $STEP $MAX_SIZE`;
+parallel --progress ./mpm_2d -c /home/$USER/backup/forward/bagnold-sc-3d-{}/runcfg -t$THREADS $SIMTIME  ::: `seq $MIN_SIZE $STEP $MAX_SIZE`;
