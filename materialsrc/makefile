@@ -4,10 +4,11 @@
 include ../makefile.common
 
 # override CFLAGS to make shared objects
-CFLAGS = -g -O3 -Wall -march=native -fPIC -shared -nostartfiles -I../src
+CFLAGS = -std=gnu99 -g -O3 -Wall -march=native -fPIC -shared -nostartfiles -I../src
 
 # Need to fix this; test each material separately
 MATERIAL_TEST_SRC = \
+    ../src/tensor.c \
 	test_material.c \
 	g_local_mu2.c
 
@@ -27,5 +28,5 @@ $(REL_MATERIAL_TEST_BIN): $(MATERIAL_TEST_SRC)
 	./$@
 
 ../%.so : %.c
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(CFLAGS) $< -o $@ 
 
