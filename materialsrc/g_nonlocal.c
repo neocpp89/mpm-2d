@@ -65,7 +65,7 @@
 
 void calculate_bulk_granular_fluidity(job_t *job);
 void solve_diffusion_part(job_t *job);
-void BiCGSTAB(double *x, cs *A, double *b, double tol);
+void BiCGSTAB(double *x, cs *Amat, double *b, double tol, int lenx);
 
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
@@ -593,7 +593,7 @@ void solve_diffusion_part(job_t *job)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void BiCGSTAB(double *x, cs *A, double *b, double tol, int lenx)
+void BiCGSTAB(double *x, cs *Amat, double *b, double tol, int lenx)
 {
     int i;
     double *r;
@@ -604,7 +604,7 @@ void BiCGSTAB(double *x, cs *A, double *b, double tol, int lenx)
         r[i] = -b[i];
     }
     rho = 1.0;
-    cs_gaxpy(A, x, r);
+    cs_gaxpy(Amat, x, r);
     free(r);
     return;
 }

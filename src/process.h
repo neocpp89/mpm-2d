@@ -66,6 +66,8 @@ typedef struct op_control_s {
     FILE *state_fd;
     FILE *log_fd;
 
+    FILE *info_fd;
+
     char *job_name;
     char *job_description;
     int job_id;
@@ -311,6 +313,22 @@ void generate_mappings(job_t *job);
 void map_particles_to_nodes(double *node_var, cs *phi, double *particle_var);
 void map_gradient_particles_to_nodes(double *node_var, cs *grad_phi, double *particle_var);
 void map_nodes_to_particles(double *particle_var, cs *phi_transpose, double *node_var);
+
+void move_grid_split(job_t *job, size_t n_start, size_t n_stop);
+void create_particle_to_element_map_split(job_t *job, size_t p_start, size_t p_stop);
+void create_particle_to_element_map_threaded(threadtask_t *task);
+void find_filled_elements(job_t *job);
+void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop);
+void update_stress(job_t *job);
+void implicit_solve(job_t *job);
+void map_to_grid_explicit(job_t *job);
+void map_to_grid_explicit_split(job_t *job, size_t thread_id);
+void map_to_grid(job_t *job);
+void move_particles_explicit_usf(job_t *job);
+void move_particles_explicit_usl(job_t *job);
+void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop);
+void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop);
+
 
 #endif
 

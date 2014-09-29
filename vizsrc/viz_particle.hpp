@@ -30,6 +30,8 @@ class Particle {
 //        double velocity_angle;
 
     public:
+        void setId(int _id) { id = _id; return; }
+
         Particle(int _id, bool _active) : id(_id), active(_active) { return; }
 
         friend std::ostream& operator<<(std::ostream& os, Particle& p)
@@ -55,38 +57,16 @@ class Particle {
 
             return os;
         }
-//        void print()
-//        {
-//            std::vector<std::string> keys;
-//            keys.reserve(data.size());
 
-//            std::cout << id << (active?": { ":"[inactive]: { ");
-//            for (int i = 0; i < 2; i++) {
-//                std::cout << "stress-eigenvalue[" << i << "]:" << eigvals[i] << " ";
-//                std::cout << "stress-eigenvector-angle[" << i << "]:" << eigangs[i] << " ";
-//            }
-//            std::cout << "data = { ";
-//            for (auto const &kv: data) {
-//                keys.push_back(kv.first);
-//            }
-//            std::sort(keys.begin(), keys.end());
-//            for (auto const &k: keys) {
-//                std::cout << k << ":" << data[k] << " ";
-//            }
-//            std::cout << "} ";
-//            std::cout << "}" << std::endl;
-
-//            return;
-//        }
-
-        bool keyExists(std::string key) const { return (data.count(key) == 1); }
-        void setKeyValuePair(std::string key, double val) { data[key] = val; }
-        double getValue(std::string key) { if (keyExists(key)) { return data[key]; } return 0; }
-        double &operator[](const std::string key) { return data[key]; }
+        bool keyExists(std::string const &key) const { return (data.count(key) == 1); }
+        void setKeyValuePair(std::string const &key, double val) { data[key] = val; }
+        double getValue(std::string const &key) { if (keyExists(key)) { return data[key]; } return 0; }
+        double &operator[](const std::string &key) { return data[key]; }
+        double operator[](const std::string &key) const { return data.at(key); }
 
         void setActive() { active = true; return; }
         void setInactive() { active = false; return; }
-        bool isActive() { return active; }
+        bool isActive() const { return active; }
 
         bool calculatePressure()
         {

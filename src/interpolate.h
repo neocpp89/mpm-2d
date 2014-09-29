@@ -28,7 +28,26 @@ void grad_paraboloid(
     double *b29,
     double x_local, double y_local, double h);
 
-double si(double xp, double xi, double h);
-double si2(double xp, double yp, double xi, double yi, double h);
+static inline double si(double xp, double xi, double h)
+{
+    double r = 0;
+    double xl;
+    
+    xl = xp - xi;
+    
+    if (0 <= xl  && xl <= h) {
+        r = 1.0 - (xl / h);
+    } else if (-h <= xl && xl <= 0) {
+        r = 1 + (xl / h);
+    }
+
+    return r;
+}
+
+static inline double si2d(double xp, double yp, double xi, double yi, double h)
+{
+    return si(xp, xi, h)*si(yp, yi, h);
+}
+
 #endif
 

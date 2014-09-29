@@ -30,7 +30,6 @@
 #include "process.h"
 #include "reader.h"
 #include "writer.h"
-#include "visualization.h"
 
 #define dispg(x) printf(#x " = %g\n", x)
 #define dispd(x) printf(#x " = %d\n", x)
@@ -622,17 +621,30 @@ int main(int argc, char **argv)
     snprintf(job->output.log_filename_fullpath, len, "%s%s",
         job->output.directory, job->output.log_filename);
 
+    char ss[16384];
+    snprintf(ss, sizeof(ss), "%s%s", job->output.directory, "info.txt");
+
+    /* If we run into an error, don't try to close random "files". */
+    job->output.info_fd = NULL;
+    job->output.particle_fd = NULL;
+    job->output.element_fd = NULL;
+    job->output.state_fd = NULL;
+    job->output.log_fd = NULL;
+
+    job->output.info_fd = fopen(ss, "w");
+        JUMP_IF_NULL(job->output.info_fd, _close_files,
+            "Can't open info file for output.\n");
     job->output.particle_fd = fopen(job->output.particle_filename_fullpath, "w");
-        JUMP_IF_NULL(job->output.particle_fd, _particle_fd_error,
+        JUMP_IF_NULL(job->output.particle_fd, _close_files,
             "Can't open particle file for output.\n");
     job->output.element_fd = fopen(job->output.element_filename_fullpath, "w");
-        JUMP_IF_NULL(job->output.particle_fd, _element_fd_error,
+        JUMP_IF_NULL(job->output.particle_fd, _close_files,
             "Can't open element file for output.\n");
     job->output.state_fd = fopen(job->output.state_filename_fullpath, "w");
-        JUMP_IF_NULL(job->output.particle_fd, _state_fd_error,
+        JUMP_IF_NULL(job->output.particle_fd, _close_files,
             "Can't open state file for output.\n");
     job->output.log_fd = fopen(job->output.log_filename_fullpath, "w");
-        JUMP_IF_NULL(job->output.particle_fd, _log_fd_error,
+        JUMP_IF_NULL(job->output.particle_fd, _close_files,
             "Can't open log file for output.\n");
 
     /* sampling rate */
@@ -784,14 +796,22 @@ job_start:
 /*    h5_write_state("state.h5", job);*/
 
     printf("Closing files.\n");
-    fclose(job->output.log_fd);
-_log_fd_error:
-    fclose(job->output.state_fd);
-_state_fd_error:
-    fclose(job->output.element_fd);
-_element_fd_error:
-    fclose(job->output.particle_fd);
-_particle_fd_error:
+_close_files:
+    if (job->output.info_fd != NULL) {
+        fclose(job->output.info_fd);
+    }
+    if (job->output.log_fd != NULL) {
+        fclose(job->output.log_fd);
+    }
+    if (job->output.state_fd != NULL) {
+        fclose(job->output.state_fd);
+    }
+    if (job->output.element_fd != NULL) {
+        fclose(job->output.element_fd);
+    }
+    if (job->output.particle_fd != NULL) {
+        fclose(job->output.particle_fd);
+    }
 
     printf("\n");
     printf("Freeing allocated memory.\n");
@@ -843,7 +863,7 @@ void *mpm_run_until(void *_task)
             job->stepcount++;
 
             if (job->t >= (job->frame / job->output.sample_rate_hz)) {
-/*                v2_write_frame(job->output.directory, NULL, job, v2_write_particle, NULL);*/
+                // v2_write_frame(job->output.directory, job->output.info_fd, job, v2_write_particle, NULL);
                 write_frame(job->output.particle_fd, job->frame, job->t, job);
                 /* write_element_frame(job->output.element_fd, job->frame, job->t, job); */
 
