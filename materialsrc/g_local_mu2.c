@@ -17,6 +17,7 @@
 #include "exitcodes.h"
 
 #include <assert.h>
+#include "tensor.h"
 
 #define jp(x) job->particles[i].x
 
@@ -107,6 +108,15 @@ void material_init(job_t *job)
         for (j = 0; j < DEPVAR; j++) {
             job->particles[i].state[j] = 0;
         }
+        job->particles[i].T[XX] = job->particles[i].sxx;
+        job->particles[i].T[XY] = job->particles[i].sxy;
+        job->particles[i].T[XZ] = 0;
+        job->particles[i].T[YX] = job->particles[i].sxy;
+        job->particles[i].T[YY] = job->particles[i].syy;
+        job->particles[i].T[YZ] = 0;
+        job->particles[i].T[ZX] = 0;
+        job->particles[i].T[ZY] = 0;
+        job->particles[i].T[ZZ] = 0;
     }
 
     for (i = 0; i < job->num_particles; i++) {
@@ -195,7 +205,50 @@ void calculate_stress_threaded(threadtask_t *task)
             continue;
         }
 
+        double T0[9], Ttr[9]; /* deviator and trial */
+        double JS[9]; /* Jaumann spin term. */
+        double W[9], D[9]; /* spin and stretching */
+        double temp[9];
+
+        /* 3D velocity gradient (plane strain). */
+        job->particles[i].L[XX] = job->particles[i].exx_t;
+        job->particles[i].L[XY] = job->particles[i].exy_t + job->particles[i].wxy_t;
+        job->particles[i].L[YX] = job->particles[i].exy_t - job->particles[i].wxy_t;
+        job->particles[i].L[YY] = job->particles[i].eyy_t;
+        job->particles[i].L[XZ] = 0;
+        job->particles[i].L[YZ] = 0;
+        job->particles[i].L[ZX] = 0;
+        job->particles[i].L[ZY] = 0;
+        job->particles[i].L[ZZ] = 0;
+
+        tensor_skw(W, job->particles[i].L, 3);
+        tensor_sym(D, job->particles[i].L, 3);
+        tensor_trace(&trD, D, 3);
+
+        /* construct jaumman spin term */        
+        tensor_multiply(JS, W, job->particles[i].T, 3);
+        tensor_multiply(temp, job->particles[i].T, W, 3);
+        tensor_scale(temp, -1.0, 3);
+        tensor_add(JS, JS, temp, 3);
+
+        /* construct trial stress */
+        tensor_copy(Ttr, D, 3);
+        tensor_scale(Ttr, 2.0 * G, 3);
+        Ttr[XX] += lambda * trD;
+        Ttr[YY] += lambda * trD;
+        Ttr[ZZ] += lambda * trD;
+        tensor_add(Ttr, Ttr, JS, 3);
+        tensor_scale(Ttr, job->dt, 3);
+        tensor_add(Ttr, Ttr, job->particles[i].T, 3);
+
         /* Calculate tau and p trial values. */
+        tensor_decompose(T0, &p_tr, Ttr, 3);
+        p_tr *= -1.0;
+        tensor_contraction(&tau_tr, T0, T0, 3);
+        tau_tr *= 0.5;
+        tau_tr = sqrt(tau_tr);
+
+#if 0
         trD = job->particles[i].exx_t + job->particles[i].eyy_t;
         dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
         dsjxy = 2.0 * G * job->particles[i].exy_t;
@@ -213,6 +266,7 @@ void calculate_stress_threaded(threadtask_t *task)
         t0xy_tr = sxy_tr;
         t0yy_tr = syy_tr + p_tr;
         tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
+#endif
 
         if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
             density_flag = 1;
@@ -223,11 +277,19 @@ void calculate_stress_threaded(threadtask_t *task)
 
         if (density_flag || p_tr <= c) {
             nup_tau = (tau_tr) / (G * job->dt);
-            beta = -p_tr / (K * job->dt);
-
-            job->particles[i].sxx = 0;
+            
+            /* job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
-            job->particles[i].syy = 0;
+            job->particles[i].syy = 0; */
+            job->particles[i].T[XX] = 0;
+            job->particles[i].T[XY] = 0;
+            job->particles[i].T[XZ] = 0;
+            job->particles[i].T[YX] = 0;
+            job->particles[i].T[YY] = 0;
+            job->particles[i].T[YZ] = 0;
+            job->particles[i].T[ZX] = 0;
+            job->particles[i].T[ZY] = 0;
+            job->particles[i].T[ZZ] = 0;
         } else if (p_tr > c) {
             S0 = MU_S * p_tr;
             if (tau_tr <= S0) {
@@ -245,20 +307,25 @@ void calculate_stress_threaded(threadtask_t *task)
             assert(scale_factor >= 0.0);
 
             nup_tau = ((tau_tr - tau_tau) / G) / job->dt;
-            beta = 0;
 
-            job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
+            tensor_scale(T0, scale_factor, 3);
+            tensor_copy(job->particles[i].T, T0, 3);
+            job->particles[i].T[XX] -= p_tr;
+            job->particles[i].T[YY] -= p_tr;
+            job->particles[i].T[ZZ] -= p_tr;
+            /* job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
             job->particles[i].sxy = scale_factor * t0xy_tr;
-            job->particles[i].syy = scale_factor * t0yy_tr - p_tr;
+            job->particles[i].syy = scale_factor * t0yy_tr - p_tr; */
         } else {
 		fprintf(stderr, "u %zu %d %3.3g %3.3g %3.3g %3.3g %3.3g",i, density_flag, tau_tau, p_tr, job->particles[i].sxx, job->particles[i].sxy, job->particles[i].syy);
             nup_tau = 0;
         }
 
-	if (!isfinite(job->particles[i].sxx) || !isfinite(job->particles[i].sxy) || !isfinite(job->particles[i].syy)) {
-		fprintf(stderr, "TA %zu %d %3.3g %3.3g %3.3g %3.3g %3.3g",i, density_flag, tau_tau, p_tr, job->particles[i].sxx, job->particles[i].sxy, job->particles[i].syy);
-	}
-
+        /* Copy relevant stress entries. */
+        job->particles[i].sxx = job->particles[i].T[XX];
+        job->particles[i].sxy = job->particles[i].T[XY];
+        job->particles[i].syy = job->particles[i].T[YY];
+        
         /* use strain rate to calculate stress increment */
         gammap += nup_tau * job->dt;
         gammadotp = nup_tau;
