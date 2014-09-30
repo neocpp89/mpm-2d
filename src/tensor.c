@@ -128,7 +128,7 @@ void tensor_copy(double *C, double *A, size_t dim)
     \param A Tensor to take the deviator of.
     \param dim Is this a 2D or 3D tensor? Pass in either 2 or 3.
 */
-void tensor_decompose_deviatoric_and_spherical(double *A_0, double *c, double *A, size_t dim)
+void tensor_decompose(double *A_0, double *c, double *A, size_t dim)
 {
     size_t i;
     double trA;
@@ -140,7 +140,7 @@ void tensor_decompose_deviatoric_and_spherical(double *A_0, double *c, double *A
 
 
     tensor_trace(&trA, A, dim);
-    *c = trA / (float)dim;
+    *c = trA / (double)dim;
 
     zero_array(A_0, dim*dim);
     tensor_copy(A_0, A, dim);
@@ -152,4 +152,122 @@ void tensor_decompose_deviatoric_and_spherical(double *A_0, double *c, double *A
     return;
 }
 /*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/** \brief Multiples two tensors and stores the result in a third.
+    \param C where to store result tensor.
+    \param A left tensor.
+    \param B right tensor.
+    \param dim Is this a 2D or 3D tensor? Pass in either 2 or 3.
+*/
+void tensor_multiply(double *C, double *A, double *B, size_t dim)
+{
+    size_t i, j, k;
+    assert(dim == 2 || dim == 3);
+    assert(C != NULL);
+    assert(A != NULL);
+    assert(B != NULL);
+    assert(A != C);
 
+    for (i = 0; i < dim; i++) {
+        for (j = 0; j < dim; j++) {
+            C[i*dim + j] = 0;
+            for (k = 0; k < dim; k++) {
+                 C[i*dim + j] += A[i*dim + k]*B[k*dim + j];
+            }
+        }
+    }
+
+    return;
+}
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/** \brief Scales tensor by a constant.
+    \param A tensor to scale.
+    \param c scaling constant.
+    \param dim Is this a 2D or 3D tensor? Pass in either 2 or 3.
+*/
+void tensor_scale(double *A, double c, size_t dim)
+{
+    size_t i, j;
+    assert(dim == 2 || dim == 3);
+    assert(A != NULL);
+
+    for (i = 0; i < dim; i++) {
+        for (j = 0; j < dim; j++) {
+            A[i*dim + j] *= c;
+        }
+    }
+
+    return;
+}
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/** \brief Gets symmetric part of tensor.
+    \param C where to store sym(A).
+    \param A tensor to symmetrize.
+    \param dim Is this a 2D or 3D tensor? Pass in either 2 or 3.
+*/
+void tensor_sym(double *C, double *A, size_t dim)
+{
+    size_t i, j;
+    assert(dim == 2 || dim == 3);
+    assert(A != NULL);
+    assert(C != NULL);
+    assert(A != C);
+
+    for (i = 0; i < dim; i++) {
+        for (j = 0; j < dim; j++) {
+            C[i*dim + j] = 0.5 *(A[i*dim + j] + A[j*dim + i]);
+        }
+    }
+
+    return;
+}
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/** \brief Gets skew part of tensor.
+    \param C where to store skw(A).
+    \param A tensor to skew.
+    \param dim Is this a 2D or 3D tensor? Pass in either 2 or 3.
+*/
+void tensor_skw(double *C, double *A, size_t dim)
+{
+    size_t i, j;
+    assert(dim == 2 || dim == 3);
+    assert(A != NULL);
+    assert(C != NULL);
+    assert(A != C);
+
+    for (i = 0; i < dim; i++) {
+        for (j = 0; j < dim; j++) {
+            C[i*dim + j] = 0.5 *(A[i*dim + j] - A[j*dim + i]);
+        }
+    }
+
+    return;
+}
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/** \brief Tensor contraction of A and B.
+    \param C where to store skw(A).
+    \param A tensor to skew.
+    \param dim Is this a 2D or 3D tensor? Pass in either 2 or 3.
+*/
+void tensor_contraction(double *c, double *A, double *B, size_t dim)
+{
+    size_t i, j;
+    assert(dim == 2 || dim == 3);
+    assert(A != NULL);
+    assert(B != NULL);
+    assert(c != NULL);
+    
+    *c = 0;
+    for (i = 0; i < dim; i++) {
+        for (j = 0; j < dim; j++) {
+            (*c) += A[i*dim + j] * B[i*dim + j];
+        }
+    }
+
+    return;
+}
+/*----------------------------------------------------------------------------*/
