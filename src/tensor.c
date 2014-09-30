@@ -142,7 +142,6 @@ void tensor_decompose(double *A_0, double *c, double *A, size_t dim)
     tensor_trace(&trA, A, dim);
     *c = trA / (double)dim;
 
-    zero_array(A_0, dim*dim);
     tensor_copy(A_0, A, dim);
 
     for (i = 0; i < dim; i++) {
