@@ -13,6 +13,7 @@
 #include "particle.h"
 
 #include "tensor.h"
+#define NDEBUG
 #include <assert.h>
 
 /*----------------------------------------------------------------------------*/
@@ -40,7 +41,7 @@ void zero_array(double *array, size_t numel)
     \param A Tensor to take the deviator of.
     \param dim Is this a 2D or 3D tensor? Pass in either 2 or 3.
 */
-void tensor_trace(double *trA, double *A, size_t dim)
+inline void tensor_trace(double *trA, double *A, size_t dim)
 {
     size_t i;
     assert(dim == 2 || dim == 3);
@@ -100,7 +101,7 @@ void tensor_add(double *C, double *A, double *B, size_t dim)
     \param A Tensor to copy (tensor).
     \param dim Is this a 2D or 3D tensor? Pass in either 2 or 3.
 */
-void tensor_copy(double *C, double *A, size_t dim)
+inline void tensor_copy(double *C, double *A, size_t dim)
 {
     size_t i, j;
     assert(dim == 2 || dim == 3);
@@ -140,11 +141,9 @@ void tensor_decompose(double *A_0, double *c, double *A, size_t dim)
 
 
     tensor_trace(&trA, A, dim);
-    *c = trA / (double)dim;
-
-    zero_array(A_0, dim*dim);
+    *c = trA / dim;
+    
     tensor_copy(A_0, A, dim);
-
     for (i = 0; i < dim; i++) {
         A_0[i*dim + i] = A_0[i*dim + i] - (*c);
     }
@@ -168,12 +167,32 @@ void tensor_multiply(double *C, double *A, double *B, size_t dim)
     assert(B != NULL);
     assert(A != C);
 
-    for (i = 0; i < dim; i++) {
-        for (j = 0; j < dim; j++) {
-            C[i*dim + j] = 0;
-            for (k = 0; k < dim; k++) {
-                 C[i*dim + j] += A[i*dim + k]*B[k*dim + j];
+    if (dim == 3) {
+        tensor_multiply3_helper(C, A, B);
+    } else {
+        for (i = 0; i < dim; i++) {
+            for (j = 0; j < dim; j++) {
+                C[i*dim + j] = 0;
+                for (k = 0; k < dim; k++) {
+                    C[i*dim + j] += A[i*dim + k]*B[k*dim + j];
+                }
             }
+        }
+    }
+
+    return;
+}
+
+
+void tensor_multiply3_helper(double *C, double *A, double *B)
+{
+    size_t i, j;
+
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 3; j++) {
+            C[i*3+j] = A[3*i+0] * B[3*0+j];
+            C[i*3+j] += A[3*i+1] * B[3*1+j];
+            C[i*3+j] += A[3*i+2] * B[3*2+j];
         }
     }
 

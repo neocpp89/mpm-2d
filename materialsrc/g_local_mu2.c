@@ -212,9 +212,9 @@ void calculate_stress_threaded(threadtask_t *task)
         /* 3D velocity gradient (plane strain). */
         job->particles[i].L[XX] = job->particles[i].exx_t;
         job->particles[i].L[XY] = job->particles[i].exy_t + job->particles[i].wxy_t;
+        job->particles[i].L[XZ] = 0;
         job->particles[i].L[YX] = job->particles[i].exy_t - job->particles[i].wxy_t;
         job->particles[i].L[YY] = job->particles[i].eyy_t;
-        job->particles[i].L[XZ] = 0;
         job->particles[i].L[YZ] = 0;
         job->particles[i].L[ZX] = 0;
         job->particles[i].L[ZY] = 0;
@@ -242,34 +242,12 @@ void calculate_stress_threaded(threadtask_t *task)
 
         /* Calculate tau and p trial values. */
         tensor_decompose(T0, &p_tr, Ttr, 3);
-        p_tr *= -1.0;
         tensor_contraction(&tau_tr, T0, T0, 3);
-        tau_tr *= 0.5;
-        tau_tr = sqrt(tau_tr);
-
-#if 0
-        trD = job->particles[i].exx_t + job->particles[i].eyy_t;
-        dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
-        dsjxy = 2.0 * G * job->particles[i].exy_t;
-        dsjyy = lambda * trD + 2.0 * G * job->particles[i].eyy_t;
-        dsjxx += 2 * job->particles[i].wxy_t * job->particles[i].sxy;
-        dsjxy -= job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
-        dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
-
-        sxx_tr = job->particles[i].sxx + job->dt * dsjxx;
-        sxy_tr = job->particles[i].sxy + job->dt * dsjxy;
-        syy_tr = job->particles[i].syy + job->dt * dsjyy;
-
-        p_tr = -0.5 * (sxx_tr + syy_tr);
-        t0xx_tr = sxx_tr + p_tr;
-        t0xy_tr = sxy_tr;
-        t0yy_tr = syy_tr + p_tr;
-        tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
-#endif
+        tau_tr = sqrt(0.5 * tau_tr);
+        p_tr *= -1.0;
 
         if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
             density_flag = 1;
-/*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
         } else {
             density_flag = 0;
         }
@@ -277,9 +255,6 @@ void calculate_stress_threaded(threadtask_t *task)
         if (density_flag || p_tr <= c) {
             nup_tau = (tau_tr) / (G * job->dt);
             
-            /* job->particles[i].sxx = 0;
-            job->particles[i].sxy = 0;
-            job->particles[i].syy = 0; */
             job->particles[i].T[XX] = 0;
             job->particles[i].T[XY] = 0;
             job->particles[i].T[XZ] = 0;
