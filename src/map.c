@@ -10,12 +10,12 @@
 /* IMPORTANT: Does not clear nodal quantites before accumulating! */
 /*---Maps scalars of type double to nodes. Uses shape functions.--------------*/
 void map_particles_to_nodes_doublescalar(job_t *job,
-    size_t node_field_offset, size_t particle_field_offset)
+    const size_t node_field_offset, const size_t particle_field_offset)
 {
     size_t i, j;
-    double *ndata;
-    double *pdata;
-    int *n_idx;
+    double * restrict ndata;
+    double * restrict pdata;
+    int * restrict n_idx;
     double s[NODES_PER_ELEMENT];
 
     for (i = 0; i < job->num_particles; i++) {
@@ -47,11 +47,11 @@ void map_particles_to_nodes_doublescalar(job_t *job,
 /*----------------------------------------------------------------------------*/
 /*---Accumulates scalars of type double to nodes. Inner loop of the map.------*/
 void accumulate_p_to_n_doublescalar(node_t *nodes,
-    size_t node_field_offset, int *nodelist, double *sfvalues, 
-    size_t nodelist_len, double pdata)
+    const size_t node_field_offset, const int * restrict nodelist, const double * restrict sfvalues, 
+    const size_t nodelist_len, const double pdata)
 {
     size_t i;
-    double *ndata;
+    double * restrict ndata;
 
     for (i = 0; i < nodelist_len; i++) {
         ndata = (double *)((char *)&(nodes[nodelist[i]]) + node_field_offset);
@@ -65,16 +65,56 @@ void accumulate_p_to_n_doublescalar(node_t *nodes,
 #pragma GCC optimize ("unroll-loops")
 /*---Accumulates a list of scalars of type double to nodes.  -----------------*/
 void accumulate_p_to_n_ds_list(node_t *nodes,
-    size_t *node_field_offset, int *nodelist, double *sfvalues, 
-    size_t nodelist_len, double *pdata, size_t pdata_len)
+    const size_t * restrict node_field_offset, const int * restrict nodelist, const double * restrict sfvalues, 
+    const size_t nodelist_len, const double * restrict pdata, const size_t pdata_len)
 {
     size_t i, j;
-    double *ndata;
-    char *nodeoff;
+    double * restrict ndata;
+    char * restrict nodeoff;
 
     for (i = 0; i < nodelist_len; i++) {
         nodeoff = (char *)&(nodes[nodelist[i]]);
         for (j = 0; j < pdata_len; j++) {
+            ndata = (double *)(nodeoff + node_field_offset[j]);
+            *ndata += sfvalues[i] * pdata[j];
+        }
+    }
+
+    return;
+}
+void accumulate_p_to_n_ds_list47(node_t *nodes,
+    const size_t * restrict node_field_offset, const int * restrict nodelist, const double * restrict sfvalues,
+    const double * restrict pdata)
+{
+    size_t i, j;
+    double * restrict ndata;
+    char * restrict nodeoff;
+
+    // nodelist length = 4
+    // pdata length = 7
+    for (i = 0; i < 4; i++) {
+        nodeoff = (char *)&(nodes[nodelist[i]]);
+        for (j = 0; j < 7; j++) {
+            ndata = (double *)(nodeoff + node_field_offset[j]);
+            *ndata += sfvalues[i] * pdata[j];
+        }
+    }
+
+    return;
+}
+void accumulate_p_to_n_ds_list42(node_t *nodes,
+    const size_t * restrict node_field_offset, const int * restrict nodelist, const double * restrict sfvalues, 
+    const double * restrict pdata)
+{
+    size_t i, j;
+    double * restrict ndata;
+    char * restrict nodeoff;
+
+    // nodelist length = 4
+    // pdata length = 2
+    for (i = 0; i < 4; i++) {
+        nodeoff = (char *)&(nodes[nodelist[i]]);
+        for (j = 0; j < 2; j++) {
             ndata = (double *)(nodeoff + node_field_offset[j]);
             *ndata += sfvalues[i] * pdata[j];
         }

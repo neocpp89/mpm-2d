@@ -89,8 +89,9 @@ int main(int argc, char **argv)
 {
     job_t testjob;
 /*    double testprops[2] = { 72.0e3/7.0, 2.0/7.0 };*/
-    double testprops[2] = { 1e4, 0.3 };
     int a[1] = {1};
+    // double testprops[2] = { 1e4, 0.3 };
+    double testprops[2] = { 1e6, 0.3 };
     double t_stop = 1.25;
     particle_t p;
 
@@ -117,8 +118,10 @@ int main(int argc, char **argv)
         testjob.dt = 1e-3;
     }
 
-    FILE *fp = fopen("mattest_output.csv", "w");
 
+    FILE *fp = fopen("mattest_output.csv", "w");
+    FILE *fpd = fopen("mattest_output_dec.csv", "w");
+    
     material_init(&testjob);
     fprintf(fp, "%a,%a,%a,%a,%a,%a,%a,%a,%a,%a\n",
         testjob.t,
@@ -126,13 +129,24 @@ int main(int argc, char **argv)
         p.sxx, p.sxy, p.syy, mu(&p),
         p.state[10] /* gammadotp */
     );
-
+    fprintf(fpd, "%g,%g,%g,%g,%g,%g,%g,%g,%g,%g\n",
+        testjob.t,
+        p.exx_t, p.exy_t + p.wxy_t, p.exy_t - p.wxy_t, p.eyy_t,
+        p.sxx, p.sxy, p.syy, mu(&p),
+        p.state[10] /* gammadotp */
+    );
     while(testjob.t < t_stop) {
         set_velocity_gradient(&p, testjob.t);
         calculate_stress(&testjob);
         update_density(&p, testjob.dt);
         testjob.t += testjob.dt;
         fprintf(fp, "%a,%a,%a,%a,%a,%a,%a,%a,%a,%a\n",
+            testjob.t,
+            p.exx_t, p.exy_t + p.wxy_t, p.exy_t - p.wxy_t, p.eyy_t,
+            p.sxx, p.sxy, p.syy, mu(&p),
+            p.state[10] /* gammadotp */
+        );
+        fprintf(fpd, "%g,%g,%g,%g,%g,%g,%g,%g,%g,%g\n",
             testjob.t,
             p.exx_t, p.exy_t + p.wxy_t, p.exy_t - p.wxy_t, p.eyy_t,
             p.sxx, p.sxy, p.syy, mu(&p),
