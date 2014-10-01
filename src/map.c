@@ -82,5 +82,45 @@ void accumulate_p_to_n_ds_list(node_t *nodes,
 
     return;
 }
+void accumulate_p_to_n_ds_list47(node_t *nodes,
+    const size_t * restrict node_field_offset, const int * restrict nodelist, const double * restrict sfvalues,
+    const double * restrict pdata)
+{
+    size_t i, j;
+    double * restrict ndata;
+    char * restrict nodeoff;
+
+    // nodelist length = 4
+    // pdata length = 7
+    for (i = 0; i < 4; i++) {
+        nodeoff = (char *)&(nodes[nodelist[i]]);
+        for (j = 0; j < 7; j++) {
+            ndata = (double *)(nodeoff + node_field_offset[j]);
+            *ndata += sfvalues[i] * pdata[j];
+        }
+    }
+
+    return;
+}
+void accumulate_p_to_n_ds_list42(node_t *nodes,
+    const size_t * restrict node_field_offset, const int * restrict nodelist, const double * restrict sfvalues, 
+    const double * restrict pdata)
+{
+    size_t i, j;
+    double * restrict ndata;
+    char * restrict nodeoff;
+
+    // nodelist length = 4
+    // pdata length = 2
+    for (i = 0; i < 4; i++) {
+        nodeoff = (char *)&(nodes[nodelist[i]]);
+        for (j = 0; j < 2; j++) {
+            ndata = (double *)(nodeoff + node_field_offset[j]);
+            *ndata += sfvalues[i] * pdata[j];
+        }
+    }
+
+    return;
+}
 /*----------------------------------------------------------------------------*/
 #pragma GCC pop_options

@@ -2083,27 +2083,27 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
             stressdata[1] = -job->particles[p_idx].sxy * job->particles[p_idx].v;
             stressdata[2] = -job->particles[p_idx].syy * job->particles[p_idx].v;
 
-            accumulate_p_to_n_ds_list(job->nodes,
+            accumulate_p_to_n_ds_list47(job->nodes,
                 node_field_offsets, job->elements[p].nodes, s, 
-                NODES_PER_ELEMENT, pdata, pdata_len);
+                pdata);
 
             ds[0] = job->b11[p_idx];
             ds[1] = job->b12[p_idx];
             ds[2] = job->b13[p_idx];
             ds[3] = job->b14[p_idx];
 
-            accumulate_p_to_n_ds_list(job->nodes,
+            accumulate_p_to_n_ds_list42(job->nodes,
                 node_d_offsets, job->elements[p].nodes, ds, 
-                NODES_PER_ELEMENT, &(stressdata[0]), 2);
+                &(stressdata[0]));
 
             ds[0] = job->b21[p_idx];
             ds[1] = job->b22[p_idx];
             ds[2] = job->b23[p_idx];
             ds[3] = job->b24[p_idx];
 
-            accumulate_p_to_n_ds_list(job->nodes,
+            accumulate_p_to_n_ds_list42(job->nodes,
                 node_d_offsets, job->elements[p].nodes, ds, 
-                NODES_PER_ELEMENT, &(stressdata[1]), 2);
+                &(stressdata[1]));
         }
 
         /*
