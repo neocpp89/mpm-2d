@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import sys
 import numpy
-import pylab
 import math
 import csv
 

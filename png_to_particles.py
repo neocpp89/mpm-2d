@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 import sys
 import os
-import Image
+try:
+    import Image
+except:
+    from PIL import Image
 import numpy as np
 
 # linear material points per pixel (linear, so 2 -> 4 points in 1 pixel)
