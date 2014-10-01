@@ -220,29 +220,32 @@ void calculate_stress_threaded(threadtask_t *task)
         job->particles[i].L[ZY] = 0;
         job->particles[i].L[ZZ] = 0;
 
-        tensor_skw(W, job->particles[i].L, 3);
-        tensor_sym(D, job->particles[i].L, 3);
-        tensor_trace(&trD, D, 3);
+        /* Construct stretching and spin terms. */
+        tensor_skw3(W, job->particles[i].L, 3);
+        tensor_sym3(D, job->particles[i].L, 3);
+
+        /* Copy stretching to the trial while in cache and get trace.*/
+        tensor_copy3(Ttr, D);
+        tensor_trace3(&trD, D);
 
         /* construct jaumman spin term */        
-        tensor_multiply(JS, W, job->particles[i].T, 3);
-        tensor_multiply(temp, job->particles[i].T, W, 3);
-        tensor_scale(temp, -1.0, 3);
-        tensor_add(JS, JS, temp, 3);
+        tensor_multiply3(JS, W, job->particles[i].T);
+        tensor_multiply3(temp, job->particles[i].T, W);
+        tensor_scale3(temp, -1.0);
+        tensor_add3(JS, JS, temp);
 
-        /* construct trial stress */
-        tensor_copy(Ttr, D, 3);
-        tensor_scale(Ttr, 2.0 * G, 3);
+        /* construct trial stress (assume Ttr has a copy of stretching D). */
+        tensor_scale3(Ttr, 2.0 * G);
         Ttr[XX] += lambda * trD;
         Ttr[YY] += lambda * trD;
         Ttr[ZZ] += lambda * trD;
-        tensor_add(Ttr, Ttr, JS, 3);
-        tensor_scale(Ttr, job->dt, 3);
-        tensor_add(Ttr, Ttr, job->particles[i].T, 3);
+        tensor_add3(Ttr, Ttr, JS);
+        tensor_scale3(Ttr, job->dt);
+        tensor_add3(Ttr, Ttr, job->particles[i].T);
 
         /* Calculate tau and p trial values. */
-        tensor_decompose(T0, &p_tr, Ttr, 3);
-        tensor_contraction(&tau_tr, T0, T0, 3);
+        tensor_decompose3(T0, &p_tr, Ttr);
+        tensor_contraction3(&tau_tr, T0, T0);
         tau_tr = sqrt(0.5 * tau_tr);
         p_tr *= -1.0;
 
@@ -280,8 +283,8 @@ void calculate_stress_threaded(threadtask_t *task)
 
             nup_tau = ((tau_tr - tau_tau) / G) / job->dt;
 
-            tensor_scale(T0, scale_factor, 3);
-            tensor_copy(job->particles[i].T, T0, 3);
+            tensor_scale3(T0, scale_factor);
+            tensor_copy3(job->particles[i].T, T0);
             job->particles[i].T[XX] -= p_tr;
             job->particles[i].T[YY] -= p_tr;
             job->particles[i].T[ZZ] -= p_tr;

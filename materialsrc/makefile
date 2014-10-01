@@ -24,7 +24,7 @@ clean:
 	-rm $(REL_SOBJ) $(REL_MATERIAL_TEST_BIN);
 
 $(REL_MATERIAL_TEST_BIN): $(MATERIAL_TEST_SRC)
-	$(CC) -march=native -I../src -g $^ -o $@ -lm
+	$(CC) -std=gnu99 -march=native -I../src -g $^ -o $@ -lm
 	./$@
 
 ../%.so : %.c
