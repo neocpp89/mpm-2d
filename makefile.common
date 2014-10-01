@@ -20,8 +20,9 @@ MATERIAL_SRC = \
     dp_ri.c \
     dp_ri_mt.c \
     g_local_mu2_reverse.c \
-    g_local_mu2.c \
     g_local_mu2_plane_strain.c \
+    g_local_mu2_true_2d.c \
+    g_local_mu2.c \
     g_local.c \
     g_local_mu2_ext.c \
     g_nonlocal_avg.c \
