@@ -8,6 +8,7 @@ include ./makefile.common
 VIZDIR = vizsrc
 MATERIALDIR = materialsrc
 MPMDIR = src
+BCDIR = bcsrc
 
 SOBJ = $(MATERIAL_SRC:.c=.so)
 
@@ -16,14 +17,16 @@ SOBJ = $(MATERIAL_SRC:.c=.so)
 .PHONY: $(VIZBIN)
 .PHONY: $(BIN)
 .PHONY: $(SOBJ)
+.PHONY: $(BCSOBJ)
 
 # Default target(s)
-all: $(BIN) $(VIZBIN) $(SOBJ) $(MATERIAL_TEST_BIN)
+all: $(BIN) $(VIZBIN) $(SOBJ) $(BCSOBJ) $(MATERIAL_TEST_BIN)
 
 clean:
 	${MAKE} -f makefile -C $(VIZDIR) clean
 	${MAKE} -f makefile -C $(MATERIALDIR) clean
 	${MAKE} -f makefile -C $(MPMDIR) clean
+	${MAKE} -f makefile -C $(BCDIR) clean
 
 $(MATERIAL_TEST_BIN): 
 	${MAKE} -f makefile -C $(MATERIALDIR) ../$@
@@ -51,5 +54,10 @@ $(VIZBIN):
 
 materials: $(SOBJ)
 
+boundaries: $(BCSOBJ)
+
 $(SOBJ):
 	${MAKE} -f makefile -C $(MATERIALDIR) ../$@
+
+$(BCSOBJ):
+	${MAKE} -f makefile -C $(BCDIR) ../$@

@@ -863,8 +863,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
         }
 
         /* Create dirichlet and periodic boundary conditions. */
-        generate_dirichlet_bcs(job);
-        generate_node_number_override(job);
+        job->boundary.bc_time_varying(job);
     }
 
     pthread_barrier_wait(job->serialize_barrier);

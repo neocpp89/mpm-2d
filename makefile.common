@@ -32,6 +32,9 @@ MATERIAL_SRC = \
     g_nonlocalxs71.c \
     isolin.c
 
+BC_SRC = \
+    box.c
+
 SRC = \
     main.c \
     bc.c \
@@ -48,4 +51,4 @@ SRC = \
     map.c
 
 SOBJ = $(MATERIAL_SRC:.c=.so)
-
+BCSOBJ = $(BC_SRC:.c=.so)

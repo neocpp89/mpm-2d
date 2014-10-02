@@ -96,8 +96,14 @@ typedef struct mat_control_s {
 } material_control_t;
 
 typedef struct bc_control_s {
-    /* XXX: fill in remaining properties! */
-
+    char *bc_filename;
+    int use_builtin;
+    void (*bc_init)(void *);
+    int (*bc_validate)(void *);
+    void (*bc_time_varying)(void *);
+    void (*bc_momentum)(void *);
+    void (*bc_force)(void *);
+    
     double *fp64_props;
     int *int_props;
     int num_fp64_props;

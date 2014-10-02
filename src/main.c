@@ -52,12 +52,13 @@ static struct state_s {
     char *gridfile;
     char *particlefile;
     char *materialso;
+    char *bcso;
 
     double tmax;
     int restart;        /* is this a restart? */
 } g_state;
 
-static const char* g_optstring = "hc:o:r:p:g:u:t:";
+static const char* g_optstring = "hc:o:r:p:g:u:t:b:";
 char *outputdir = "./";
 const char *default_cfgfile = "simulation.cfg";
 
@@ -146,6 +147,7 @@ void usage(char *program_name)
     printf("\t\t-p PFILE, particle file to use. Overrides config file value.\n");
     printf("\t\t-g GFILE, grid file to use. Overrides config file value.\n");
     printf("\t\t-u MATERIAL, material shared object to use. Overrides config file value.\n");
+    printf("\t\t-b BC, boundary conditions shared object to use. Overrides config file value.\n");
     printf("\t\t-c CFGFILE, configuration file to use. Default is '%s'.\n", default_cfgfile);
     printf("\t\t-t THREADS, number of threads to use. Default is 1.\n");
     printf("\t\t-h This help message.");
@@ -264,6 +266,7 @@ int main(int argc, char **argv)
     int command_line_gridfile = 0;
     int command_line_particlefile = 0;
     int command_line_materialso = 0;
+    int command_line_bcso = 0;
     char *s;
     char *s_dlerror;
 
@@ -286,6 +289,7 @@ int main(int argc, char **argv)
     FILE *state_fd;
 
     void *material_so_handle;
+    void *bc_so_handle;
 
     int opt;
     int leftover_argc;
@@ -336,6 +340,9 @@ int main(int argc, char **argv)
                 g_state.materialso = optarg;
                 command_line_materialso = 1;
                 break;
+            case 'b':
+                g_state.bcso = optarg;
+                command_line_bcso = 1;
             case 't':
                 num_threads = atoi(optarg);
                 if (num_threads <= 0) {
@@ -357,7 +364,7 @@ int main(int argc, char **argv)
     if (cfg_parse(cfg, cfgfile) == CFG_PARSE_ERROR) {
         fprintf(stderr, "Fatal -- cannot parse configuration file '%s'.\n",
             cfgfile);
-        exit(EXIT_ERROR_CFG_PARSE);
+        goto _fatal_error;
     }
 
     /* section for input */
@@ -481,8 +488,68 @@ int main(int argc, char **argv)
     fprintf(stderr, "}\n");
 
     /* section for boundary condition options */
-    /* XXX: fix implementation! need to do dlopen/dlsym etc */
     cfg_boundary = cfg_getsec(cfg, "boundary-conditions");
+    job->boundary.bc_init = NULL;
+    job->boundary.bc_validate = NULL;
+    job->boundary.bc_time_varying = NULL;
+    job->boundary.bc_momentum = NULL;
+    job->boundary.bc_force = NULL;
+    if (command_line_bcso != 0) {
+        job->boundary.use_builtin = 0;
+        job->boundary.bc_filename = g_state.bcso;
+    } else {
+        job->boundary.use_builtin = cfg_getint(cfg_boundary, "use-builtin");
+        job->boundary.bc_filename = cfg_getstr(cfg_boundary, "boundary-conditions-file");
+    }
+    if (job->boundary.use_builtin == 0) {
+        bc_so_handle =
+            dlopen(job->boundary.bc_filename, RTLD_LAZY);
+        if (material_so_handle == NULL) {
+            fprintf(stderr, "FATAL -- Can't dlopen() boundary condition file '%s': %s.\n",
+                job->material.material_filename, dlerror());
+            goto _fatal_error;
+        }
+        *(void **)(&(job->boundary.bc_init)) =
+            dlsym(bc_so_handle, "bc_init");
+        if ((s_dlerror = dlerror()) != NULL) {
+            fprintf(stderr, "FATAL -- Error loading symbol 'bc_init': %s.\n",
+                s_dlerror);
+            goto _fatal_error;
+        }
+        *(void **)(&(job->boundary.bc_validate)) =
+            dlsym(bc_so_handle, "bc_validate");
+        if ((s_dlerror = dlerror()) != NULL) {
+            fprintf(stderr, "FATAL -- Error loading symbol 'bc_validate': %s.\n",
+                s_dlerror);
+            goto _fatal_error;
+        }
+        *(void **)(&(job->boundary.bc_time_varying)) =
+            dlsym(bc_so_handle, "bc_time_varying");
+        if ((s_dlerror = dlerror()) != NULL) {
+            fprintf(stderr, "FATAL -- Error loading symbol 'bc_time_varying': %s.\n",
+                s_dlerror);
+            goto _fatal_error;
+        }
+        *(void **)(&(job->boundary.bc_momentum)) =
+            dlsym(bc_so_handle, "bc_momentum");
+        if ((s_dlerror = dlerror()) != NULL) {
+            fprintf(stderr, "FATAL -- Error loading symbol 'bc_momentum': %s.\n",
+                s_dlerror);
+            goto _fatal_error;
+        }
+        *(void **)(&(job->boundary.bc_force)) =
+            dlsym(bc_so_handle, "bc_force");
+        if ((s_dlerror = dlerror()) != NULL) {
+            fprintf(stderr, "FATAL -- Error loading symbol 'bc_force': %s.\n",
+                s_dlerror);
+            goto _fatal_error;
+        }
+    }
+
+    if (job->boundary.bc_init == NULL) {
+        fprintf(stderr, "FATAL -- No boundary conditions.\n");
+        goto _fatal_error;
+    }
 
     job->boundary.num_fp64_props = cfg_size(cfg_boundary, "properties");
     job->boundary.num_int_props = cfg_size(cfg_boundary, "integer-properties");
@@ -496,6 +563,8 @@ int main(int argc, char **argv)
     }
 
     fprintf(stderr, "\nBoundary options set:\n");
+    fprintf(stderr, "bc_filename: %s\n", job->boundary.bc_filename);
+    fprintf(stderr, "use_builtin: %d\n", job->boundary.use_builtin);
     fprintf(stderr, "num_fp64_props: %d\n", job->boundary.num_fp64_props);
     fprintf(stderr, "num_int_props: %d\n", job->boundary.num_int_props);
 
@@ -757,9 +826,9 @@ job_start:
     dispg(job->t);
     dispd(j);
 
-    if (validate_bc_properties(job) == 0) {
-        fprintf(stderr, "Exiting due to error with BC properties.\n");
-        exit(EXIT_ERROR_BC_PROPS);
+    if (job->boundary.bc_validate(job) == 0) {
+        fprintf(stderr, "Error with boundary condition properties.\n");
+        goto _fatal_error;
     }
 
     job->frame = floor(job->t * job->output.sample_rate_hz);
@@ -785,10 +854,10 @@ job_start:
 
     /* dump state to file */
     write_state(job->output.state_fd, job);
-/*    h5_write_state("state.h5", job);*/
 
-    printf("Closing files.\n");
+_fatal_error:
 _close_files:
+    printf("Closing files.\n");
     if (job->output.info_fd != NULL) {
         fclose(job->output.info_fd);
     }
@@ -809,14 +878,13 @@ _close_files:
     printf("Freeing allocated memory.\n");
 
     cfg_free(cfg);
-    if (job->output.modified_directory) {
+    if (job->output.modified_directory != NULL) {
         free(job->output.directory);
     }
     free(job->output.particle_filename_fullpath);
     free(job->output.element_filename_fullpath);
     free(job->output.state_filename_fullpath);
     mpm_cleanup(job);
-/*    h5_cleanup(h5);*/
 
     free(pdata);
     pdata = NULL;
