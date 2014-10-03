@@ -16,10 +16,18 @@
 #include "material.h"
 #include "element.h"
 
+#define XFRICTION 0x01
+#define YFRICTION 0x02
+
 static size_t left_col = 0;
 static size_t right_col = 0;
 static size_t bottom_row = 0;
 static size_t top_row = 0;
+
+static int left_fric = 0;
+static int right_fric = 0;
+static int bottom_fric = 0;
+static int top_fric = 0;
 
 void generate_dirichlet_bcs(job_t *job);
 void generate_node_number_override(job_t *job);
@@ -39,13 +47,26 @@ int bc_validate(job_t *job)
         return 0;
     }
 
+    if (job->boundary.num_int_props != 4) {
+        fprintf(stderr, "%s:%s: Wrong number of integer boundary condition properties. Expected 4, got %d.\n", __FILE__, __func__, job->boundary.num_int_props);
+        return 0;
+    }
+
     x0 = job->boundary.fp64_props[0];
     y0 = job->boundary.fp64_props[1];
     w = job->boundary.fp64_props[2];
     h = job->boundary.fp64_props[3];
     
+    left_fric = job->boundary.int_props[0];
+    bottom_fric = job->boundary.int_props[1];
+    right_fric = job->boundary.int_props[2];
+    top_fric = job->boundary.int_props[3];
+    
     printf("%s:%s: (x_bottomleft, y_bottomleft): (%g, %g), (width, height): (%g, %g)\n",
         __FILE__, __func__ , x0, y0, w, h);
+
+    printf("%s:%s: friction on (left, bottom, right, top): (%d, %d, %d, %d)\n",
+        __FILE__, __func__ , left_fric, bottom_fric, right_fric, top_fric);
 
     if (x0 < 0 || y0 < 0 || x0 > 1.0 || y0 > 1.0) {
         fprintf(stderr, "%s:%s: Box must start in [(0,0),(1,1)]\n", __FILE__, __func__);
@@ -98,15 +119,24 @@ void generate_dirichlet_bcs(job_t *job)
         size_t t = n + top_row * job->N;
 
         /* bottom */
-        job->u_dirichlet[NODAL_DOF * b + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * b + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * b + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * b + YDOF_IDX] = 1;
+        if (bottom_fric & XFRICTION) {
+            job->u_dirichlet[NODAL_DOF * b + XDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * b + XDOF_IDX] = 1;
+        }
+        if (bottom_fric & YFRICTION) {
+            job->u_dirichlet[NODAL_DOF * b + YDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * b + YDOF_IDX] = 1;
+        }
 
-        job->u_dirichlet[NODAL_DOF * t + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * t + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * t + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * t + YDOF_IDX] = 1;
+        /* top */
+        if (top_fric & XFRICTION) {
+            job->u_dirichlet[NODAL_DOF * t + XDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * t + XDOF_IDX] = 1;
+        }
+        if (top_fric & YFRICTION) {
+            job->u_dirichlet[NODAL_DOF * t + YDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * t + YDOF_IDX] = 1;
+        }
     }
 
     /* Side walls. */
@@ -114,15 +144,25 @@ void generate_dirichlet_bcs(job_t *job)
         size_t l = n*job->N + left_col;
         size_t r = n*job->N + right_col;
 
-        job->u_dirichlet[NODAL_DOF * l + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * l + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * l + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * l + YDOF_IDX] = 1;
+        /* left */
+        if (left_fric & XFRICTION) {
+            job->u_dirichlet[NODAL_DOF * l + XDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * l + XDOF_IDX] = 1;
+        }
+        if (left_fric & YFRICTION) {
+            job->u_dirichlet[NODAL_DOF * l + YDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * l + YDOF_IDX] = 1;
+        }
 
-        job->u_dirichlet[NODAL_DOF * r + XDOF_IDX] = 0;
-        job->u_dirichlet[NODAL_DOF * r + YDOF_IDX] = 0;
-        job->u_dirichlet_mask[NODAL_DOF * r + XDOF_IDX] = 1;
-        job->u_dirichlet_mask[NODAL_DOF * r + YDOF_IDX] = 1;
+        /* right */
+        if (right_fric & XFRICTION) {
+            job->u_dirichlet[NODAL_DOF * r + XDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * r + XDOF_IDX] = 1;
+        }
+        if (right_fric & YFRICTION) {
+            job->u_dirichlet[NODAL_DOF * r + YDOF_IDX] = 0;
+            job->u_dirichlet_mask[NODAL_DOF * r + YDOF_IDX] = 1;
+        }
     }
 
     return;
