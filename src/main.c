@@ -58,8 +58,7 @@ static struct state_s {
     int restart;        /* is this a restart? */
 } g_state;
 
-static const char* g_optstring = "hc:o:r:p:g:u:t:b:";
-char *outputdir = "./";
+const char* g_optstring = "hc:o:r:p:g:u:t:b:";
 const char *default_cfgfile = "simulation.cfg";
 
 volatile int want_sigterm = 0;
@@ -160,7 +159,7 @@ void usage(char *program_name)
 int main(int argc, char **argv)
 {
     /* Configuration file used by libconfuse. */
-    char *cfgfile = default_cfgfile;
+    const char *cfgfile = default_cfgfile;
     /* libconfuse config parsing variables */
     cfg_opt_t timestep_opts[] =
     {
@@ -262,24 +261,18 @@ int main(int argc, char **argv)
     };
 
     int num_threads = 1;
-    int command_line_outputdir = 0;
-    int command_line_gridfile = 0;
-    int command_line_particlefile = 0;
-    int command_line_materialso = 0;
-    int command_line_bcso = 0;
     char *s;
     char *s_dlerror;
 
-    double h = 0.1;
-    int N = (1+ceil(1/h));
+    double h;
+    int N;
     int i;
     int j;
     int len;
-    double t_stop = 1;
+    double t_stop;
 
     struct timespec wallstart, wallstop;
     long ns;
-    long stepcount;
 
     grid_t g;
     particle_t *pdata = NULL;
@@ -301,7 +294,11 @@ int main(int argc, char **argv)
     size_t psplit, nsplit, esplit;
 
     /* set default command line state */
-    g_state.outputdir = outputdir;
+    g_state.outputdir = NULL;
+    g_state.gridfile = NULL;
+    g_state.particlefile = NULL;
+    g_state.materialso = NULL;
+    g_state.bcso = NULL;
     g_state.restart = 0;
     g_state.tmax = 0;
 
@@ -326,23 +323,18 @@ int main(int argc, char **argv)
                 break;
             case 'o':
                 g_state.outputdir = optarg;
-                command_line_outputdir = 1;
                 break;
             case 'p':
                 g_state.particlefile = optarg;
-                command_line_particlefile = 1;
                 break;
             case 'g':
                 g_state.gridfile = optarg;
-                command_line_gridfile = 1;
                 break;
             case 'u':
                 g_state.materialso = optarg;
-                command_line_materialso = 1;
                 break;
             case 'b':
                 g_state.bcso = optarg;
-                command_line_bcso = 1;
             case 't':
                 num_threads = atoi(optarg);
                 if (num_threads <= 0) {
@@ -369,10 +361,10 @@ int main(int argc, char **argv)
 
     /* section for input */
     cfg_input = cfg_getsec(cfg, "input");
-    if (command_line_particlefile != 1) {
+    if (g_state.particlefile == NULL) {
         g_state.particlefile = cfg_getstr(cfg_input, "initial-particle-file");
     }
-    if (command_line_gridfile != 1) {
+    if (g_state.gridfile == NULL) {
         g_state.gridfile = cfg_getstr(cfg_input, "grid-file");
     }
 
@@ -380,7 +372,7 @@ int main(int argc, char **argv)
     signal(SIGINT, signal_callback_handler);
 
     /* Add an additional byte if we need to add a '/'. */
-    if (command_line_outputdir != 0) {
+    if (g_state.outputdir != NULL) {
         len = strlen(g_state.outputdir);
         printf("Using output directory \"%s\".\n", g_state.outputdir);
         if (g_state.outputdir[len-1] != '/') {
@@ -421,7 +413,7 @@ int main(int argc, char **argv)
     /* section for material options */
     cfg_material = cfg_getsec(cfg, "material");
     job->material.calculate_stress_threaded = NULL;
-    if (command_line_materialso != 0) {
+    if (g_state.materialso != NULL) {
         job->material.use_builtin = 0;
         job->material.material_filename = g_state.materialso;
     } else {
@@ -494,7 +486,7 @@ int main(int argc, char **argv)
     job->boundary.bc_time_varying = NULL;
     job->boundary.bc_momentum = NULL;
     job->boundary.bc_force = NULL;
-    if (command_line_bcso != 0) {
+    if (g_state.bcso != NULL) {
         job->boundary.use_builtin = 0;
         job->boundary.bc_filename = g_state.bcso;
     } else {
@@ -504,9 +496,9 @@ int main(int argc, char **argv)
     if (job->boundary.use_builtin == 0) {
         bc_so_handle =
             dlopen(job->boundary.bc_filename, RTLD_LAZY);
-        if (material_so_handle == NULL) {
+        if (bc_so_handle == NULL) {
             fprintf(stderr, "FATAL -- Can't dlopen() boundary condition file '%s': %s.\n",
-                job->material.material_filename, dlerror());
+                job->boundary.bc_filename, dlerror());
             goto _fatal_error;
         }
         *(void **)(&(job->boundary.bc_init)) =
@@ -648,7 +640,7 @@ int main(int argc, char **argv)
         We can specify the output directory on the commandline, use that to
         override the configuration file.
     */
-    if (command_line_outputdir) {
+    if (g_state.outputdir != NULL) {
         job->output.directory = g_state.outputdir;
     } else {
         job->output.directory = cfg_getstr(cfg_output, "directory");
@@ -878,7 +870,7 @@ _close_files:
     printf("Freeing allocated memory.\n");
 
     cfg_free(cfg);
-    if (job->output.modified_directory != NULL) {
+    if (job->output.modified_directory != 0) {
         free(job->output.directory);
     }
     free(job->output.particle_filename_fullpath);

@@ -296,6 +296,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 void implicit_mpm_step(job_t *job);
 void explicit_mpm_step_usf(job_t *job);
 void explicit_mpm_step_usl(job_t *job);
+void explicit_mpm_step_usl_threaded(void *task);
 void mpm_cleanup(job_t *job);
 
 void pt_update_stress(void *args);
