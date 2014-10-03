@@ -83,7 +83,7 @@ typedef struct op_control_s {
 } output_control_t;
 
 typedef struct mat_control_s {
-    char *material_filename;
+    const char *material_filename;
     int use_builtin;
     void (*material_init)(void *);
     void (*calculate_stress)(void *);
@@ -96,7 +96,7 @@ typedef struct mat_control_s {
 } material_control_t;
 
 typedef struct bc_control_s {
-    char *bc_filename;
+    const char *bc_filename;
     int use_builtin;
     void (*bc_init)(void *);
     int (*bc_validate)(void *);

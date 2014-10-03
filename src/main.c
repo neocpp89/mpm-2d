@@ -49,10 +49,10 @@
 static struct state_s {
     char *outputdir;
 
-    char *gridfile;
-    char *particlefile;
-    char *materialso;
-    char *bcso;
+    const char *gridfile;
+    const char *particlefile;
+    const char *materialso;
+    const char *bcso;
 
     double tmax;
     int restart;        /* is this a restart? */
@@ -616,22 +616,24 @@ int main(int argc, char **argv)
     fprintf(stderr, "stable_dt_threshold: %d\n", job->timestep.stable_dt_threshold);
 
     /* section for implicit solver */
-    cfg_implicit = cfg_getsec(cfg, "implicit");
+    if (job->solver == IMPLICIT_SOLVER) {
+        cfg_implicit = cfg_getsec(cfg, "implicit");
 
-    job->implicit.du_norm_ratio =
-        cfg_getfloat(cfg_implicit, "displacement-norm-ratio");
-    job->implicit.q_norm_ratio =
-        cfg_getfloat(cfg_implicit, "residual-norm-ratio");
-    job->implicit.du_norm_converged =
-        cfg_getfloat(cfg_implicit, "converged-displacement-norm");
-    job->implicit.unstable_iteration_count =
-        cfg_getint(cfg_implicit, "unstable-iteration-count");
+        job->implicit.du_norm_ratio =
+            cfg_getfloat(cfg_implicit, "displacement-norm-ratio");
+        job->implicit.q_norm_ratio =
+            cfg_getfloat(cfg_implicit, "residual-norm-ratio");
+        job->implicit.du_norm_converged =
+            cfg_getfloat(cfg_implicit, "converged-displacement-norm");
+        job->implicit.unstable_iteration_count =
+            cfg_getint(cfg_implicit, "unstable-iteration-count");
 
-    fprintf(stderr, "\nImplicit options set:\n");
-    fprintf(stderr, "du_norm_ratio: %e\n", job->implicit.du_norm_ratio);
-    fprintf(stderr, "q_norm_ratio: %e\n", job->implicit.q_norm_ratio);
-    fprintf(stderr, "du_norm_converged: %e\n", job->implicit.du_norm_converged);
-    fprintf(stderr, "unstable_iteration_count: %d\n", job->implicit.unstable_iteration_count);
+        fprintf(stderr, "\nImplicit options set:\n");
+        fprintf(stderr, "du_norm_ratio: %e\n", job->implicit.du_norm_ratio);
+        fprintf(stderr, "q_norm_ratio: %e\n", job->implicit.q_norm_ratio);
+        fprintf(stderr, "du_norm_converged: %e\n", job->implicit.du_norm_converged);
+        fprintf(stderr, "unstable_iteration_count: %d\n", job->implicit.unstable_iteration_count);
+    }
 
     /* section for output */
     cfg_output = cfg_getsec(cfg, "output");
@@ -815,8 +817,6 @@ job_start:
 
     j = floor(job->t * job->output.sample_rate_hz);
     job->frame = j;
-    dispg(job->t);
-    dispd(j);
 
     if (job->boundary.bc_validate(job) == 0) {
         fprintf(stderr, "Error with boundary condition properties.\n");

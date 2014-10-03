@@ -21,8 +21,8 @@ typedef struct grid_s {
     double len;
 } grid_t;
 
-int read_grid_params(grid_t *grid, char *fname);
-int read_particles(particle_t **particles, int *num_particles, char *fname);
+int read_grid_params(grid_t *grid, const char *fname);
+int read_particles(particle_t **particles, int *num_particles, const char *fname);
 job_t *read_state(FILE *fd);
 
 #endif

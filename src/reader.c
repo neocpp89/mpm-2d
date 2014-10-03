@@ -14,7 +14,7 @@
 #include "process.h"
 
 /*---read_grid_params---------------------------------------------------------*/
-int read_grid_params(grid_t *grid, char *fname)
+int read_grid_params(grid_t *grid, const char *fname)
 {
     int r;
     FILE *fp;
@@ -37,7 +37,7 @@ int read_grid_params(grid_t *grid, char *fname)
 /*----------------------------------------------------------------------------*/
 
 /*---read_particles-----------------------------------------------------------*/
-int read_particles(particle_t **particles, int *num_particles, char *fname)
+int read_particles(particle_t **particles, int *num_particles, const char *fname)
 {
     FILE *fp;
     int i, r;
