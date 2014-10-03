@@ -366,141 +366,6 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void zero_momentum_bc(job_t *job)
-{
-    int i, j, m, n;
-
-    for (i = 0; i < job->num_nodes; i++) {
-        for (j = 0; j < NODAL_DOF; j++) {
-            n = NODAL_DOF * i + j;
-            m = job->node_number_override[n];
-            if (job->u_dirichlet_mask[m] != 0) {
-                /* only handle 0 displacement right now. */
-                if (job->u_dirichlet[m] == 0) {
-                    if (j == XDOF_IDX) {
-                        job->nodes[i].mx_t = 0;
-                    } else if (j == YDOF_IDX) {
-                        job->nodes[i].my_t = 0;
-                    }
-                }
-            }
-        }
-    }
-
-    /* handle periodicity */
-    for (i = 0; i < job->num_nodes; i++) {
-        for (j = 0; j < NODAL_DOF; j++) {
-            if (job->node_number_override[NODAL_DOF * i + j] != NODAL_DOF * i + j) {
-                /* tie nodes together. */
-                m = job->node_number_override[NODAL_DOF * i + j];
-                n = NODAL_DOF * i + j;
-
-                if (n % NODAL_DOF == XDOF_IDX) {
-                    if (m % NODAL_DOF == XDOF_IDX) {
-                        job->nodes[(m / NODAL_DOF)].mx_t += job->nodes[(n / NODAL_DOF)].mx_t;
-                        job->nodes[(n / NODAL_DOF)].mx_t = job->nodes[(m / NODAL_DOF)].mx_t;
-
-                        job->nodes[(m / NODAL_DOF)].mx_tt += job->nodes[(n / NODAL_DOF)].mx_tt;
-                        job->nodes[(n / NODAL_DOF)].mx_tt = job->nodes[(m / NODAL_DOF)].mx_tt;
-                    } else if (m % NODAL_DOF == YDOF_IDX) {
-                        job->nodes[(m / NODAL_DOF)].my_t += job->nodes[(n / NODAL_DOF)].mx_t;
-                        job->nodes[(n / NODAL_DOF)].mx_t = job->nodes[(m / NODAL_DOF)].my_t;
-
-                        job->nodes[(m / NODAL_DOF)].my_tt += job->nodes[(n / NODAL_DOF)].mx_tt;
-                        job->nodes[(n / NODAL_DOF)].mx_tt = job->nodes[(m / NODAL_DOF)].my_tt;
-                    }
-                } else if (n % NODAL_DOF == YDOF_IDX) {
-                    if (m % NODAL_DOF == XDOF_IDX) {
-                        job->nodes[(m / NODAL_DOF)].mx_t += job->nodes[(n / NODAL_DOF)].my_t;
-                        job->nodes[(n / NODAL_DOF)].my_t = job->nodes[(m / NODAL_DOF)].mx_t;
-
-                        job->nodes[(m / NODAL_DOF)].mx_tt += job->nodes[(n / NODAL_DOF)].my_tt;
-                        job->nodes[(n / NODAL_DOF)].my_tt = job->nodes[(m / NODAL_DOF)].mx_tt;
-                    } else if (m % NODAL_DOF == YDOF_IDX) {
-                        job->nodes[(m / NODAL_DOF)].my_t += job->nodes[(n / NODAL_DOF)].my_t;
-                        job->nodes[(n / NODAL_DOF)].my_t = job->nodes[(m / NODAL_DOF)].my_t;
-
-                        job->nodes[(m / NODAL_DOF)].my_tt += job->nodes[(n / NODAL_DOF)].my_tt;
-                        job->nodes[(n / NODAL_DOF)].my_tt = job->nodes[(m / NODAL_DOF)].my_tt;
-                    }
-                }
-            }
-        }
-    }
-
-    /* fix masses as well */
-    for (i = 0; i < job->num_nodes; i++) {
-        j = 0;
-        if (job->node_number_override[NODAL_DOF * i + j] != NODAL_DOF * i + j) {
-            /* tie nodes together. */
-            m = job->node_number_override[NODAL_DOF * i + j];
-            n = NODAL_DOF * i + j;
-
-            job->nodes[(m / NODAL_DOF)].m += job->nodes[(n / NODAL_DOF)].m;
-            job->nodes[(n / NODAL_DOF)].m = job->nodes[(m / NODAL_DOF)].m;
-        }
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void zero_force_bc(job_t *job)
-{
-    int i, j, m, n;
-
-    for (i = 0; i < job->num_nodes; i++) {
-        for (j = 0; j < NODAL_DOF; j++) {
-            n = NODAL_DOF * i + j;
-            m = job->node_number_override[n];
-            if (job->u_dirichlet_mask[m] != 0) {
-                /* only handle 0 displacement right now. */
-                if (job->u_dirichlet[m] == 0) {
-                    if (j == XDOF_IDX) {
-                        job->nodes[i].fx = 0;
-                    } else if (j == YDOF_IDX) {
-                        job->nodes[i].fy = 0;
-                    }
-                }
-            }
-        }
-    }
-
-    /* handle periodicity */
-    for (i = 0; i < job->num_nodes; i++) {
-        for (j = 0; j < NODAL_DOF; j++) {
-            if (job->node_number_override[NODAL_DOF * i + j] != NODAL_DOF * i + j) {
-                /* tie nodes together. */
-                m = job->node_number_override[NODAL_DOF * i + j];
-                n = NODAL_DOF * i + j;
-
-                if (n % NODAL_DOF == XDOF_IDX) {
-                    if (m % NODAL_DOF == XDOF_IDX) {
-                        job->nodes[(m / NODAL_DOF)].fx += job->nodes[(n / NODAL_DOF)].fx;
-                        job->nodes[(n / NODAL_DOF)].fx = job->nodes[(m / NODAL_DOF)].fx;
-                    } else if (m % NODAL_DOF == YDOF_IDX) {
-                        job->nodes[(m / NODAL_DOF)].fy += job->nodes[(n / NODAL_DOF)].fx;
-                        job->nodes[(n / NODAL_DOF)].fx = job->nodes[(m / NODAL_DOF)].fy;
-                    }
-                } else if (n % NODAL_DOF == YDOF_IDX) {
-                    if (m % NODAL_DOF == XDOF_IDX) {
-                        job->nodes[(m / NODAL_DOF)].fx += job->nodes[(n / NODAL_DOF)].fy;
-                        job->nodes[(n / NODAL_DOF)].fy = job->nodes[(m / NODAL_DOF)].fx;
-                    } else if (m % NODAL_DOF == YDOF_IDX) {
-                        job->nodes[(m / NODAL_DOF)].fy += job->nodes[(n / NODAL_DOF)].fy;
-                        job->nodes[(n / NODAL_DOF)].fy = job->nodes[(m / NODAL_DOF)].fy;
-                    }
-                }
-            }
-        }
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
 void explicit_mpm_step_usf(job_t *job)
 {
     int i;
@@ -541,14 +406,13 @@ void explicit_mpm_step_usf(job_t *job)
 /*    generate_mappings(job);*/
 
     /* Create dirichlet and periodic boundary conditions. */
-    generate_dirichlet_bcs(job);
-    generate_node_number_override(job);
+    (*(job->boundary.bc_time_varying))(job);
 
     /* Map particle state to grid quantites. */
     map_to_grid(job);
 
     /* Zero perpendicular momentum at edge nodes. */
-    zero_momentum_bc(job);
+    (*(job->boundary.bc_momentum))(job);
 
     /* Calculate node velocity. */
     calculate_node_velocity(job);
@@ -559,22 +423,10 @@ void explicit_mpm_step_usf(job_t *job)
     /* Calculate stress. */
     (*(job->material.calculate_stress))(job);
 
-    /* Calculate stress. */
-/*    task.job = job;*/
-/*    for (i = 0; i < PT_NUM_THREADS; i++) {*/
-/*        task.offset = i;*/
-/*        pthread_create(&(job->threads[i]), NULL, &pt_calculate_stress, &task);*/
-/*    }*/
-/*    */
-/*    for (i = 0; i < PT_NUM_THREADS; i++) {*/
-/*        task.offset = i;*/
-/*        pthread_join(job->threads[i], NULL);*/
-/*    }*/
-
     update_stress(job);
 
     /* Zero perpendicular forces at edge nodes. */
-    zero_force_bc(job);
+    (*(job->boundary.bc_force))(job);
 
     /* Update momentum and velocity at nodes. */
     move_grid(job); 
@@ -639,14 +491,13 @@ void explicit_mpm_step_usf_threaded(job_t *job)
 /*    generate_mappings(job);*/
 
     /* Create dirichlet and periodic boundary conditions. */
-    generate_dirichlet_bcs(job);
-    generate_node_number_override(job);
+    (*(job->boundary.bc_time_varying))(job);
 
     /* Map particle state to grid quantites. */
     map_to_grid(job);
 
     /* Zero perpendicular momentum at edge nodes. */
-    zero_momentum_bc(job);
+    (*(job->boundary.bc_momentum))(job);
 
     /* Calculate node velocity. */
     calculate_node_velocity(job);
@@ -657,22 +508,10 @@ void explicit_mpm_step_usf_threaded(job_t *job)
     /* Calculate stress. */
     (*(job->material.calculate_stress))(job);
 
-    /* Calculate stress. */
-/*    task.job = job;*/
-/*    for (i = 0; i < PT_NUM_THREADS; i++) {*/
-/*        task.offset = i;*/
-/*        pthread_create(&(job->threads[i]), NULL, &pt_calculate_stress, &task);*/
-/*    }*/
-/*    */
-/*    for (i = 0; i < PT_NUM_THREADS; i++) {*/
-/*        task.offset = i;*/
-/*        pthread_join(job->threads[i], NULL);*/
-/*    }*/
-
     update_stress(job);
 
     /* Zero perpendicular forces at edge nodes. */
-    zero_force_bc(job);
+    (*(job->boundary.bc_force))(job);
 
     /* Update momentum and velocity at nodes. */
     move_grid(job); 
@@ -738,14 +577,13 @@ void explicit_mpm_step_usl(job_t *job)
     calculate_shapefunctions(job);
 
     /* Create dirichlet and periodic boundary conditions. */
-    generate_dirichlet_bcs(job);
-    generate_node_number_override(job);
+    (*(job->boundary.bc_time_varying))(job);
 
     /* Map particle state to grid quantites. */
     map_to_grid_explicit(job);
 
     /* Zero perpendicular momentum at edge nodes. */
-    zero_momentum_bc(job);
+    (*(job->boundary.bc_momentum))(job);
 
     /*
         This is poorly named -- it actually calculates diverence of stress to
@@ -754,7 +592,7 @@ void explicit_mpm_step_usl(job_t *job)
     update_stress(job);
 
     /* Zero perpendicular forces at edge nodes. */
-    zero_force_bc(job);
+    (*(job->boundary.bc_force))(job);
 
     /* Update momentum and velocity at nodes. */
     move_grid(job); 
@@ -863,7 +701,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
         }
 
         /* Create dirichlet and periodic boundary conditions. */
-        job->boundary.bc_time_varying(job);
+        (*(job->boundary.bc_time_varying))(job);
     }
 
     pthread_barrier_wait(job->serialize_barrier);
@@ -873,7 +711,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
     rc = pthread_barrier_wait(job->serialize_barrier);
     if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
         /* Zero perpendicular momentum at edge nodes. */
-        zero_momentum_bc(job);
+        (*(job->boundary.bc_momentum))(job);
 
         /*
             This is poorly named -- it actually calculates diverence of stress to
@@ -883,7 +721,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
 /*        update_stress(job);*/
 
         /* Zero perpendicular forces at edge nodes. */
-        zero_force_bc(job);
+        (*(job->boundary.bc_force))(job);
 
     }
 
@@ -1568,10 +1406,7 @@ start_implicit:
     }
 
     /* Generate and apply dirichlet boundary conditions given in BC file. */
-    generate_dirichlet_bcs(job);
-
-    /* Generate the new nodal numbers according to BCs. */
-    generate_node_number_override(job);
+    (*(job->boundary.bc_time_varying))(job);
 
     /*
         We have to change the velocities and accelerations if nodes are tied
@@ -2742,18 +2577,6 @@ void mpm_cleanup(job_t *job)
     free(job->elements);
     
     free(job->in_element);
-
-/*    free(job->m_nodes);*/
-/*    free(job->mx_t_nodes);*/
-/*    free(job->my_t_nodes);*/
-/*    free(job->mx_tt_nodes);*/
-/*    free(job->my_tt_nodes);*/
-/*    free(job->x_t_nodes);*/
-/*    free(job->y_t_nodes);*/
-/*    free(job->x_tt_nodes);*/
-/*    free(job->y_tt_nodes);*/
-/*    free(job->fx_nodes);*/
-/*    free(job->fy_nodes);*/
 
     free(job->h1);
     free(job->h2);

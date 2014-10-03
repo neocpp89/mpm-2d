@@ -33,11 +33,11 @@ MATERIAL_SRC = \
     isolin.c
 
 BC_SRC = \
-    box.c
+    box.c \
+    square_silo.c
 
 SRC = \
     main.c \
-    bc.c \
     loading.c \
     element.c \
     particle.c \
