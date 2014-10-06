@@ -56,7 +56,7 @@ void generate_dirichlet_bcs(job_t *job)
     /**/
     int off_row = job->N - 1;
     int off_col = job->N - 1;
-/*    int off_col = ((job->N - 1)/ 2);*/
+    off_col = ((job->N - 1) / 4);
 
     hole_radius = job->boundary.fp64_props[0];
     open_time = job->boundary.fp64_props[1];
