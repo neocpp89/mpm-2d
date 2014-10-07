@@ -758,11 +758,11 @@ void explicit_mpm_step_usl_threaded(void *_task)
     /* Update particle position and velocity. */
     move_particles_explicit_usl_split(job, p_start, p_stop);
 
-    /* update volume */
-    update_particle_densities_split(job, p_start, p_stop);
-
     /* Calculate strain rate. */
     calculate_strainrate_split(job, p_start, p_stop);
+
+    /* update volume */
+    update_particle_densities_split(job, p_start, p_stop);
 
     /* Calculate stress. */
     (*(job->material.calculate_stress_threaded))(task);
