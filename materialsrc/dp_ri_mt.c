@@ -1,7 +1,7 @@
 /**
-    \file process.c
+    \file g_local_mu2.c
     \author Sachith Dunatunga
-    \date 04.06.12
+    \date 04.12.13
 
     mpm_2d -- An implementation of the Material Point Method in 2D.
 */
@@ -14,47 +14,36 @@
 #include "node.h"
 #include "process.h"
 #include "material.h"
-
-#define signum(x) ((int)((0 < x) - (x < 0)))
+#include "exitcodes.h"
 
 #define jp(x) job->particles[i].x
-#define SVISC 1e3
-#define SYIELD 1e2
-
-#define mu0     0.2f
-#define hmu     360.0f
-#define p       1.88f
-#define mucv    0.613f
-#define etacr   0.54f
-#define b       2.25f
-#define q       1.0f
-#define eta0    0.675f
-#define hbeta   1.5f
 
 #undef EMOD
 #undef NUMOD
 
-#define EMOD 1e8
-#define NUMOD 0.3
+#undef G
+#undef K
 
-#define G (EMOD / (2.0f * (1.0f + NUMOD)))
-#define K (EMOD / (3.0f * (1.0f - 2*NUMOD)))
-
-#define PI 3.1415926535897932384626433
-#define PHI (30.0*PI/180.0)
-
-#define Epxx jp(state[0])
-#define Epxy jp(state[1])
-#define Epyy jp(state[2])
-#define mu jp(state[3])
-#define eta jp(state[4])
-#define beta jp(state[5])
-/*#define Exx jp(state[6])*/
-/*#define Exy jp(state[7])*/
-/*#define Eyy jp(state[8])*/
+#define szz jp(state[1])
 #define gammap jp(state[9])
-#define Ef_mag jp(state[10])
-#define gf jp(state[6])
+#define gammadotp jp(state[10])
+
+#define MAT_VERSION_STRING "1.0 " __DATE__ " " __TIME__
+
+void calculate_stress(job_t *job);
+void calculate_stress_threaded(threadtask_t *task);
+
+/*
+    The Young's Modulus (E) and Poisson ratio (nu), set in the material init
+    procedure. These are Ccpies of the properties given in the
+    configuration file. Shear modulus (G) and bulk modulus (K) are derived from
+    these.
+*/
+static double E;
+static double nu;
+static double G;
+static double K;
+static double mu_s;
 
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
@@ -68,89 +57,104 @@ void material_init(job_t *job)
     }
 
     for (i = 0; i < job->num_particles; i++) {
-        Epxx = 0;
-        Epxy = 0;
-        Epyy = 0;
-        mu = mu0;
-        eta = eta0;
-        beta = hbeta*(mu0 - mucv);
-        gf = 0;
+        szz = 0;
         gammap = 0;
+        gammadotp = 0;
     }
 
+    if (job->material.num_fp64_props < 3) {
+        fprintf(stderr,
+            "%s:%s: Need at least 3 properties defined (E, nu, mu_s).\n",
+            __FILE__, __func__);
+        exit(EXIT_ERROR_MATERIAL_FILE);
+    } else {
+        E = job->material.fp64_props[0];
+        nu = job->material.fp64_props[1];
+        mu_s = job->material.fp64_props[2];
+        G = E / (2.0 * (1.0 + nu));
+        K = E / (3.0 * (1.0 - 2*nu));
+        printf("%s:%s: properties (E = %g, nu = %g, G = %g, K = %g, mu_s = %g).\n",
+            __FILE__, __func__, E, nu, G , K, mu_s);
+    }
+
+    printf("%s:%s: (material version %s) done initializing material.\n",
+        __FILE__,  __func__, MAT_VERSION_STRING);
     return;
 }
 /*----------------------------------------------------------------------------*/
 
-/* Rate Independent Drucker-Prager (return along shear direction only). */
-/*----------------------------------------------------------------------------*/
+/* Local granular fluidity model. */
 void calculate_stress(job_t *job)
 {
-    return calculate_stress_threaded(job, 0, job->num_particles);
+    threadtask_t t;
+    t.job = job;
+    t.offset = 0;
+    t.blocksize = job->num_particles;
+    calculate_stress_threaded(&t);
+    return;
 }
 
-void calculate_stress_threaded(job_t *job, size_t p_start, size_t p_stop)
+/*----------------------------------------------------------------------------*/
+void calculate_stress_threaded(threadtask_t *task)
 {
-    double f;
-    double txx;
-    double txy;
-    double tyy;
-    double t0xx;
-    double t0xy;
-    double t0yy;
-    double qm;
-    double pm;
-    double m;
-    double q_adj;
+    job_t *job = task->job;
 
-    double dsjxx;
-    double dsjxy;
-    double dsjyy;
+    /* Since this is local, we can split the particles among the threads. */
+    size_t p_start = task->offset;
+    size_t p_stop = task->offset + task->blocksize;
 
-    double density_flag;
+    /* value at end of timestep */
+    double tau_tau;
+    double scale_factor;
 
-    double const c = 1e-2;
+    /* increment using jaumann rate */
+    double dsjxx, dsjxy, dsjyy;
+
+    /* trial values */
+    double sxx_tr, sxy_tr, syy_tr, szz_tr;
+    double t0xx_tr, t0xy_tr, t0yy_tr, t0zz_tr;
+    double p_tr, tau_tr;
+
+    double nup_tau;
+
+    double const c = 0;
+
+    int density_flag;
+    
     size_t i;
+
+    double trD;
+    const double lambda = K - 2.0 * G / 3.0;
+
+    double S0;
+
+/*    fprintf(stderr, "processing particle ids [%zu %zu].\n", p_start, p_stop);*/
 
     for (i = p_start; i < p_stop; i++) {
         if (job->active[i] == 0) {
             continue;
         }
 
-        dsjxx = job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((job->particles[i].exx_t) + NUMOD * (job->particles[i].eyy_t));
-        dsjxy = job->dt * (EMOD / (2 *(1 + NUMOD))) * (job->particles[i].exy_t);
-        dsjyy = job->dt * (EMOD / (1 - NUMOD*NUMOD)) * ((job->particles[i].eyy_t) + NUMOD * (job->particles[i].exx_t));
+        /* Calculate tau and p trial values. */
+        trD = job->particles[i].exx_t + job->particles[i].eyy_t;
+        dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
+        dsjxy = 2.0 * G * job->particles[i].exy_t;
+        dsjyy = lambda * trD + 2.0 * G * job->particles[i].eyy_t;
+        dsjxx += 2 * job->particles[i].wxy_t * job->particles[i].sxy;
+        dsjxy -= job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
+        dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
 
-        dsjxx -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
-        dsjxy += job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
-        dsjyy += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
+        sxx_tr = job->particles[i].sxx + job->dt * dsjxx;
+        sxy_tr = job->particles[i].sxy + job->dt * dsjxy;
+        syy_tr = job->particles[i].syy + job->dt * dsjyy;
+        szz_tr = szz + job->dt * lambda * trD;
 
-/*        dsjxx += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;*/
-/*        dsjxy -= job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);*/
-/*        dsjyy -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;*/
-
-/*        dsjxx += 1e2 * (jp(exx_t) + jp(eyy_t));*/
-/*        dsjyy += 1e2 * (jp(eyy_t) + jp(exx_t));*/
-
-        txx = job->particles[i].sxx + dsjxx;
-        txy = job->particles[i].sxy + dsjxy;
-        tyy = job->particles[i].syy + dsjyy;
-        pm = -0.5f*(txx + tyy);
-        t0xx = txx + pm;
-        t0xy = txy;
-        t0yy = tyy + pm;
-        qm = sqrt(0.5f*(t0xx*t0xx + 2*t0xy*t0xy + t0yy*t0yy));
-        m = tan(PHI);
-
-        f = qm - m*pm - c;
-
-        if(job->particles[i].material == M_RIGID) {
-            job->particles[i].sxx = txx;
-            job->particles[i].sxy = txy;
-            job->particles[i].syy = tyy;
-/*            printf("particle %d is rigid.\n", i);*/
-            continue;
-        }
+        p_tr = -(sxx_tr + syy_tr + szz_tr) / 3.0;
+        t0xx_tr = sxx_tr + p_tr;
+        t0xy_tr = sxy_tr;
+        t0yy_tr = syy_tr + p_tr;
+        t0zz_tr = szz_tr + p_tr; 
+        tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr + t0zz_tr*t0zz_tr));
 
         if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
             density_flag = 1;
@@ -159,33 +163,38 @@ void calculate_stress_threaded(job_t *job, size_t p_start, size_t p_stop)
             density_flag = 0;
         }
 
-        if (density_flag) {
+        if (density_flag || p_tr <= c) {
+            nup_tau = (tau_tr) / (G * job->dt);
+
             job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
             job->particles[i].syy = 0;
-        } else if (f < 0) {
-            job->particles[i].sxx = txx;
-            job->particles[i].sxy = txy;
-            job->particles[i].syy = tyy;
-            job->particles[i].color = 1;
-        } else if (f >= 0 && pm > -c/m) {
-            Epxx += (f / qm) * t0xx / (2 * G);
-            Epxy += (f / qm) * t0xy / (2 * G);
-            Epyy += (f / qm) * t0yy / (2 * G);
-            q_adj = m*pm + c;
-            job->particles[i].sxx = (q_adj / qm) * t0xx - pm;
-            job->particles[i].sxy = (q_adj / qm) * t0xy;
-            job->particles[i].syy = (q_adj / qm) * t0yy - pm;
-            job->particles[i].color = 2;
-            gammap = sqrt(Epxx*Epxx + 2*Epxy*Epxy + Epyy*Epyy);
-        } else if (pm <= -c/m) {
-            job->particles[i].sxx = -0.5 * c / m;
-            job->particles[i].sxy = 0;
-            job->particles[i].syy = -0.5 * c / m;
-            job->particles[i].color = 3;
+            szz = 0;
+        } else if (p_tr > c) {
+            S0 = mu_s * p_tr;
+            if (tau_tr <= S0) {
+                tau_tau = tau_tr;
+                scale_factor = 1.0;
+            } else {
+                tau_tau = S0;
+                scale_factor = (tau_tau / tau_tr);
+            }
+
+            nup_tau = ((tau_tr - tau_tau) / G) / job->dt;
+
+            job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
+            job->particles[i].sxy = scale_factor * t0xy_tr;
+            job->particles[i].syy = scale_factor * t0yy_tr - p_tr;
+            szz = scale_factor * t0zz_tr - p_tr;
         } else {
-            fprintf(stderr, "u");
+/*            fprintf(stderr, "u %zu %3.3g %3.3g %d ", i, f, p_tr, density_flag);*/
+            fprintf(stderr, "u"); 
+            nup_tau = 0;
         }
+
+        /* use strain rate to calculate stress increment */
+        gammap += nup_tau * job->dt;
+        gammadotp = nup_tau;
     }
 
     return;
