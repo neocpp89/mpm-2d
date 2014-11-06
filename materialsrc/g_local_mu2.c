@@ -256,8 +256,12 @@ void calculate_stress_threaded(threadtask_t *task)
         }
 
         if (density_flag || p_tr <= c) {
-            nup_tau = (tau_tr) / (G * job->dt);
-            
+            // nup_tau = (tau_tr) / (G * job->dt);
+
+            // setting plastic strain rate to zero is probably more consistent
+            // with reality, since particles would move as a rigid body.
+            nup_tau = 0;
+
             job->particles[i].T[XX] = 0;
             job->particles[i].T[XY] = 0;
             job->particles[i].T[XZ] = 0;

@@ -1,5 +1,5 @@
 /**
-    \file g_local_mu2.c
+    \file dp_ri_mt.c
     \author Sachith Dunatunga
     \date 04.12.13
 
