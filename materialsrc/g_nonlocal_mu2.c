@@ -40,9 +40,10 @@
 /* from geometric considerations */
 #define GRAINS_D 0.005
 
-#define Epxx jp(state[0])
-#define Epxy jp(state[1])
-#define Epyy jp(state[2])
+/* parameter */
+#define RHO_CRITICAL 1485.0
+
+#define dense jp(state[0])
 #define gf jp(state[3])
 #define eta jp(state[4])
 #define gf_local jp(state[5])
@@ -75,9 +76,11 @@ void material_init(job_t *job)
     }
 
     for (i = 0; i < job->num_particles; i++) {
-        Epxx = 0;
-        Epxy = 0;
-        Epyy = 0;
+        if ((job->particles[i].m / job->particles[i].v) > RHO_CRITICAL) {
+            dense = 1;
+        } else {
+            dense = 0;
+        }
         eta = 0;
         gammap = 0;
         gammadotp = 0;
@@ -180,16 +183,17 @@ void calculate_stress(job_t *job)
         t0yy_tr = syy_tr + p_tr;
         tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
 
-        if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
-            density_flag = 1;
+#if 0
+        if ((job->particles[i].m / job->particles[i].v) < RHO_CRITICAL) {
+            dense = 0;
 /*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
         } else {
-            density_flag = 0;
+            dense = 1;
         }
+#endif
 
-        if (density_flag || p_tr <= c) {
-            nup_tau = (tau_tr) / (G * job->dt);
-
+        if (dense == 0 || p_tr <= c) {
+            nup_tau = 0;
             job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
             job->particles[i].syy = 0;
@@ -211,88 +215,6 @@ void calculate_stress(job_t *job)
         /* use strain rate to calculate stress increment */
         gammap += nup_tau * job->dt;
         gammadotp = nup_tau;
-        
-        #if 0
-        
-        /* Calculate p at beginning of timestep. */
-        p_t = -0.5 * (job->particles[i].sxx + job->particles[i].syy);
-
-        /* Calculate tau and p trial values. */
-        dsjxx = job->dt * (E / (1 - nu*nu)) * ((job->particles[i].exx_t) + nu * (job->particles[i].eyy_t));
-        dsjxy = job->dt * (E / (2 *(1 + nu))) * (job->particles[i].exy_t);
-        dsjyy = job->dt * (E / (1 - nu*nu)) * ((job->particles[i].eyy_t) + nu * (job->particles[i].exx_t));
-        dsjxx -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
-        dsjxy += job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
-        dsjyy += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
-
-        sxx_tr = job->particles[i].sxx + dsjxx;
-        sxy_tr = job->particles[i].sxy + dsjxy;
-        syy_tr = job->particles[i].syy + dsjyy;
-
-        p_tr = -0.5 * (sxx_tr + syy_tr);
-        t0xx_tr = sxx_tr + p_tr;
-        t0xy_tr = sxy_tr;
-        t0yy_tr = syy_tr + p_tr;
-        tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
-
-        inertial_num = gammadotp * GRAINS_D * sqrt(GRAINS_RHO);
-        if (p_t <= 0) {
-            mu_t = MU_2;
-        } else {
-            inertial_num = inertial_num / sqrt(p_t);
-            if (inertial_num <= 0) {
-                mu_t = MU_S;
-            } else {
-                mu_t = MU_S + (MU_2 - MU_S) / ((I_0 / inertial_num) + 1.0);
-            }
-        }
-
-        tau_tau = mu_t*(p_tr + c);
-        f = tau_tr - tau_tau;
-
-        if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
-            density_flag = 1;
-/*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
-        } else {
-            density_flag = 0;
-        }
-
-        if (density_flag) {
-            nup_tau = (tau_tr) / (G * job->dt);
-
-            job->particles[i].sxx = 0;
-            job->particles[i].sxy = 0;
-            job->particles[i].syy = 0;
-        } else if (f < 0) {
-            nup_tau = 0;
-
-            job->particles[i].sxx = t0xx_tr - p_tr;
-            job->particles[i].sxy = t0xy_tr;
-            job->particles[i].syy = t0yy_tr - p_tr;
-        } else if (f >= 0 && p_tr > -c) {
-            nup_tau = (tau_tr - tau_tau) / (G * job->dt);
-
-            scale_factor = (tau_tau / tau_tr);
-            job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
-            job->particles[i].sxy = scale_factor * t0xy_tr;
-            job->particles[i].syy = scale_factor * t0yy_tr - p_tr;
-        } else if (p_tr <= -c) {
-            nup_tau = tau_tr / (G * job->dt);
-
-            job->particles[i].sxx = 0;
-            job->particles[i].sxy = 0;
-            job->particles[i].syy = 0;
-        } else {
-            fprintf(stderr, "u %zu %3.3g %3.3g %d ", i, f, p_tr, density_flag);
-/*            fprintf(stderr, "u"); */
-            nup_tau = 0;
-        }
-
-        /* use strain rate to calculate stress increment */
-        gammap += nup_tau * job->dt;
-        gammadotp = nup_tau;
-        
-        #endif
     }
 
     return;
@@ -328,8 +250,6 @@ void calculate_bulk_granular_fluidity(job_t *job)
     double p_tr, tau_tr;
 
     double const c = 0;
-
-    int density_flag;
    
     size_t i = 0;
  
@@ -364,14 +284,14 @@ void calculate_bulk_granular_fluidity(job_t *job)
         t0yy_tr = syy_tr + p_tr;
         tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
 
-        if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
-            density_flag = 1;
+        if ((job->particles[i].m / job->particles[i].v) < RHO_CRITICAL || p_tr < 0) {
+            dense = 0;
 /*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
         } else {
-            density_flag = 0;
+            dense = 1;
         }
 
-        if (density_flag || p_tr <= c) {
+        if (dense == 0 || p_tr <= c) {
             gf_local = 0;
             xisq_inv = 0;
         } else if (p_tr > c) {
@@ -475,11 +395,19 @@ void solve_diffusion_part(job_t *job)
 
     /*  calculate number of nonzero elements (before summing duplicates). */
     nnz = 0;
+    for (i = 0; i < job->num_particles; i++) {
+        if (dense) {
+            nnz += (NODES_PER_ELEMENT * NODES_PER_ELEMENT) * 1;
+        }
+    }
+    nnz += slda;
+    /*
     for (i = 0; i < job->num_elements; i++) {
         if (job->elements[i].filled != 0) {
             nnz += (NODES_PER_ELEMENT * NODES_PER_ELEMENT) * 1;
         }
     }
+    */
 
     /* slda contains degrees of freedom of new matrix */
     triplets = cs_spalloc(slda, slda, nnz, 1, 1);
@@ -490,6 +418,10 @@ void solve_diffusion_part(job_t *job)
     for (i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
             continue;
+        }
+
+        if (dense == 0) {
+            continue; // don't add stiffness contribution if not dense.
         }
 
         p = job->in_element[i];
@@ -523,6 +455,10 @@ void solve_diffusion_part(job_t *job)
     for (i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
             continue;
+        }
+        
+        if (dense == 0) {
+            continue; // don't add stiffness contribution if not dense.
         }
 
         p = job->in_element[i];
@@ -564,6 +500,10 @@ void solve_diffusion_part(job_t *job)
                 );
             }
         }
+    }
+
+    for (i = 0; i < slda; i++) {
+        cs_entry(triplets, i, i, 1e-10);
     }
 
     /* create compressed sparse matrix */

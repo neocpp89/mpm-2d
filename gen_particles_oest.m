@@ -1,12 +1,10 @@
-#!/usr/bin/env octave
-
 p.rho = 1500;
-p.E = 1e6;
+p.E = 100e6;
 p.nu = 0.3;
-p.g = -0.8;
+p.g = -1;
 % p.Np = 4 * 2.5;
-p.Np = 80;
-p.N = 81;
+p.Np = 4 * 5;
+p.N = 11;
 p.rhop = 3;
 p.tol = 1e-12;
 p.T = 2;
@@ -26,27 +24,18 @@ tol = p.tol;
 Nn = N*N;
 
 % set up material points
-%bar_w = 1.0; Nbx = Np; %
-bar_w = 0.2; Nbx = Np; %
+bar_w = 0.5; Nbx = Np; %
 % Nbx = ceil(p.rhop*bar_w/h);
-bar_h = 1.0; Nby = (bar_h/bar_w)*Nbx;
-bar_h = 0.1; Nby = (bar_h/bar_w)*Nbx;
+bar_h = 0.5; Nby = (bar_h/bar_w)*Nbx;
 
 bxtmp = linspace(0, bar_w, Nbx+1);
-% bar_x = (0.5 - bar_w/2) + bxtmp(1:end-1) + bxtmp(2)/2;
-bar_x = 0.0 + bxtmp(1:end-1) + bxtmp(2)/2;
+bar_x = (bar_w/2 - bar_w/2) + bxtmp(1:end-1) + bxtmp(2)/2;
 bytmp = linspace(0, bar_h, Nby+1);
-bar_y = 0.0 + bytmp(1:end-1) + bytmp(2)/2;
+bar_y = 0.000 + bytmp(1:end-1) + bytmp(2)/2;
 
 % initialize position
 Np = Nbx*Nby;
-%xjitter = normrnd(0, 0.001, Nbx, Nby);
-%yjitter = normrnd(0, 0.001, Nbx, Nby);
-xjitter = zeros(Nby, Nbx);
-yjitter = zeros(Nby, Nbx);
 [xp, yp] = meshgrid(bar_x, bar_y);
-xp = xp + xjitter;
-yp = yp + yjitter;
 %r = 0.1;
 %rs = linspace(0, r,Nbx);
 %ts = linspace(0, 2*pi, Nby+1);
@@ -64,15 +53,12 @@ mp = p.rho*vp;
 
 % initialize velocity
 xp_t = 0*ones(size(xp));
-yp_t = -0.0*ones(size(yp));
+yp_t = 0*ones(size(yp));
 
 % initialize stress
-sxxp = 0*ones(size(xp));
-%sxyp = -p.rho * p.g * (xp - (bar_w / 2));
-syyp = 0*ones(size(yp));
-%sxxp = -p.rho * p.g * (yp - bar_h);
-sxyp = 0*ones(size(yp));
-%syyp = -p.rho * p.g * (yp - bar_h);
+sxxp = zeros(size(xp));
+sxyp = zeros(size(yp));
+syyp = zeros(size(yp));
 
 % initialize strain
 exxp = zeros(size(xp));
@@ -92,9 +78,7 @@ ylim([min(y), max(y)]);
 fp = fopen('generated_particles.txt', 'w');
 fprintf(fp, '%d\n', numel(mp));
 for i=1:numel(mp)
-    fprintf(fp, '%g %g %g %g %g %g %g %g %g\n', mp(i), vp(i),
-        xp(i), yp(i), xp_t(i), yp_t(i),
-        sxxp(i), sxyp(i), syyp(i));
+    fprintf(fp, '%f %f %f %f %f %f\n', mp(i), vp(i), xp(i), yp(i), xp_t(i), yp_t(i));
 end
 fclose(fp);
 
@@ -103,10 +87,3 @@ fp = fopen('generated_grid.txt', 'w');
 fprintf(fp, '%d\n', N);
 fprintf(fp, '1\n');
 fclose(fp);
-
-% bc file
-fp = fopen('bc.cfg', 'w');
-fprintf(fp, 'dirichlet-bcs = {\n');
-fprintf(fp, '};\n');
-fprintf(fp, 'periodic-bcs = {\n');
-fprintf(fp, '};\n');

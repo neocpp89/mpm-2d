@@ -1059,6 +1059,13 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
             &(job->b11[i]), &(job->b12[i]), &(job->b13[i]), &(job->b14[i]),
             &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
             xl, yl, job->h);
+        // give every particle in the element the same velocity gradient
+        /*
+        grad_tent(
+            &(job->b11[i]), &(job->b12[i]), &(job->b13[i]), &(job->b14[i]),
+            &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
+            0.5, 0.5, job->h);
+        */
         if (xl < 0.0f || xl > 1.0f || yl < 0.0f || yl > 1.0f) {
             fprintf(stderr, "Particle %zu outside of element %d (%g, %g).\n", i,
                 p, xl, yl);

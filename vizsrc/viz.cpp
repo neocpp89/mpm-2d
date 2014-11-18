@@ -1220,6 +1220,7 @@ int draw_particles(void)
 //    glBegin(GL_POINTS);
 
     /* compute smoothed stresses */
+#if 0
     backgroundMesh.clear();
 
     for (i = 0; i < np; i++) {
@@ -1259,6 +1260,7 @@ int draw_particles(void)
             backgroundMesh[list[k]].CopyStressToParticle(&(particles[i]));
         }
     }
+#endif
 
     for (i = 0; i < np; i++) {
 

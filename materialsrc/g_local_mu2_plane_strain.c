@@ -122,7 +122,7 @@ void material_init(job_t *job)
 
     if (job->material.num_fp64_props < 2) {
         fprintf(stderr,
-            "%s:%s: Need at least 2 properties defined (E, nu).\n",
+            "%s:%s: Need at least 7 properties defined (E, nu, mu_s, mu_2, I_0, rho_s, d).\n",
             __FILE__, __func__);
         exit(EXIT_ERROR_MATERIAL_FILE);
     } else {

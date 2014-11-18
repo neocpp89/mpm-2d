@@ -1,0 +1,9 @@
+# Move camera
+C -0.0,-0.0,2
+
+# Draw boundaries (these will be mirrored if needed)
+# L 0,0,0,1
+# L 0,0,1,0
+# L 1,0,1,1
+# L 0,1,1,1
+

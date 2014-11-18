@@ -97,9 +97,9 @@ void calculate_stress_threaded(threadtask_t *task)
         dsjxy = 2.0 * G * job->particles[i].exy_t;
         dsjyy = lambda * trD + 2.0 * G * job->particles[i].eyy_t;
 
-        dsjxx -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
-        dsjxy += job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
-        dsjyy += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
+        dsjxx += 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
+        dsjxy -= job->dt * job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
+        dsjyy -= 2 * job->dt * job->particles[i].wxy_t * job->particles[i].sxy;
 
 /*
         evoldot = (job->particles[i].exx_t + job->particles[i].eyy_t);

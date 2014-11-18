@@ -20,12 +20,11 @@ void calculate_stress(job_t *job);
 
 double mu(particle_t *p)
 {
-    double pr = -(p->sxx + p->syy + p->T[8]) / 3.0;
+    double pr = -0.5 * (p->sxx + p->syy);
     double s0xx = p->sxx + pr;
     double s0xy = p->sxy;
     double s0yy = p->syy + pr;
-    double s0zz = p->T[8] + pr;
-    double tau = sqrt(0.5*(s0xx*s0xx + 2*s0xy*s0xy + s0yy*s0yy + s0zz*s0zz));
+    double tau = sqrt(0.5*(s0xx*s0xx + 2*s0xy*s0xy + s0yy*s0yy));
 
     if (pr <= 0) {
         return 0;
@@ -91,15 +90,14 @@ int main(int argc, char **argv)
     job_t testjob;
 /*    double testprops[2] = { 72.0e3/7.0, 2.0/7.0 };*/
     int a[1] = {1};
-    double testprops[2] = { 1e4, 0.3 };
-    // double testprops[2] = { 1e6, 0.3 };
+    // double testprops[2] = { 1e4, 0.3 };
+    double testprops[2] = { 1e6, 0.3 };
     double t_stop = 1.25;
     particle_t p;
 
-    p.sxx = -0.67;
+    p.sxx = -1;
     p.sxy = 0;
-    p.syy = -0.67;
-    p.T[8] = -0.67;
+    p.syy = -1;
     p.m = 2450;
     p.v = 1;
 
@@ -125,7 +123,6 @@ int main(int argc, char **argv)
     FILE *fpd = fopen("mattest_output_dec.csv", "w");
     
     material_init(&testjob);
-    p.T[8] = -0.67; /* have to re-init this... */
     fprintf(fp, "%a,%a,%a,%a,%a,%a,%a,%a,%a,%a\n",
         testjob.t,
         p.exx_t, p.exy_t + p.wxy_t, p.exy_t - p.wxy_t, p.eyy_t,
