@@ -892,9 +892,11 @@ _cfgfile_error:
 
     FREE_AND_NULL(tasks);
     FREE_AND_NULL(threads);
-    
-    for (i = 0; i < (job->num_colors * job->num_threads); i++) {
-        FREE_AND_NULL(job->particle_by_element_color_lists[i]);
+   
+    if (job->particle_by_element_color_lists != NULL) { 
+        for (i = 0; i < (job->num_colors * job->num_threads); i++) {
+            FREE_AND_NULL(job->particle_by_element_color_lists[i]);
+        }
     }
 
     FREE_AND_NULL(job->update_elementlists);

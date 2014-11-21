@@ -1,7 +1,7 @@
 # Project: mpm_2d.
 CC = gcc
 CXX = g++
-CFLAGS = -fno-omit-frame-pointer -march=native -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -rdynamic
+CFLAGS = -fno-omit-frame-pointer -march=native -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -rdynamic -flto
 CFLAGS += -Werror
 
 #takes form '-ldl -lpthread' etc.
