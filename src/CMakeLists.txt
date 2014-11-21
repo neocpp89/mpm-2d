@@ -3,7 +3,6 @@ ADD_EXECUTABLE(mpm_2d
     element.c
     implicit.c
     interpolate.c
-    isolin.c
     loading.c
     map.c
     material.c
