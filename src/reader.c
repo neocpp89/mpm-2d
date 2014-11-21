@@ -131,7 +131,7 @@ job_t *read_state(FILE *fd)
     job = (job_t *)malloc(sizeof(job_t));
 
     r = fscanf(fd, "%lg %lg %lg", &(job->t), &(job->dt), &(job->t_stop));
-    r += fscanf(fd, "%d %d %d", &(job->num_particles), &(job->num_nodes), &(job->num_elements));
+    r += fscanf(fd, "%zu %zu %zu", &(job->num_particles), &(job->num_nodes), &(job->num_elements));
     r += fscanf(fd, "%d %lg", &(job->N), &(job->h));
 
     if (r != 8) {

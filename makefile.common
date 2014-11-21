@@ -2,10 +2,10 @@
 CC = gcc
 CXX = g++
 CFLAGS = -fno-omit-frame-pointer -march=native -std=gnu99 -O3 -Wall -Wstrict-prototypes -pedantic -g -rdynamic
+CFLAGS += -Werror
 
 #takes form '-ldl -lpthread' etc.
-LIB = -lrt -lm -pthread -lblas -llapack -lcxsparse -lconfuse -ldl
-
+LIB = -lrt -lm -pthread -lblas -llapack -lconfuse -ldl -Wl,-Bdynamic -lcxsparse 
 # modified CFLAGS for libraries
 LDFLAGS = $(LIB) -g
 
@@ -43,6 +43,7 @@ SRC = \
     particle.c \
     process.c \
     interpolate.c \
+    implicit.c \
     reader.c \
     writer.c \
     rtsafe.c \

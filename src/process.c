@@ -20,14 +20,9 @@
 #include "map.h"
 #include <suitesparse/cs.h>
 
-#if 0
-    #undef assert
-    #define assert(x)
-#else
-    #include <assert.h>
-#endif
+#include <assert.h>
 
-#define TOL 1e-12
+#define TOL 1e-10
 
 #define signum(x) ((int)((0 < x) - (x < 0)))
 
@@ -86,24 +81,6 @@
 
 #define CHECK_ACTIVE(j,i) if (j->active[i] == 0) { continue; }
 
-/* Lapack function, double precision direct solver for general matrix */
-extern void dgesv_(const int *N, const int *nrhs, double *A, const int *lda, int
-    *ipiv, double *b, const int *ldb, int *info);
-
-/* Lapack function, double precision direct solver for symmetric matrix */
-extern void dsysv_(char* uplo, int* n, int* nrhs, double* a, int* lda,
-    int* ipiv, double* b, int* ldb, double* work, int* lwork, int* info);
-
-/* Lapack function, double precision 2-norm of vector */
-extern double dnrm2_(int *n, double *x, int *incx);
-
-/* threaded stress calculation */
-void pt_calculate_stress(void *_task)
-{
-    threadtask_t *task = (threadtask_t *)_task;
-    return;
-}
-
 /*----------------------------------------------------------------------------*/
 job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t)
 {
@@ -129,7 +106,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 
     /* Copy particles from given ICs. */
     fprintf(stderr, "Each particle is %zu bytes.\n", sizeof(particle_t));
-    job->particles = (particle_t *)malloc(num_particles * sizeof(particle_t));
+    job->particles = (particle_t *)calloc(num_particles, sizeof(particle_t));
     fprintf(stderr, "%zu bytes (%.2g MB) allocated for %d particles.\n",
         num_particles * sizeof(particle_t),
         num_particles * sizeof(particle_t) / 1048576.0,
@@ -161,13 +138,26 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
         job->particles[i].material_data = NULL;
 
         job->particles[i].id = i;
+
+        job->particles[i].state[9] = 0;
+        job->particles[i].state[10] = 0;
+
+        job->particles[i].corners[0][0] = 0;
+        job->particles[i].corners[0][1] = 0;
+        job->particles[i].corners[1][0] = 0;
+        job->particles[i].corners[1][1] = 0;
+        job->particles[i].corners[2][0] = 0;
+        job->particles[i].corners[2][1] = 0;
+        job->particles[i].corners[3][0] = 0;
+        job->particles[i].corners[3][1] = 0;
+        job->particles[i].color = 0;
     }
     fprintf(stderr, "Done setting initial particle data.\n");
 
     /* Get node coordinates. */
     fprintf(stderr, "Each node is %zu bytes.\n", sizeof(node_t));
-    job->nodes = (node_t *)malloc(job->num_nodes * sizeof(node_t));
-    fprintf(stderr, "%zu bytes (%.2g MB) allocated for %d nodes.\n",
+    job->nodes = (node_t *)calloc(job->num_nodes, sizeof(node_t));
+    fprintf(stderr, "%zu bytes (%.2g MB) allocated for %zu nodes.\n",
         job->num_nodes * sizeof(node_t),
         job->num_nodes * sizeof(node_t) / 1048576.0,
         job->num_nodes);
@@ -178,8 +168,8 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 
     /* Get node numbering for elements. */
     fprintf(stderr, "Each element is %zu bytes.\n", sizeof(element_t));
-    job->elements = (element_t *)malloc(job->num_elements * sizeof(element_t));
-    fprintf(stderr, "%zu bytes (%.2g MB) allocated for %d elements.\n",
+    job->elements = (element_t *)calloc(job->num_elements, sizeof(element_t));
+    fprintf(stderr, "%zu bytes (%.2g MB) allocated for %zu elements.\n",
         job->num_elements * sizeof(element_t),
         job->num_elements * sizeof(element_t) / 1048576.0,
         job->num_elements);
@@ -221,18 +211,6 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
         FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[7], r-1, c+1, (job->N - 1));
 
     }
-/*    job->element_id_by_color = (size_t **)malloc(job->num_colors * sizeof(size_t *));*/
-/*    for (i = 0; i < job->num_colors; i++) {*/
-/*        job->element_id_by_color[i] = (size_t *)malloc(job->color_list_lengths[i] * sizeof(size_t));*/
-/*    }*/
-/*    for (i = 0; i < job->num_colors; i++) {*/
-/*        job->color_indices[i] = 0;*/
-/*    }*/
-/*    for (i = 0; i < job->num_elements; i++) {*/
-/*        c = job->elements[i].color;*/
-/*        job->element_id_by_color[job->color_indices[c]] = i;*/
-/*        job->color_indices[c]++;*/
-/*    }*/
     for (i = 0; i < job->num_colors; i++) {
         job->color_indices[i] = 0;
     }
@@ -261,16 +239,6 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 
     /* max size of u_grid is NODAL_DOF * number of nodes. */
     job->vec_len = NODAL_DOF * job->num_nodes;
-    job->u_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
-    job->du_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
-    job->v_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
-    job->a_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
-    job->m_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
-    job->f_ext_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
-    job->f_int_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
-    job->q_grid = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
-    job->node_u_map = (int *)malloc(NODAL_DOF * sizeof(int) * job->num_nodes);
-    job->inv_node_u_map = (int *)malloc(NODAL_DOF * sizeof(int) * job->num_nodes);
 
     /* for dirichlet BCs */
     job->u_dirichlet = (double *)malloc(NODAL_DOF * sizeof(double) * job->num_nodes);
@@ -279,17 +247,6 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     /* for periodic BCs */
     job->node_number_override = (int *)malloc(job->vec_len * sizeof(int));
 
-    for (i = 0; i < job->vec_len; i++) {
-        job->u_grid[i] = 0;
-        job->du_grid[i] = 0;
-        job->v_grid[i] = 0;
-        job->a_grid[i] = 0;
-        job->m_grid[i] = 0;
-        job->f_ext_grid[i] = 0;
-        job->q_grid[i] = 0;
-        job->f_int_grid[i] = 0;
-    }
-
     for (i = 0; i < job->num_particles; i++) {
         job->in_element[i] = WHICH_ELEMENT(
             job->particles[i].x, job->particles[i].y, job->N, job->h);
@@ -297,11 +254,6 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
             job->active[i] = 0;
         } else {
             job->active[i] = 1;
-        }
-        if ((job->in_element[i] / (job->N - 1)) % 2 == 0) {
-            job->particles[i].color = 0;
-        } else {
-            job->particles[i].color = 1;
         }
     }
 
@@ -322,38 +274,17 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     /* Set default timestep. */
     job->dt = 0.4 * job->h * sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
 
-    /* make sure corners know where the are on first step */
-    update_particle_vectors(job);
-    update_corner_positions(job);
-
+    /* Don't use cpdi here. */
     job->use_cpdi = 0;
-
-    /* initialize mapping matricies */
-    job->phi = NULL;
-    job->grad_phi = NULL;
-    job->phi_transpose = NULL;
-    job->grad_phi_transpose = NULL;
-
-    /* nodal quantites */
-/*    job->m_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->mx_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->my_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->mx_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->my_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->x_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->y_t_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->x_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->y_tt_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->fx_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
-/*    job->fy_nodes = (double *)malloc(sizeof(double) * job->num_nodes);*/
 
     /* swap this out later with a pointer from dlopen if needed. */
     job->material.num_fp64_props = 0;
     job->material.num_int_props = 0;
     job->material.fp64_props = NULL;
     job->material.int_props = NULL;
-    job->material.material_filename = (char *)malloc(16);
-    strcpy(job->material.material_filename, "builtin");
+    job->material.material_filename = NULL;
+    //job->material.material_filename = (char *)malloc(16);
+    //strcpy(job->material.material_filename, "builtin");
     job->material.material_init = &material_init_linear_elastic;
     job->material.calculate_stress = &calculate_stress_linear_elastic;
 
@@ -366,12 +297,26 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void explicit_mpm_step_usf(job_t *job)
+void explicit_mpm_step_musl_threaded(void *_task)
 {
-    int i;
+    threadtask_t *task = (threadtask_t *)_task;
+    job_t *job = task->job;
+    int rc;
+    size_t i;
+
+    size_t p_start = task->offset;
+    size_t p_stop = task->offset + task->blocksize;
+
+    size_t n_start = task->n_offset;
+    size_t n_stop = task->n_offset + task->n_blocksize;
+
+    size_t e_start = task->e_offset;
+    size_t e_stop = task->e_offset + task->e_blocksize;
+
+    pthread_barrier_wait(job->serialize_barrier);
 
     /* Clear grid quantites. */
-    for (i = 0; i < job->num_nodes; i++) {
+    for (i = n_start; i < n_stop; i++) {
         job->nodes[i].m = 0;
         job->nodes[i].mx_t = 0;
         job->nodes[i].my_t = 0;
@@ -387,239 +332,151 @@ void explicit_mpm_step_usf(job_t *job)
         job->nodes[i].uy = 0;
     }
 
-    for (i = 0; i < job->num_elements; i++) {
+    for (i = e_start; i < e_stop; i++) {
         job->elements[i].filled = 0;
         job->elements[i].n = 0;
         job->elements[i].m = 0;
     }
 
-    /* Update corner coordinates. NOTE: Not needed unless using cpdi. */
-    /* update_corner_domains(job); */
-
     /* Figure out which element each material point is in. */
-    create_particle_to_element_map(job);
-
-    /* Calculate shape and gradient of shape functions. */
-    calculate_shapefunctions(job);
-
-    /* Generate phi and grad phi maps. */
-/*    generate_mappings(job);*/
-
-    /* Create dirichlet and periodic boundary conditions. */
-    (*(job->boundary.bc_time_varying))(job);
-
-    /* Map particle state to grid quantites. */
-    map_to_grid(job);
-
-    /* Zero perpendicular momentum at edge nodes. */
-    (*(job->boundary.bc_momentum))(job);
-
-    /* Calculate node velocity. */
-    calculate_node_velocity(job);
-
-    /* Calculate strain rate. */
-    calculate_strainrate(job);
-
-    /* Calculate stress. */
-    (*(job->material.calculate_stress))(job);
-
-    update_stress(job);
-
-    /* Zero perpendicular forces at edge nodes. */
-    (*(job->boundary.bc_force))(job);
-
-    /* Update momentum and velocity at nodes. */
-    move_grid(job); 
-
-    /* Update particle position and velocity. */
-    move_particles_explicit_usf(job);
-
-    /* Update deformation gradient and volume. */
-    /* update_deformation_gradient(job); */
-
-    /* update volume */
-    update_particle_densities(job);
-
-    /* Update particle domains. NOTE: Not needed unless using cpdi. */
-    /* update_particle_domains(job); */
-
-    /* Increment time. */
-    job->t += job->dt;
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void explicit_mpm_step_usf_threaded(job_t *job)
-{
-    int i;
-
-    /* Clear grid quantites. */
-    for (i = 0; i < job->num_nodes; i++) {
-        job->nodes[i].m = 0;
-        job->nodes[i].mx_t = 0;
-        job->nodes[i].my_t = 0;
-        job->nodes[i].mx_tt = 0;
-        job->nodes[i].my_tt = 0;
-        job->nodes[i].x_t = 0;
-        job->nodes[i].y_t = 0;
-        job->nodes[i].x_tt = 0;
-        job->nodes[i].y_tt = 0;
-        job->nodes[i].fx = 0;
-        job->nodes[i].fy = 0;
-        job->nodes[i].ux = 0;
-        job->nodes[i].uy = 0;
-    }
-
-    for (i = 0; i < job->num_elements; i++) {
-        job->elements[i].filled = 0;
-        job->elements[i].n = 0;
-        job->elements[i].m = 0;
-    }
-
-    /* Update corner coordinates. NOTE: Not needed unless using cpdi. */
-    /* update_corner_domains(job); */
-
-    /* Figure out which element each material point is in. */
-    create_particle_to_element_map(job);
-
-    /* Calculate shape and gradient of shape functions. */
-    calculate_shapefunctions(job);
-
-    /* Generate phi and grad phi maps. */
-/*    generate_mappings(job);*/
-
-    /* Create dirichlet and periodic boundary conditions. */
-    (*(job->boundary.bc_time_varying))(job);
-
-    /* Map particle state to grid quantites. */
-    map_to_grid(job);
-
-    /* Zero perpendicular momentum at edge nodes. */
-    (*(job->boundary.bc_momentum))(job);
-
-    /* Calculate node velocity. */
-    calculate_node_velocity(job);
-
-    /* Calculate strain rate. */
-    calculate_strainrate(job);
-
-    /* Calculate stress. */
-    (*(job->material.calculate_stress))(job);
-
-    update_stress(job);
-
-    /* Zero perpendicular forces at edge nodes. */
-    (*(job->boundary.bc_force))(job);
-
-    /* Update momentum and velocity at nodes. */
-    move_grid(job); 
-
-    /* Update particle position and velocity. */
-    move_particles_explicit_usf(job);
-
-    /* Update deformation gradient and volume. */
-    /* update_deformation_gradient(job); */
-
-    /* update volume */
-    update_particle_densities(job);
-
-    /* Update particle domains. NOTE: Not needed unless using cpdi. */
-    /* update_particle_domains(job); */
-
-    /* Increment time. */
-    job->t += job->dt;
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void explicit_mpm_step_usl(job_t *job)
-{
-    int i;
-
-    /* Clear grid quantites. */
-    for (i = 0; i < job->num_nodes; i++) {
-        job->nodes[i].m = 0;
-        job->nodes[i].mx_t = 0;
-        job->nodes[i].my_t = 0;
-        job->nodes[i].mx_tt = 0;
-        job->nodes[i].my_tt = 0;
-        job->nodes[i].x_t = 0;
-        job->nodes[i].y_t = 0;
-        job->nodes[i].x_tt = 0;
-        job->nodes[i].y_tt = 0;
-        job->nodes[i].fx = 0;
-        job->nodes[i].fy = 0;
-        job->nodes[i].ux = 0;
-        job->nodes[i].uy = 0;
-    }
-
-    for (i = 0; i < job->num_elements; i++) {
-        job->elements[i].filled = 0;
-        job->elements[i].n = 0;
-        job->elements[i].m = 0;
-
-        job->elements[i].sxx = 0;
-        job->elements[i].sxy = 0;
-        job->elements[i].syy = 0;
-    }
-
-    /* Update corner coordinates. NOTE: Not needed unless using cpdi. */
-    /* update_corner_domains(job); */
-
-    /* Figure out which element each material point is in. */
-    create_particle_to_element_map(job);
-
-    /* Calculate shape and gradient of shape functions. */
-    calculate_shapefunctions(job);
-
-    /* Create dirichlet and periodic boundary conditions. */
-    (*(job->boundary.bc_time_varying))(job);
-
-    /* Map particle state to grid quantites. */
-    map_to_grid_explicit(job);
-
-    /* Zero perpendicular momentum at edge nodes. */
-    (*(job->boundary.bc_momentum))(job);
+/*    create_particle_to_element_map_split(job, p_start, p_stop);*/
+    create_particle_to_element_map_threaded(task);
 
     /*
-        This is poorly named -- it actually calculates diverence of stress to
-        get nodal force.
+        XXX Normally we find which elements are filled here, but we defer
+        because we don't need it until later and want to keep the serial
+        sections together after one barrier call.
     */
-    update_stress(job);
 
-    /* Zero perpendicular forces at edge nodes. */
-    (*(job->boundary.bc_force))(job);
+    /* Calculate shape and gradient of shape functions. */
+    calculate_shapefunctions_split(job, p_start, p_stop);
 
-    /* Update momentum and velocity at nodes. */
-    move_grid(job); 
+    rc = pthread_barrier_wait(job->serialize_barrier);
+    if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
+        /* Increment time. (We do this first to avoid more barrier calls.) */
+        job->t += job->dt;
+
+/*    }*/
+/*    pthread_barrier_wait(job->serialize_barrier);*/
+
+    /* XXX: most of this is serialized in testing!! */
+/*    rc = pthread_barrier_wait(job->serialize_barrier);*/
+/*    if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {*/
+
+        /* Update corner coordinates. NOTE: Not needed unless using cpdi. */
+        /* update_corner_domains(job); */
+
+        /* find which elements are filled */
+        job->update_elementlists_flag = 0;
+        for (i = 0; i < job->num_threads; i++) {
+            job->update_elementlists_flag += job->update_elementlists[i];
+        }
+
+        if (job->update_elementlists_flag != 0) {
+            find_filled_elements(job);
+        }
+
+        /* Create dirichlet and periodic boundary conditions. */
+        (*(job->boundary.bc_time_varying))(job);
+    }
+
+    pthread_barrier_wait(job->serialize_barrier);
+    /* Map particle state to grid quantites. */
+    map_to_grid_explicit_split(job, task->id);
+
+    rc = pthread_barrier_wait(job->serialize_barrier);
+    if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
+        /* Zero perpendicular momentum at edge nodes. */
+        (*(job->boundary.bc_momentum))(job);
+
+        /*
+            This is poorly named -- it actually calculates diverence of stress to
+            get nodal force.
+        */
+        /* XXX: moved to map_to_grid_explicit_split. */
+/*        update_stress(job);*/
+
+        /* Zero perpendicular forces at edge nodes. */
+        (*(job->boundary.bc_force))(job);
+
+    }
+
+    pthread_barrier_wait(job->serialize_barrier);
+
+    /*
+        Update momentum and velocity at nodes.
+        Wait for all threads to finish updating nodes before calculating
+        strainrates.
+    */
+    move_grid_split(job, n_start, n_stop); 
+    pthread_barrier_wait(job->serialize_barrier);
 
     /* Update particle position and velocity. */
-    move_particles_explicit_usl(job);
+    move_particles_explicit_usl_split(job, p_start, p_stop);
+   
+    /* recalculate nodal velocity by projecting from particles again. */ 
+  
+    /* 
+    for (i = n_start; i < n_stop; i++) {
+        if (job->nodes[i].m > TOL)
+            printf("before %zu: %g, %g\n", i, job->nodes[i].x_t, job->nodes[i].y_t);
+    }
+    */
 
-    /* update volume */
-    update_particle_densities(job);
+    pthread_barrier_wait(job->serialize_barrier);
+    for (i = n_start; i < n_stop; i++) {
+        job->nodes[i].m = 0;
+        job->nodes[i].mx_t = 0;
+        job->nodes[i].my_t = 0;
+        job->nodes[i].mx_tt = 0;
+        job->nodes[i].my_tt = 0;
+        job->nodes[i].x_t = 0;
+        job->nodes[i].y_t = 0;
+        job->nodes[i].x_tt = 0;
+        job->nodes[i].y_tt = 0;
+        job->nodes[i].fx = 0;
+        job->nodes[i].fy = 0;
+        job->nodes[i].ux = 0;
+        job->nodes[i].uy = 0;
+    }
+    pthread_barrier_wait(job->serialize_barrier);
+    map_to_grid_explicit_split(job, task->id);
+    pthread_barrier_wait(job->serialize_barrier);
+    for (i = n_start; i < n_stop; i++) {
+        if(job->nodes[i].m > TOL) {
+            job->nodes[i].x_t = job->nodes[i].mx_t / job->nodes[i].m;
+            job->nodes[i].y_t = job->nodes[i].my_t / job->nodes[i].m;
+        } else {
+            job->nodes[i].x_t = 0;
+            job->nodes[i].y_t = 0;
+        }
+    }
+    rc = pthread_barrier_wait(job->serialize_barrier);
+    if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
+        /* Zero perpendicular momentum at edge nodes. */
+        (*(job->boundary.bc_momentum))(job);
+    }
+    pthread_barrier_wait(job->serialize_barrier);
 
-    /* Calculate node velocity. */
-/*    calculate_node_velocity(job);*/
-    /* Unnecessary because move_grid already does this! */
+    /*
+    for (i = n_start; i < n_stop; i++) {
+        if (job->nodes[i].m > TOL)
+            printf("after %zu: %g, %g\n", i, job->nodes[i].x_t, job->nodes[i].y_t);
+    }
+    */
 
     /* Calculate strain rate. */
-    calculate_strainrate(job);
+    calculate_strainrate_split(job, p_start, p_stop);
+
+    /* update volume */
+    update_particle_densities_split(job, p_start, p_stop);
 
     /* Calculate stress. */
-    (*(job->material.calculate_stress))(job);
-
-    /* Increment time. */
-    job->t += job->dt;
+    (*(job->material.calculate_stress_threaded))(task);
 
     return;
 }
 /*----------------------------------------------------------------------------*/
-
 /*----------------------------------------------------------------------------*/
 void explicit_mpm_step_usl_threaded(void *_task)
 {
@@ -772,83 +629,6 @@ void explicit_mpm_step_usl_threaded(void *_task)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void implicit_mpm_step(job_t *job)
-{
-    int i, j;
-
-    /* Clear grid quantites. */
-    for (i = 0; i < job->num_nodes; i++) {
-/*        job->m_nodes[i] = 0;*/
-/*        job->mx_t_nodes[i] = 0;*/
-/*        job->my_t_nodes[i] = 0;*/
-/*        job->mx_tt_nodes[i] = 0;*/
-/*        job->my_tt_nodes[i] = 0;*/
-/*        job->fx_nodes[i] = 0;*/
-/*        job->fy_nodes[i] = 0;*/
-
-        job->nodes[i].m = 0;
-        job->nodes[i].mx_t = 0;
-        job->nodes[i].my_t = 0;
-        job->nodes[i].mx_tt = 0;
-        job->nodes[i].my_tt = 0;
-        job->nodes[i].x_t = 0;
-        job->nodes[i].y_t = 0;
-        job->nodes[i].x_tt = 0;
-        job->nodes[i].y_tt = 0;
-        job->nodes[i].fx = 0;
-        job->nodes[i].fy = 0;
-
-        for (j = 0; j < NODAL_DOF; j++) {
-            job->u_grid[NODAL_DOF * i + j] = 0;
-            job->du_grid[NODAL_DOF * i + j] = 0;
-            job->f_int_grid[NODAL_DOF * i + j] = 0;
-            job->f_ext_grid[NODAL_DOF * i + j] = 0;
-        }
-    }
-
-    for (i = 0; i < job->num_elements; i++) {
-        job->elements[i].filled = 0;
-        job->elements[i].n = 0;
-        job->elements[i].m = 0;
-    }
-
-    /* Figure out which element each material point is in. */
-    create_particle_to_element_map(job);
-
-    /* Calculate shape and gradient of shape functions. */
-    calculate_shapefunctions(job);
-
-    /* Generate phi and grad phi mappings. */
-    generate_mappings(job);
-
-    /* Map particle state to grid quantites. */
-    map_to_grid(job);
-
-    /* Calculate node velocity. */
-    calculate_node_velocity(job);
-
-    /* matrix solve */
-    implicit_solve(job);
-
-    /* Update particle position and velocity. */
-    move_particles(job);
-
-    /* update deformation gradient, vectors and corners. */
-    update_deformation_gradient(job);
-    update_particle_vectors(job);
-    update_corner_positions(job);
-
-    /* update volume */
-    update_particle_densities(job);
-
-    /* Increment time. */
-    job->t += job->dt;
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
 void move_grid(job_t *job)
 {
     move_grid_split(job, 0, job->num_nodes);
@@ -890,49 +670,6 @@ void move_grid_split(job_t *job, size_t n_start, size_t n_stop)
 
 
 /*----------------------------------------------------------------------------*/
-void create_particle_to_element_map(job_t *job)
-{
-    create_particle_to_element_map_split(job, 0, job->num_particles);
-    find_filled_elements(job);
-
-    return;
-}
-
-void create_particle_to_element_map_split(job_t *job, size_t p_start, size_t p_stop)
-{
-    size_t i;
-    int p;
-
-    /* All elements must be cleared before entering this routine! */
-
-    for (i = p_start; i < p_stop; i++) {
-        CHECK_ACTIVE(job, i);
-        p = WHICH_ELEMENT(
-            job->particles[i].x, job->particles[i].y, job->N, job->h);
-
-        if (p != job->in_element[i]) {
-            fprintf(job->output.log_fd, 
-                "[%g] Particle %zu @(%g, %g) left element %d, now in element %d.\n",
-                job->t, i, job->particles[i].x, job->particles[i].y,
-                job->in_element[i], p);
-        }
-
-        /* Update particle element. */
-        job->in_element[i] = p;
-
-        if (p == -1) {
-            fprintf(job->output.log_fd,
-                "[%g] Particle %zu outside of grid (%g, %g), marking as inactive.\n",
-                job->t, i, job->particles[i].x, job->particles[i].y);
-            job->active[i] = 0;
-            continue;
-        }
-
-    }
-
-    return;
-}
-
 void create_particle_to_element_map_threaded(threadtask_t *task)
 {
     job_t *job = task->job;
@@ -1060,7 +797,7 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
             &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
             xl, yl, job->h);
         if (xl < 0.0f || xl > 1.0f || yl < 0.0f || yl > 1.0f) {
-            fprintf(stderr, "Particle %zu outside of element %d (%g, %g).\n", i,
+            fprintf(stderr, "Particle %zu outside of element %zu (%g, %g).\n", i,
                 p, xl, yl);
         }
         job->particles[i].xl = xl;
@@ -1086,11 +823,6 @@ void calculate_node_velocity(job_t *job)
             job->nodes[i].x_t = 0;
             job->nodes[i].y_t = 0;
         }
-    }
-
-    for (i = 0; i < job->num_nodes; i++) {
-        job->v_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].x_t;
-        job->v_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].y_t;
     }
 
     int i_new;
@@ -1171,685 +903,6 @@ void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void update_stress(job_t *job)
-{
-    int i, j, k, method;
-    int ce, nn[4];
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        if (job->use_cpdi) {
-            /* loop over corners */
-            for (j = 0; j < 4; j++) {
-                ce = job->particles[i].corner_elements[j];
-                for (k = 0; k < 4; k++) {
-                    nn[k] = job->elements[ce].nodes[k];
-                    
-                    /* actual volume of particle here (not averaging volume) */
-                    job->nodes[nn[k]].fx += -job->particles[i].v * (
-                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxx + 
-                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].sxy);
-
-                    job->nodes[nn[k]].fy += -job->particles[i].v * (
-                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxy + 
-                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].syy);
-                }
-            }
-        } else {
-            ACCUMULATE_WITH_MUL(fx, job, sxx, i, n, b1, -job->particles[i].v);
-            ACCUMULATE_WITH_MUL(fx, job, sxy, i, n, b2, -job->particles[i].v);
-            ACCUMULATE_WITH_MUL(fy, job, sxy, i, n, b1, -job->particles[i].v);
-            ACCUMULATE_WITH_MUL(fy, job, syy, i, n, b2, -job->particles[i].v);
-        }
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void update_stress_threaded(job_t *job, size_t thread_id)
-{
-    int i, j, k, method;
-    int ce, nn[4];
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        if (job->use_cpdi) {
-            /* loop over corners */
-            for (j = 0; j < 4; j++) {
-                ce = job->particles[i].corner_elements[j];
-                for (k = 0; k < 4; k++) {
-                    nn[k] = job->elements[ce].nodes[k];
-                    
-                    /* actual volume of particle here (not averaging volume) */
-                    job->nodes[nn[k]].fx += -job->particles[i].v * (
-                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxx + 
-                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].sxy);
-
-                    job->nodes[nn[k]].fy += -job->particles[i].v * (
-                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxy + 
-                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].syy);
-                }
-            }
-        } else {
-            ACCUMULATE_WITH_MUL(fx, job, sxx, i, n, b1, -job->particles[i].v);
-            ACCUMULATE_WITH_MUL(fx, job, sxy, i, n, b2, -job->particles[i].v);
-            ACCUMULATE_WITH_MUL(fy, job, sxy, i, n, b1, -job->particles[i].v);
-            ACCUMULATE_WITH_MUL(fy, job, syy, i, n, b2, -job->particles[i].v);
-        }
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void update_internal_stress(job_t *job)
-{
-    int i, j, k, s;
-    int p;
-    int ce, nn[4];
-
-    double sxx, sxy, syy;
-    double pxx, pxy, pyx, pyy;
-    double dudx, dudy, dvdx, dvdy, jdet;
-
-    for (i = 0; i < job->vec_len; i++) {
-        job->f_int_grid[i] = 0;
-    }
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        p = job->in_element[i];
-        for (j = 0; j < 4; j++) {
-            nn[j]  = job->elements[p].nodes[j];
-        }
-
-        if (job->use_cpdi) {
-            /* loop over corners */
-            for (j = 0; j < 4; j++) {
-                ce = job->particles[i].corner_elements[j];
-                /* corner is outside of particle domain. should probably deal with this better... */
-                if (ce == -1) {
-                    continue;
-                }
-                for (k = 0; k < 4; k++) {
-                    nn[k] = job->elements[ce].nodes[k];
-
-                    /* actual volume of particle here (not averaging volume) */
-                    job->f_int_grid[NODAL_DOF * nn[k] + XDOF_IDX] += job->particles[i].v * (
-                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxx + 
-                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].sxy);
-
-                    job->f_int_grid[NODAL_DOF * nn[k] + YDOF_IDX] += job->particles[i].v * (
-                    job->particles[i].grad_sc[j][k][S_XIDX] * job->particles[i].sxy + 
-                    job->particles[i].grad_sc[j][k][S_YIDX] * job->particles[i].syy);
-
-                }
-            }
-        } else {
-            sxx = job->particles[i].sxx;
-            sxy = job->particles[i].sxy;
-            syy = job->particles[i].syy;
-            pxx = sxx;
-            pxy = sxy;
-            pyx = sxy;
-            pyy = syy;
-
-            job->f_int_grid[NODAL_DOF * nn[0] + XDOF_IDX] += job->particles[i].v*(job->b11[i]*pxx + job->b21[i]*pxy);
-            job->f_int_grid[NODAL_DOF * nn[0] + YDOF_IDX] += job->particles[i].v*(job->b11[i]*pyx + job->b21[i]*pyy);
-            job->f_int_grid[NODAL_DOF * nn[1] + XDOF_IDX] += job->particles[i].v*(job->b12[i]*pxx + job->b22[i]*pxy);
-            job->f_int_grid[NODAL_DOF * nn[1] + YDOF_IDX] += job->particles[i].v*(job->b12[i]*pyx + job->b22[i]*pyy);
-            job->f_int_grid[NODAL_DOF * nn[2] + XDOF_IDX] += job->particles[i].v*(job->b13[i]*pxx + job->b23[i]*pxy);
-            job->f_int_grid[NODAL_DOF * nn[2] + YDOF_IDX] += job->particles[i].v*(job->b13[i]*pyx + job->b23[i]*pyy);
-            job->f_int_grid[NODAL_DOF * nn[3] + XDOF_IDX] += job->particles[i].v*(job->b14[i]*pxx + job->b24[i]*pxy);
-            job->f_int_grid[NODAL_DOF * nn[3] + YDOF_IDX] += job->particles[i].v*(job->b14[i]*pyx + job->b24[i]*pyy);
-        }
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void implicit_solve(job_t *job)
-{
-    int i, j;
-    int i_new, j_new;
-    int r, s;
-    int m, n;
-
-    /* global and elemental indicies */
-    int gi, gj;
-    int ei, ej;
-    double ke;
-
-    /* lapack related*/
-    int lda, ldb;
-
-    /* dnrm2 */
-    int incx = 1;
-    double du_norm = 0;
-    double du0_norm = 0;
-    double q_norm = 0;
-    double q0_norm = 0;
-
-    /* For assembly of elements into global matrix. */
-    int nn[4];
-
-    /* iteration count */
-    int k = 0;
-    static int stable_timestep = 0;
-
-    /* old timestep grid velocity and acceleration */
-    double *v_grid_t;
-    double *a_grid_t;
-
-    /* mass weighted old timestep grid velocity and acceleration */
-    double *mv_grid_t;
-    double *ma_grid_t;
-    double *m_grid_t;
-
-    /* csparse */
-    int nnz;
-    int slda, sldb;
-    cs *triplets;
-    cs *smat;
-    double *sb;
-    int res = 0;
-
-    /* for small timestep */
-    double inv_dt = 1.0 / job->dt;
-    double inv_dt_sq = inv_dt / job->dt;
-
-    /* Timing code */
-    struct timespec requestStart, requestEnd;
-    long ns;
-
-    lda = job->vec_len;
-    ldb = lda;
-
-    v_grid_t = (double *)malloc(lda * sizeof(double));
-    a_grid_t = (double *)malloc(lda * sizeof(double));
-
-    mv_grid_t = (double *)malloc(lda * sizeof(double));
-    ma_grid_t = (double *)malloc(lda * sizeof(double));
-    m_grid_t = (double *)malloc(lda * sizeof(double));
-
-    /* keep old timestep velocity and acceleration */
-    memcpy(v_grid_t, job->v_grid, lda * sizeof(double));
-    memcpy(a_grid_t, job->a_grid, lda * sizeof(double));
-/*    for (i = 0; i < ldb; i++) {*/
-/*        mv_grid_t[i] = v_grid_t[i] * job->m_grid[i];*/
-/*        ma_grid_t[i] = a_grid_t[i] * job->m_grid[i];*/
-/*    }*/
-
-    /* keep old stresses */
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        memcpy(job->particles[i].real_state, job->particles[i].state, DEPVAR * sizeof(double));
-        job->particles[i].real_sxx = job->particles[i].sxx;
-        job->particles[i].real_sxy = job->particles[i].sxy;
-        job->particles[i].real_syy = job->particles[i].syy;
-    }
-
-start_implicit:
-    k = 0;
-    /* no initial grid deformation */
-    for (i = 0; i < ldb; i++) {
-        job->u_grid[i] = 0;
-    }
-
-    /* Generate and apply dirichlet boundary conditions given in BC file. */
-    (*(job->boundary.bc_time_varying))(job);
-
-    /*
-        We have to change the velocities and accelerations if nodes are tied
-        together. Weigh each component by nodal mass.
-    */
-    for (i = 0; i < lda; i++) {
-        mv_grid_t[i] = 0;
-        ma_grid_t[i] = 0;
-        m_grid_t[i] = 0;
-    }
-    for (i = 0; i < lda; i++) {
-        i_new = job->node_number_override[i];
-        mv_grid_t[i_new] += v_grid_t[i] * job->m_grid[i];
-        ma_grid_t[i_new] += a_grid_t[i] * job->m_grid[i];
-        m_grid_t[i_new] += job->m_grid[i];
-    }
-    for (i = 0; i < lda; i++) {
-        i_new = job->node_number_override[i];
-        if (fabs(m_grid_t[i_new]) < TOL) {
-            v_grid_t[i] = 0;
-            a_grid_t[i] = 0;
-            continue;
-        }
-        v_grid_t[i] = mv_grid_t[i_new] / m_grid_t[i_new];
-        a_grid_t[i] = ma_grid_t[i_new] / m_grid_t[i_new];
-    }
-
-/*    for (i = 0; i < job->num_nodes; i++) {*/
-/*        printf("at[%d] = [%g %g]\n",*/
-/*            a_grid_t[NODAL_DOF * i + XDOF_IDX], i, a_grid_t[NODAL_DOF * i + YDOF_IDX]);*/
-/*        printf("vt[%d] = [%g %g]\n",*/
-/*            v_grid_t[NODAL_DOF * i + XDOF_IDX], i, v_grid_t[NODAL_DOF * i + YDOF_IDX]);*/
-/*    }*/
-/*    getchar();*/
-
-    /* Begin newton iterations */
-    do {
-        update_internal_stress(job);
-        build_elemental_stiffness(job);
-
-        /* starting timer */
-        clock_gettime(CLOCK_REALTIME, &requestStart);
-
-        /* build node and inverse maps, taking BCs into account. */
-        for (i = 0; i < lda; i++) {
-            job->node_u_map[i] = -1;
-            job->inv_node_u_map[i] = -1;
-        }
-        j = 0;
-        for (i = 0; i < lda; i++) {
-            i_new = job->node_number_override[i];
-
-            /* if the new node dof has already been assigned a place in the
-                matrix, don't set it again */
-            if (job->node_u_map[i_new] != -1) {
-                continue;
-            }
-
-            /* otherwise, check if this node has any particles and the value
-                has not been set by dirichlet BCs. */
-            if (job->m_grid[i] > TOL && (job->u_dirichlet_mask[i] == 0)) {
-                job->node_u_map[i_new] = j;
-                job->inv_node_u_map[j] = i_new;
-                j++;
-            }
-        }
-        slda = j;   /* The number of free DOFs gives the sparse matrix size. */
-
-        /*  calculate number of nonzero elements (before summing duplicates). */
-        nnz = 0;
-        for (i = 0; i < job->num_elements; i++) {
-            if (job->elements[i].filled != 0) {
-                nnz += (NODAL_DOF * NODES_PER_ELEMENT) *
-                        (NODAL_DOF * NODES_PER_ELEMENT);
-                nnz += NODAL_DOF; /* for diagonal mass matrix entries. */
-            }
-        }
-
-        /* allocate triplet array. */
-        fprintf(job->output.log_fd, "%d nonzeros (including duplicates) in K, which has size [%d x %d].\n", nnz, slda, slda);
-        triplets = cs_spalloc(slda, slda, nnz, 1, 1);
-
-        /* Calculate right hand side (load):
-                Q = f_ext - f_int - M_g * (4 * u / dt^2 - 4 * v / dt - a) */
-        for (i = 0; i < lda; i++) {
-            job->q_grid[i] = 0;
-        }
-        for (i = 0; i < lda; i++) {
-            i_new = job->node_number_override[i];
-            job->q_grid[i_new] = (-4 * m_grid_t[i_new] * job->u_grid[i_new] + 4 * mv_grid_t[i_new] * job->dt + ma_grid_t[i_new] * job->dt * job->dt);
-/*            job->q_grid[i_new] = (1 * mv_grid_t[i_new] * job->dt);*/
-        }
-        for (i = 0; i < lda; i++) {
-            i_new = job->node_number_override[i];
-            job->q_grid[i_new] += (job->f_ext_grid[i] - job->f_int_grid[i]) * job->dt * job->dt;
-        }
-
-        /* assemble elements into global stiffness matrix */
-        for (i = 0; i < job->num_elements; i++) {
-
-            /* Ignore empty elements. */
-            if (job->elements[i].filled == 0) {
-                continue;
-            }
-
-            /* scale stiffness matrix */
-            for (r = 0; r < (NODAL_DOF * NODES_PER_ELEMENT); r++) {
-                for (s = 0; s < (NODAL_DOF * NODES_PER_ELEMENT); s++) {
-                    job->elements[i].kku_element[r][s] *= (job->dt * job->dt);
-                }
-            }
-            nn[0] = job->elements[i].nodes[0];
-            nn[1] = job->elements[i].nodes[1];
-            nn[2] = job->elements[i].nodes[2];
-            nn[3] = job->elements[i].nodes[3];
-
-            /*
-                This presumes that the element level stiffness matrices are
-                written as (x1, y1, c1, .... , x4, y4, c4) where the
-                numbers indicate local node and the variable names are
-                nodal degrees of freedom.
-            */
-            for (r = 0; r < NODES_PER_ELEMENT; r++) {
-                for (m = 0; m < NODAL_DOF; m++) {
-                    for (s = 0; s < NODES_PER_ELEMENT; s++) {
-                        for (n = 0; n < NODAL_DOF; n++) {
-                            gi = NODAL_DOF * nn[r] + m;
-                            gj = NODAL_DOF * nn[s] + n;
-
-                            /* renumber nodes as appropriate */
-                            gi = job->node_number_override[gi];
-                            gj = job->node_number_override[gj];
-
-                            ei = NODAL_DOF * r + m;
-                            ej = NODAL_DOF * s + n;
-                            ke = job->elements[i].kku_element[ei][ej];
-
-                            /*
-                                If the global index is masked, don't add it
-                                to the sparse matrix. We will correct the
-                                solution later.
-                            */
-                            if (job->u_dirichlet_mask[gi] != 0) {
-                                continue;
-                            }
-
-                            /* Adjust load for dirichlet bcs. */
-                            if (job->u_dirichlet_mask[gj] != 0) {
-                                job->q_grid[gi] += (-job->u_dirichlet[gj] * ke);
-                                continue;
-                            }
-
-                            /* Don't add DOFs which are outside the problem. */
-                            if (job->node_u_map[gi] == -1 ||
-                                job->node_u_map[gj] == -1) {
-                                continue;
-                            }
-
-                            res = cs_entry(triplets,
-                                    job->node_u_map[gi],
-                                    job->node_u_map[gj],
-                                    ke);
-
-                            if (res == 0) {
-                                fprintf(stderr, "error adding stiffness entry\n");
-/*                                fprintf(stderr, "gi=%d gj=%d nmap[gi]=%d nmap[gj]=%d\n",*/
-/*                                    gi, gj, job->node_u_map[gi], job->node_u_map[gj]);*/
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        for (i = 0; i < lda; i++) {
-            i_new = job->node_number_override[i];
-            if (job->node_u_map[i_new] != -1) {
-                /* add diagonal mass matrix entries to
-                    displacement dofs. */
-
-                res = cs_entry(triplets,
-                        job->node_u_map[i_new],
-                        job->node_u_map[i_new],
-                        4 * job->m_grid[i]);
-
-/*                res = cs_entry(triplets,*/
-/*                        job->node_u_map[i_new],*/
-/*                        job->node_u_map[i_new],*/
-/*                        1 * job->m_grid[i]);*/
-
-                if (res == 0) {
-                    fprintf(stderr, "error adding mass entry\n");
-                }
-            }
-        }
-
-        /* stopping timer */
-        clock_gettime(CLOCK_REALTIME, &requestEnd);
-
-        /* Calculate time it took */
-    #define NS_PER_S 1E9
-        ns = NS_PER_S * (requestEnd.tv_sec - requestStart.tv_sec )
-          + ( requestEnd.tv_nsec - requestStart.tv_nsec );
-        fprintf(job->output.log_fd, "Global Assembly[%d]: %lf s\n", k, (double)ns/NS_PER_S );
-    #undef NS_PER_S
-
-        /* reset stress state at beginning of newton iteration */
-        for (i = 0; i < job->num_particles; i++) {
-            CHECK_ACTIVE(job, i);
-            
-            memcpy(job->particles[i].state, job->particles[i].real_state, DEPVAR * sizeof(double));
-            job->particles[i].sxx = job->particles[i].real_sxx;
-            job->particles[i].sxy = job->particles[i].real_sxy;
-            job->particles[i].syy = job->particles[i].real_syy;
-        }
-
-        sb = (double *)malloc(slda * sizeof(double));
-        for (i = 0; i < slda; i++) {
-            sb[i] = job->q_grid[job->inv_node_u_map[i]];
-        }
-
-        /* change to compressed format to sum up entries. */
-        smat = cs_compress(triplets);
-
-        /* sum entries with same indicies. */
-        res = cs_dupl(smat);
-
-        if (res == 0) {
-            fprintf(stderr, "error summing entries\n");
-            exit(EXIT_ERROR_CS_DUP);
-        }
-
-/*        cs_print(smat, 0);*/
-
-        /* starting timer */
-        clock_gettime(CLOCK_REALTIME, &requestStart);
-
-        sldb = slda;
-        if (k == 0) {
-            q0_norm = dnrm2_(&sldb, sb, &incx);
-        }
-        q_norm = dnrm2_(&sldb, sb, &incx);
-
-        if (!cs_lusol(1, smat, sb, 1e-12)) {
-            fprintf(stderr, "lusol error!\n");
-            if (cs_qrsol(1, smat, sb)) {
-                fprintf(stderr, "qrsol error!\n");
-                exit(EXIT_ERROR_CS_SOL);
-            }
-        }
-
-        if (k == 0) {
-            du0_norm = dnrm2_(&sldb, sb, &incx);
-        }
-        du_norm = dnrm2_(&sldb, sb, &incx);
-
-        /* stopping timer */
-        clock_gettime(CLOCK_REALTIME, &requestEnd);
-
-        /* Calculate time it took */
-    #define NS_PER_S 1E9
-        ns = NS_PER_S * (requestEnd.tv_sec - requestStart.tv_sec )
-          + ( requestEnd.tv_nsec - requestStart.tv_nsec );
-        fprintf(job->output.log_fd, "Iteration[%d]: Norm du: %f Norm q: %f Implicit Solve: %lf s\n", k, du_norm, q_norm, (double)ns/NS_PER_S );
-    #undef NS_PER_S
-
-        /* map solution back to entire grid */
-        for (i = 0; i < ldb; i++) {
-            i_new = job->node_number_override[i];
-            if ((j = job->node_u_map[i_new]) != -1) {
-                job->du_grid[i] = sb[j];
-            } else {
-                job->du_grid[i] = 0;
-            }
-        }
-
-        /* apply dirichlet BCs to solution */
-        for (i = 0; i < ldb; i++) {
-            i_new = job->node_number_override[i];
-            if (job->u_dirichlet_mask[i_new] != 0) {
-                job->du_grid[i] = job->u_dirichlet[i_new];
-            }
-        }
-
-        for (i = 0; i < ldb; i++) {
-            /* update grid displacement */
-            job->u_grid[i] += job->du_grid[i];
-
-            /* update grid velocity */
-            job->v_grid[i] = 2 * (job->u_grid[i] / job->dt) - v_grid_t[i];
-/*            job->v_grid[i] = (job->u_grid[i] / job->dt);*/
-        }
-
-        for (i = 0; i < job->num_nodes; i++) {
-            job->nodes[i].x_t = job->v_grid[NODAL_DOF * i + XDOF_IDX];
-            job->nodes[i].y_t = job->v_grid[NODAL_DOF * i + YDOF_IDX];
-        }
-
-        calculate_strainrate(job);
-        (*(job->material.calculate_stress))(job);
-
-        cs_spfree(triplets);
-        cs_spfree(smat);
-        free(sb);
-        k++;
-
-        if (du_norm < job->implicit.du_norm_converged) {
-            fprintf(job->output.log_fd, "norm of du  = %e: Accepting as converged.\n", du_norm);
-            break;
-        }
-
-        if (q_norm*du_norm > 10*(q0_norm*du0_norm)
-                || du_norm > 10*du0_norm
-                || k > job->implicit.unstable_iteration_count) {
-            job->dt = job->dt * 0.8;
-            stable_timestep = 0;
-            fprintf(job->output.log_fd, "Trouble converging, modifying Timestep to %f.\n", job->dt);
-            goto start_implicit;
-        }
-
-        if (job->dt < job->timestep.dt_min) {
-            fprintf(stderr, "Timestep %g is too small, aborting.\n", job->dt);
-            exit(EXIT_ERROR_DT_TOO_SMALL);
-        }
-
-    } while ((du_norm / du0_norm) > job->implicit.du_norm_ratio ||
-        ((du_norm*q_norm) / (du0_norm*q0_norm)) > job->implicit.q_norm_ratio);
-
-    stable_timestep++;
-    if (job->timestep.allow_dt_increase != 0
-        && stable_timestep > job->timestep.stable_dt_threshold 
-        && job->dt < job->timestep.dt_max) {
-        job->dt = job->dt * 1.25;
-        if (job->dt > job->timestep.dt_max) {
-            job->dt = job->timestep.dt_max;
-        }
-        fprintf(job->output.log_fd, "Increasing timestep to %f.\n", job->dt);
-        stable_timestep = 0;
-    }
-
-    /* update grid acceleration */
-    for (i = 0; i < ldb; i++) {
-        job->a_grid[i] = (4 * job->u_grid[i] * inv_dt_sq - 4 * v_grid_t[i] * inv_dt - a_grid_t[i]);
-/*        job->a_grid[i] = (job->u_grid[i] * inv_dt_sq - v_grid_t[i] * inv_dt);*/
-    }
-
-    /* repackage for use with macros */
-    for (i = 0; i < job->num_nodes; i++) {
-        job->nodes[i].x_tt = job->a_grid[NODAL_DOF * i + XDOF_IDX];
-        job->nodes[i].y_tt = job->a_grid[NODAL_DOF * i + YDOF_IDX];
-
-        job->nodes[i].x_t = job->v_grid[NODAL_DOF * i + XDOF_IDX];
-        job->nodes[i].y_t = job->v_grid[NODAL_DOF * i + YDOF_IDX];
-
-        job->nodes[i].ux = job->u_grid[NODAL_DOF * i + XDOF_IDX];
-        job->nodes[i].uy = job->u_grid[NODAL_DOF * i + YDOF_IDX];
-    }
-
-    for (i = 0; i < job->num_nodes; i++) {
-        i_new = job->node_number_override[NODAL_DOF * i] / NODAL_DOF;
-
-        if (i == i_new) { continue; }
-
-/*        if (fabs(job->nodes[i].x_t) > TOL) {*/
-/*            printf("u[%d] = [%g %g]\n", i, job->nodes[i].ux, job->nodes[i].uy);*/
-/*            printf("v[%d] = [%g %g]\n", i, job->nodes[i].x_t, job->nodes[i].y_t);*/
-/*            printf("a[%d] = [%g %g]\n", i, job->nodes[i].x_tt, job->nodes[i].y_tt);*/
-/*            printf("f_int[%d] = [%g %g]\n", i, job->f_int_grid[NODAL_DOF * i +XDOF_IDX], job->f_int_grid[NODAL_DOF * i + YDOF_IDX]);*/
-/*            printf("f_ext[%d] = [%g %g]\n", i, job->f_ext_grid[NODAL_DOF * i +XDOF_IDX], job->f_ext_grid[NODAL_DOF * i + YDOF_IDX]);*/
-/*        }*/
-
-        assert(job->nodes[i].ux == job->nodes[i_new].ux);
-        assert(job->nodes[i].uy == job->nodes[i_new].uy);
-        assert(job->nodes[i].x_t == job->nodes[i_new].x_t);
-        assert(job->nodes[i].y_t == job->nodes[i_new].y_t);
-        assert(job->nodes[i].x_tt == job->nodes[i_new].x_tt);
-        assert(job->nodes[i].y_tt == job->nodes[i_new].y_tt);
-    }
-
-    free(v_grid_t);
-    free(a_grid_t);
-    free(mv_grid_t);
-    free(ma_grid_t);
-    free(m_grid_t);
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void map_to_grid_explicit(job_t *job)
-{
-    size_t i;
-    double s[NODES_PER_ELEMENT];
-
-    /* kinda a hack */
-    const int pdata_len = 7;
-    size_t node_field_offsets[pdata_len];
-    double pdata[pdata_len];
-
-    int p;
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        s[0] = job->h1[i];
-        s[1] = job->h2[i];
-        s[2] = job->h3[i];
-        s[3] = job->h4[i];
-
-        p = job->in_element[i];
-
-        /* Mass. */
-        pdata[0] = job->particles[i].m;
-        node_field_offsets[0] = offsetof(node_t, m);
-
-        /* Momentum. */
-        pdata[1] = job->particles[i].x_t * job->particles[i].m;
-        pdata[2] = job->particles[i].y_t * job->particles[i].m;
-        node_field_offsets[1] = offsetof(node_t, mx_t);
-        node_field_offsets[2] = offsetof(node_t, my_t);
-
-        /* Pseudoforce. */
-        pdata[3] = job->particles[i].x_tt * job->particles[i].m;
-        pdata[4] = job->particles[i].y_tt * job->particles[i].m;
-        node_field_offsets[3] = offsetof(node_t, mx_tt);
-        node_field_offsets[4] = offsetof(node_t, my_tt);
-
-        /* Body forces. */
-        pdata[5] = job->particles[i].bx * job->particles[i].m;
-        pdata[6] = job->particles[i].by * job->particles[i].m;
-        node_field_offsets[5] = offsetof(node_t, fx);
-        node_field_offsets[6] = offsetof(node_t, fy);
-
-        accumulate_p_to_n_ds_list(job->nodes,
-            node_field_offsets, job->elements[p].nodes, s, 
-            NODES_PER_ELEMENT, pdata, pdata_len);
-
-    }
-
-    return;
-}
-
 void map_to_grid_explicit_split(job_t *job, size_t thread_id)
 {
     size_t c, i, p_idx, tc_idx;
@@ -1952,257 +1005,6 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void map_to_grid_implicit(job_t *job)
-{
-    double mn;
-    
-    size_t i;
-    double s[NODES_PER_ELEMENT];
-
-    /* kinda a hack */
-    const int pdata_len = 7;
-    size_t node_field_offsets[pdata_len];
-    double pdata[pdata_len];
-
-    int p;
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        s[0] = job->h1[i];
-        s[1] = job->h2[i];
-        s[2] = job->h3[i];
-        s[3] = job->h4[i];
-
-        p = job->in_element[i];
-
-        /* Mass. */
-        pdata[0] = job->particles[i].m;
-        node_field_offsets[0] = offsetof(node_t, m);
-
-        /* Momentum. */
-        pdata[1] = job->particles[i].x_t * job->particles[i].m;
-        pdata[2] = job->particles[i].y_t * job->particles[i].m;
-        node_field_offsets[1] = offsetof(node_t, mx_t);
-        node_field_offsets[2] = offsetof(node_t, my_t);
-
-        /* Pseudoforce. */
-        pdata[3] = job->particles[i].x_tt * job->particles[i].m;
-        pdata[4] = job->particles[i].y_tt * job->particles[i].m;
-        node_field_offsets[3] = offsetof(node_t, mx_tt);
-        node_field_offsets[4] = offsetof(node_t, my_tt);
-
-        /* Body forces. */
-        pdata[5] = job->particles[i].bx * job->particles[i].m;
-        pdata[6] = job->particles[i].by * job->particles[i].m;
-        node_field_offsets[5] = offsetof(node_t, fx);
-        node_field_offsets[6] = offsetof(node_t, fy);
-
-        accumulate_p_to_n_ds_list(job->nodes,
-            node_field_offsets, job->elements[p].nodes, s, 
-            NODES_PER_ELEMENT, pdata, pdata_len);
-
-    }
-
-    /* for implicit method, map to another array */
-    for (i = 0; i < job->num_nodes; i++) {
-        mn = job->nodes[i].m;
-        /* used lumped mass */
-        job->m_grid[NODAL_DOF * i + XDOF_IDX] = mn;
-        job->m_grid[NODAL_DOF * i + YDOF_IDX] = mn;
-
-        /* need previous timestep's acceleration for implicit method */
-        if (mn > TOL) {
-            job->a_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].mx_tt / mn;
-            job->a_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].my_tt  / mn;
-        } else {
-            job->a_grid[NODAL_DOF * i + XDOF_IDX] = 0;
-            job->a_grid[NODAL_DOF * i + YDOF_IDX] = 0;
-        }
-
-        /* external forces */
-        job->f_ext_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].fx;
-        job->f_ext_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].fy;
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void map_to_grid(job_t *job)
-{
-    double mn;
-    size_t i;
-    double s[NODES_PER_ELEMENT];
-
-    int p;
-/*    double *m_particles;*/
-
-/*    m_particles = malloc(sizeof(double) * job->num_particles);*/
-/*    for (i = 0; i < job->num_nodes; i++) {*/
-/*        job->m_nodes[i] = 0;*/
-/*    }*/
-/*    for (i = 0; i < job->num_particles; i++) {*/
-/*        m_particles[i] = job->particles[i].m;*/
-/*    }*/
-
-/*    cs_gaxpy(job->phi, m_particles, job->m_nodes);*/
-
-/*    for (i = 0; i < job->num_nodes; i++) {*/
-/*        job->nodes[i].m = job->m_nodes[i];*/
-/*    }*/
-
-    /* accumulate mass */
-/*    map_particles_to_nodes_doublescalar(job, offsetof(node_t, m), offsetof(particle_t, m));*/
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        s[0] = job->h1[i];
-        s[1] = job->h2[i];
-        s[2] = job->h3[i];
-        s[3] = job->h4[i];
-
-        p = job->in_element[i];
-
-        /* Mass. */
-/*        ACCUMULATE(m,job,m,i,n,h);*/
-        accumulate_p_to_n_doublescalar(job->nodes,
-            offsetof(node_t, m), job->elements[p].nodes, s, 
-            NODES_PER_ELEMENT, job->particles[i].m);
-
-        /* Momentum. */
-/*        ACCUMULATE_WITH_MUL(mx_t,job,x_t,i,n,h,job->particles[i].m);*/
-/*        ACCUMULATE_WITH_MUL(my_t,job,y_t,i,n,h,job->particles[i].m);*/
-        accumulate_p_to_n_doublescalar(job->nodes,
-            offsetof(node_t, mx_t), job->elements[p].nodes, s,
-            NODES_PER_ELEMENT, job->particles[i].x_t * job->particles[i].m);
-        accumulate_p_to_n_doublescalar(job->nodes,
-            offsetof(node_t, my_t), job->elements[p].nodes, s, 
-            NODES_PER_ELEMENT, job->particles[i].y_t * job->particles[i].m);
-
-        /* Pseudoforce. */
-/*        ACCUMULATE_WITH_MUL(mx_tt,job,x_tt,i,n,h,job->particles[i].m);*/
-/*        ACCUMULATE_WITH_MUL(my_tt,job,y_tt,i,n,h,job->particles[i].m);*/
-        accumulate_p_to_n_doublescalar(job->nodes,
-            offsetof(node_t, mx_tt), job->elements[p].nodes, s,
-            NODES_PER_ELEMENT, job->particles[i].x_tt * job->particles[i].m);
-        accumulate_p_to_n_doublescalar(job->nodes,
-            offsetof(node_t, my_tt), job->elements[p].nodes, s, 
-            NODES_PER_ELEMENT, job->particles[i].y_tt * job->particles[i].m);
-
-
-        /* Body forces. */
-/*        ACCUMULATE_WITH_MUL(fx,job,bx,i,n,h,job->particles[i].m);*/
-/*        ACCUMULATE_WITH_MUL(fy,job,by,i,n,h,job->particles[i].m);*/
-        accumulate_p_to_n_doublescalar(job->nodes,
-            offsetof(node_t, fx), job->elements[p].nodes, s,
-            NODES_PER_ELEMENT, job->particles[i].bx * job->particles[i].m);
-        accumulate_p_to_n_doublescalar(job->nodes,
-            offsetof(node_t, fy), job->elements[p].nodes, s, 
-            NODES_PER_ELEMENT, job->particles[i].by * job->particles[i].m);
-
-    }
-
-    /* for implicit method, map to another array */
-    for (i = 0; i < job->num_nodes; i++) {
-        mn = job->nodes[i].m;
-        /* used lumped mass */
-        job->m_grid[NODAL_DOF * i + XDOF_IDX] = mn;
-        job->m_grid[NODAL_DOF * i + YDOF_IDX] = mn;
-
-        /* need previous timestep's acceleration for implicit method */
-        if (mn > TOL) {
-            job->a_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].mx_tt / mn;
-            job->a_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].my_tt  / mn;
-        } else {
-            job->a_grid[NODAL_DOF * i + XDOF_IDX] = 0;
-            job->a_grid[NODAL_DOF * i + YDOF_IDX] = 0;
-        }
-
-        /* external forces */
-        job->f_ext_grid[NODAL_DOF * i + XDOF_IDX] = job->nodes[i].fx;
-        job->f_ext_grid[NODAL_DOF * i + YDOF_IDX] = job->nodes[i].fy;
-    }
-
-/*    free(m_particles);*/
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void move_particles(job_t *job)
-{
-    int i;
-    double dux, a_x_t;
-    double duy, a_y_t;
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        dux = (N_TO_P(job, ux, i));
-        duy = (N_TO_P(job, uy, i));
-
-        job->particles[i].x += dux;
-        job->particles[i].y += duy;
-        job->particles[i].ux += dux;
-        job->particles[i].uy += duy;
-
-        while(job->particles[i].x < 0) { job->particles[i].x += -floor(job->particles[i].x); }
-        while(job->particles[i].x > 1) { job->particles[i].x -= floor(job->particles[i].x); }
-
-        while(job->particles[i].y < 0) { job->particles[i].y += -floor(job->particles[i].y); }
-        while(job->particles[i].y > 1) { job->particles[i].y -= floor(job->particles[i].y); }
-
-        a_x_t = job->particles[i].x_tt;
-        a_y_t = job->particles[i].y_tt;
-
-        job->particles[i].x_tt = (N_TO_P(job, x_tt, i));
-        job->particles[i].y_tt = (N_TO_P(job, y_tt, i));
-
-        job->particles[i].x_t += 0.5 * job->dt * (job->particles[i].x_tt + a_x_t);
-        job->particles[i].y_t += 0.5 * job->dt * (job->particles[i].y_tt + a_y_t);
-/*        job->particles[i].x_t = (N_TO_P(job, x_t, i));*/
-/*        job->particles[i].y_t = (N_TO_P(job, y_t, i));*/
-    }
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void move_particles_explicit_usf(job_t *job)
-{
-    int i;
-    double dux, duy;
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        job->particles[i].x_tt = (N_TO_P(job, x_tt, i));
-        job->particles[i].y_tt = (N_TO_P(job, y_tt, i));
-
-        job->particles[i].x_t = (N_TO_P(job, x_t, i));
-        job->particles[i].y_t = (N_TO_P(job, y_t, i));
-        dux = job->dt * (N_TO_P(job, x_t, i));
-        duy = job->dt * (N_TO_P(job, y_t, i));
-        job->particles[i].x += dux;
-        job->particles[i].y += duy;
-        job->particles[i].ux += dux;
-        job->particles[i].uy += duy;
-
-        while(job->particles[i].x < 0) { job->particles[i].x += -floor(job->particles[i].x); }
-        while(job->particles[i].x > 1) { job->particles[i].x -= floor(job->particles[i].x); }
-
-        while(job->particles[i].y < 0) { job->particles[i].y += -floor(job->particles[i].y); }
-        while(job->particles[i].y > 1) { job->particles[i].y -= floor(job->particles[i].y); }
-    }
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
 void move_particles_explicit_usl(job_t *job)
 {
     move_particles_explicit_usl_split(job, 0, job->num_particles);
@@ -2211,40 +1013,35 @@ void move_particles_explicit_usl(job_t *job)
 
 void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop)
 {
-    size_t i, j, el, n;
-    double dux, duy;
-    double m, s[4];
-
-    for (i = p_start; i < p_stop; i++) {
+    for (size_t i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
 
-/*        job->particles[i].x_tt = (N_TO_P(job, x_tt, i));*/
-/*        job->particles[i].y_tt = (N_TO_P(job, y_tt, i));*/
-
+        double s[4];
         s[0] = job->h1[i];
         s[1] = job->h2[i];
         s[2] = job->h3[i];
         s[3] = job->h4[i];
 
-        el = job->in_element[i];
+        size_t el = job->in_element[i];
         job->particles[i].x_tt = 0;
         job->particles[i].y_tt = 0;
-        for (j = 0; j < 4; j++) {
-            n = job->elements[el].nodes[j];
-            m = job->nodes[n].m;
+        for (size_t j = 0; j < 4; j++) {
+            size_t n = job->elements[el].nodes[j];
+            double m = job->nodes[n].m;
+            if (m < TOL) { continue; }
             job->particles[i].x_tt += ((s[j] * job->nodes[n].fx) / m);
             job->particles[i].y_tt += ((s[j] * job->nodes[n].fy) / m);
         }
 
         job->particles[i].x_t += job->dt * job->particles[i].x_tt;
         job->particles[i].y_t += job->dt * job->particles[i].y_tt;
-/*        dux = job->dt * (N_TO_P(job, x_t, i));*/
-/*        duy = job->dt * (N_TO_P(job, y_t, i));*/
-        dux = 0;
-        duy = 0;
-        for (j = 0; j < 4; j++) {
-            n = job->elements[el].nodes[j];
-            m = job->nodes[n].m;
+
+        double dux = 0;
+        double duy = 0;
+        for (size_t j = 0; j < 4; j++) {
+            size_t n = job->elements[el].nodes[j];
+            double m = job->nodes[n].m;
+            if (m < TOL) { continue; }
             dux += ((s[j] * job->nodes[n].mx_t) / m);
             duy += ((s[j] * job->nodes[n].my_t) / m);
         }
@@ -2261,226 +1058,6 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void update_deformation_gradient(job_t *job)
-{
-    int i;
-
-    double delta;
-    double delta_inv;
-    double m11, m12, m21, m22;
-    double a, b, c, d;
-    double cd, sd, f;
-    double dsq;
-    double tmp_Fxx;
-    double tmp_Fxy;
-    double tmp_Fyx;
-    double tmp_Fyy;
-
-    for (i = 0; i < job->num_particles; i++) {
-        CHECK_ACTIVE(job, i);
-
-        a = job->dt * DX_N_TO_P(job, x_t, 1, i);
-        b = job->dt * DY_N_TO_P(job, x_t, 1, i);
-        c = job->dt * DX_N_TO_P(job, y_t, 1, i);
-        d = job->dt * DY_N_TO_P(job, y_t, 1, i);
-
-        dsq = (a - d) * (a - d) + 4 * b * c;
-        delta = 0.5 * sqrt(fabs(dsq));
-        delta_inv = (1.0f / delta);
-        if (dsq == 0 || delta < 1e-15) {
-            cd = 1;
-            sd = 1;
-            delta_inv = 1;
-        } else if (dsq > 0) {
-            cd = cosh(delta);
-            sd = sinh(delta);
-        } else {
-            cd = cos(delta);
-            sd = sin(delta);
-        }
-
-        m11 = cd + 0.5 * (a - d) * sd * delta_inv;
-        m12 = b * sd * delta_inv;
-        m21 = c * sd * delta_inv;
-        m22 = cd - 0.5 * (a - d) * sd * delta_inv;
-
-        f = exp(0.5 * (a + d));
-        tmp_Fxx = f * (m11);
-        tmp_Fxy = f * (m12);
-        tmp_Fyx = f * (m21);
-        tmp_Fyy = f * (m22);
-
-        job->particles[i].Fxx = job->particles[i].Fxx * tmp_Fxx + job->particles[i].Fyx * tmp_Fxy;
-        job->particles[i].Fxy = job->particles[i].Fxy * tmp_Fxx + job->particles[i].Fyy * tmp_Fxy;
-        job->particles[i].Fyx = job->particles[i].Fxx * tmp_Fyx + job->particles[i].Fyx * tmp_Fyy;
-        job->particles[i].Fyy = job->particles[i].Fxy * tmp_Fyx + job->particles[i].Fyy * tmp_Fyy;
-
-/*            job->particles[i].v = (job->particles[i].Fxx * job->particles[i].Fyy - job->particles[i].Fxy * job->particles[i].Fyx) * job->particles[i].v0;*/
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void update_particle_vectors(job_t *job)
-{
-    int i;
-    for (i = 0; i < job->num_particles; i++) {
-        job->particles[i].r1[0] =
-            job->particles[i].Fxx * job->particles[i].r1_initial[0] +
-            job->particles[i].Fxy * job->particles[i].r1_initial[1];
-        job->particles[i].r1[1] =
-            job->particles[i].Fyx * job->particles[i].r1_initial[0] +
-            job->particles[i].Fyy * job->particles[i].r1_initial[1];
-        job->particles[i].r2[0] =
-            job->particles[i].Fxx * job->particles[i].r2_initial[0] +
-            job->particles[i].Fxy * job->particles[i].r2_initial[1];
-        job->particles[i].r2[1] =
-            job->particles[i].Fyx * job->particles[i].r2_initial[0] +
-            job->particles[i].Fyy * job->particles[i].r2_initial[1];
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void update_corner_positions(job_t *job)
-{
-    int i, j, k;
-    int e, n;
-
-/*    FILE *fd;*/
-/*    fd = fopen("pnodes.txt", "a");*/
-
-/*    for (i = 0; i < (job->num_particles * job->num_nodes); i++) {*/
-/*        job->phi[i] = 0;*/
-/*    }*/
-
-    for (i = 0; i < job->num_particles; i++) {
-        /* Find corner positions from (adjusted) vectors. */
-        job->particles[i].corners[2][S_XIDX] = job->particles[i].x +
-            job->particles[i].r1[S_XIDX] + job->particles[i].r2[S_XIDX];
-        job->particles[i].corners[2][S_YIDX] = job->particles[i].y +
-            job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX];
-
-        job->particles[i].corners[3][S_XIDX] = job->particles[i].x -
-            job->particles[i].r1[S_XIDX] + job->particles[i].r2[S_XIDX];
-        job->particles[i].corners[3][S_YIDX] = job->particles[i].y -
-            job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX];
-
-        job->particles[i].corners[0][S_XIDX] = job->particles[i].x -
-            job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX];
-        job->particles[i].corners[0][S_YIDX] = job->particles[i].y -
-            job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX];
-
-        job->particles[i].corners[1][S_XIDX] = job->particles[i].x +
-            job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX];
-        job->particles[i].corners[1][S_YIDX] = job->particles[i].y +
-            job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX];
-
-        for (j = 0; j < 4; j++) {
-            /* Figure out which element each corner is in. */
-            job->particles[i].corner_elements[j] = WHICH_ELEMENT(job->particles[i].corners[j][S_XIDX], job->particles[i].corners[j][S_YIDX], job->N, job->h);
-
-            e = job->particles[i].corner_elements[j];
-            n = job->elements[e].nodes[0];
-
-/*            fprintf(fd, "%d:", i);*/
-/*            for (k = 0; k < 4; k++) {*/
-/*                fprintf(fd, " %d", job->elements[e].nodes[k]);*/
-/*            }*/
-/*            fprintf(fd, "\n");*/
-
-            /* calculate local coordinates of corners */
-            if (job->particles[i].corner_elements[j] != -1) {
-                global_to_local_coords(
-                    &(job->particles[i].cornersl[j][S_XIDX]),
-                    &(job->particles[i].cornersl[j][S_YIDX]),
-                    job->particles[i].corners[j][S_XIDX],
-                    job->particles[i].corners[j][S_YIDX],
-                    job->nodes[n].x,
-                    job->nodes[n].y,
-                    job->h
-                );
-
-                tent(
-                    &(job->particles[i].sc[j][0]),
-                    &(job->particles[i].sc[j][1]),
-                    &(job->particles[i].sc[j][2]),
-                    &(job->particles[i].sc[j][3]),
-                    job->particles[i].cornersl[j][S_XIDX],
-                    job->particles[i].cornersl[j][S_YIDX]
-                );
-            }
-        }
-
-        for (j = 0; j < 4; j++) {
-            for (k = 0; k < 4; k++) {
-
-                switch(k) {
-                    case 0:
-                        job->particles[i].grad_sc[k][j][S_XIDX] = (job->particles[i].sc[0][j])*(job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX]);
-
-                        job->particles[i].grad_sc[k][j][S_YIDX] = (job->particles[i].sc[0][j])*(job->particles[i].r2[S_XIDX] - job->particles[i].r1[S_XIDX]);
-                    break;
-                    case 1:
-                        job->particles[i].grad_sc[k][j][S_XIDX] = (job->particles[i].sc[1][j])*(job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX]);
-
-                        job->particles[i].grad_sc[k][j][S_YIDX] = (job->particles[i].sc[1][j])*(-job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX]);
-                    break;
-                    case 2:
-                        job->particles[i].grad_sc[k][j][S_XIDX] = (-job->particles[i].sc[2][j])*(job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX]);
-
-                        job->particles[i].grad_sc[k][j][S_YIDX] = (-job->particles[i].sc[2][j])*(job->particles[i].r2[S_XIDX] - job->particles[i].r1[S_XIDX]);
-                    break;
-                    case 3:
-                        job->particles[i].grad_sc[k][j][S_XIDX] = (-job->particles[i].sc[3][j])*(job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX]);
-
-                        job->particles[i].grad_sc[k][j][S_YIDX] = (-job->particles[i].sc[3][j])*(-job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX]);
-                    break;
-                }
-/*                job->particles[i].grad_sc[k][j][S_XIDX] = (job->particles[i].sc[0][j] - job->particles[i].sc[2][j])*(job->particles[i].r1[S_YIDX] - job->particles[i].r2[S_YIDX]) +*/
-/*                (job->particles[i].sc[1][j] - job->particles[i].sc[3][j])*(job->particles[i].r1[S_YIDX] + job->particles[i].r2[S_YIDX]);*/
-
-/*                job->particles[i].grad_sc[k][j][S_YIDX] = (job->particles[i].sc[0][j] - job->particles[i].sc[2][j])*(job->particles[i].r2[S_XIDX] - job->particles[i].r1[S_XIDX]) +*/
-/*                (job->particles[i].sc[1][j] - job->particles[i].sc[3][j])*(-job->particles[i].r1[S_XIDX] - job->particles[i].r2[S_XIDX]);*/
-
-/*                printf("%d,%d sc [%g %g %g %g]\n", j, k, job->particles[i].sc[k][0], job->particles[i].sc[k][1], job->particles[i].sc[k][2], job->particles[i].sc[k][3]);*/
-/*                printf("%d,%d sc [%g %g]\n", j, k, job->particles[i].grad_sc[k][j][S_XIDX],*/
-/*                    job->particles[i].grad_sc[k][j][S_YIDX]);*/
-
-                /* should be averaging domain, but use particle volume for now */
-                job->particles[i].grad_sc[k][j][S_XIDX] *= (1.0 / job->particles[i].v);
-                job->particles[i].grad_sc[k][j][S_YIDX] *= (1.0 / job->particles[i].v);
-
-                if (job->particles[i].corner_elements[k] == -1) {
-                    continue;
-                }
-
-                /* phi rows are nodal indicies, cols are particle indicies */
-/*                job->phi[job->num_particles * job->elements[job->particles[i].corner_elements[k]].nodes[j] + i] += 0.25 * job->particles[i].sc[k][j];*/
-            }
-        }
-
-    }
-
-/*    for (i = 0; i < job->num_nodes; i++) {*/
-/*        for (j = 0; j < job->num_particles; j++) {*/
-/*            fprintf(fd, " %g", job->phi[job->num_particles * i + j]);*/
-/*        }*/
-/*        fprintf(fd, "\n");*/
-/*    }*/
-/*    fprintf(fd, "\n");*/
-
-/*    fclose(fd);*/
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
 void update_particle_densities(job_t *job)
 {
     update_particle_densities_split(job, 0, job->num_particles);
@@ -2489,81 +1066,11 @@ void update_particle_densities(job_t *job)
 
 void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop)
 {
-    size_t i;
-
-    if (job->use_cpdi) {
-        for (i = p_start; i < p_stop; i++) {
-            CHECK_ACTIVE(job, i);
-            job->particles[i].v = job->particles[i].v0 *
-                ((job->particles[i].Fxx * job->particles[i].Fyy) - 
-                job->particles[i].Fxy * job->particles[i].Fyx);
-        }
-    } else {
-        for (i = p_start; i < p_stop; i++) {
-            CHECK_ACTIVE(job, i);
-            job->particles[i].v = job->particles[i].v * exp (job->dt * (job->particles[i].exx_t + job->particles[i].eyy_t));
-        }
+    for (size_t i = p_start; i < p_stop; i++) {
+        CHECK_ACTIVE(job, i);
+        job->particles[i].v = job->particles[i].v *
+            exp(job->dt * (job->particles[i].exx_t + job->particles[i].eyy_t));
     }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void generate_mappings(job_t *job)
-{
-    size_t p_idx;
-    size_t e_idx;
-    size_t i_idx;
-
-    size_t i;
-
-    size_t nr;
-    size_t nc;
-    size_t nnz;
-    cs *triplets;
-
-    double s[4];
-
-    int res;
-
-    nr = job->num_nodes;
-    nc = job->num_particles;
-    /* Each particle only affects one element at most. */
-    nnz = 4 * job->num_particles;
-
-    triplets = cs_spalloc(nr, nc, nnz, 1, 1);
-
-    for (p_idx = 0; p_idx < job->num_particles; p_idx++) {
-        if (job->active[p_idx] == 0) {
-            continue;
-        }
-
-        e_idx = job->in_element[p_idx];
-        tent(&(s[0]), &(s[1]), &(s[2]), &(s[3]),
-            job->particles[p_idx].xl, job->particles[p_idx].yl);
-        for (i = 0; i < 4; i++) {
-            i_idx = job->elements[e_idx].nodes[i];
-
-            res = cs_entry(triplets, i_idx, p_idx, s[i]);
-            if (res == 0) {
-                fprintf(stderr, "Can't add entry to generate mappings.\n");
-                exit(EXIT_ERROR_CS_ENTRY);
-            }
-        }
-    }
-
-    if (job->phi != NULL) {
-        cs_spfree(job->phi);
-    }
-    if (job->phi_transpose != NULL) {
-        cs_spfree(job->phi_transpose);
-    }
-
-    job->phi = cs_compress(triplets);
-    cs_dupl(job->phi);
-    job->phi_transpose = cs_transpose(job->phi, 1); /* copy values. */
-    cs_spfree(triplets);
 
     return;
 }
@@ -2577,6 +1084,7 @@ void mpm_cleanup(job_t *job)
     free(job->elements);
     
     free(job->in_element);
+    free(job->active);
 
     free(job->h1);
     free(job->h2);
@@ -2593,7 +1101,10 @@ void mpm_cleanup(job_t *job)
     free(job->b23);
     free(job->b24);
 
-    free(job);
+    free(job->u_dirichlet);
+    free(job->u_dirichlet_mask);
+    free(job->node_number_override);
+    free(job->color_indices);
 
     return;
 }

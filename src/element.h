@@ -71,4 +71,3 @@ typedef struct element_s {
 */
 void node_number_to_coords(double *x, double *y, int num, int N, double h);
 #endif
-

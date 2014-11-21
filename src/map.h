@@ -20,5 +20,11 @@ void accumulate_p_to_n_ds_list(node_t *nodes,
     size_t *node_field_offset, int *nodelist, double *sfvalues, 
     size_t nodelist_len, double *pdata, size_t pdata_len);
 
+void accumulate_p_to_n_ds_list47(node_t *nodes,
+    size_t *node_field_offset, int *nodelist, double *sfvalues, 
+    double *pdata);
+void accumulate_p_to_n_ds_list42(node_t *nodes,
+    size_t *node_field_offset, int *nodelist, double *sfvalues, 
+    double *pdata);
 #endif
 

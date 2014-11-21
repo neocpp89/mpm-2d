@@ -46,6 +46,9 @@
 #define JUMP_IF(cond, gotolabel, msg) \
     do { if (cond) { fprintf(stderr, "%s", msg); goto gotolabel; } } while(0)
 
+#define FREE_AND_NULL(tok) \
+    do { if((tok) != NULL) { free((tok)); tok = NULL;} } while(0)
+
 static struct state_s {
     char *outputdir;
 
@@ -244,14 +247,14 @@ int main(int argc, char **argv)
         CFG_FUNC("include", cfg_include),
         CFG_END()
     };
-    cfg_t *cfg;
-    cfg_t *cfg_solver;
-    cfg_t *cfg_timestep;
-    cfg_t *cfg_implicit;
-    cfg_t *cfg_output;
-    cfg_t *cfg_input;
-    cfg_t *cfg_material;
-    cfg_t *cfg_boundary;
+    cfg_t *cfg = NULL;
+    cfg_t *cfg_solver = NULL;
+    cfg_t *cfg_timestep = NULL;
+    cfg_t *cfg_implicit = NULL;
+    cfg_t *cfg_output = NULL;
+    cfg_t *cfg_input = NULL;
+    cfg_t *cfg_material = NULL;
+    cfg_t *cfg_boundary = NULL;
 
     const char *solver_names[] = {
         "Implicit",
@@ -281,15 +284,15 @@ int main(int argc, char **argv)
     job_t *job = NULL;
     FILE *state_fd;
 
-    void *material_so_handle;
-    void *bc_so_handle;
+    void *material_so_handle = NULL;
+    void *bc_so_handle = NULL;
 
     int opt;
     int leftover_argc;
     char **leftover_argv;
 
-    threadtask_t *tasks;
-    pthread_t *threads;
+    threadtask_t *tasks = NULL;
+    pthread_t *threads = NULL;
 
     size_t psplit, nsplit, esplit;
 
@@ -463,7 +466,7 @@ int main(int argc, char **argv)
     }
 
     fprintf(stderr, "\nMaterial options set:\n");
-    fprintf(stderr, "material_filename: %s\n", job->material.material_filename);
+    fprintf(stderr, "material_filename: %s\n", (job->material.use_builtin)?"builtin":job->material.material_filename);
     fprintf(stderr, "use_builtin: %d\n", job->material.use_builtin);
     fprintf(stderr, "num_fp64_props: %d\n", job->material.num_fp64_props);
     fprintf(stderr, "num_int_props: %d\n", job->material.num_int_props);
@@ -578,11 +581,11 @@ int main(int argc, char **argv)
     fprintf(stderr, "solver: %d (%s)\n",
         job->solver, solver_names[(int)job->solver]);
     if (job->solver == IMPLICIT_SOLVER) {
-        mpm_step = implicit_mpm_step;
+        //mpm_step = implicit_mpm_step;
     } else if (job->solver == EXPLICIT_SOLVER_USF) {
-        mpm_step = explicit_mpm_step_usf;
+        //mpm_step = explicit_mpm_step_usf;
     } else if (job->solver == EXPLICIT_SOLVER_USL) {
-        mpm_step = explicit_mpm_step_usl;
+        //mpm_step = explicit_mpm_step_usl;
     } else {
         fprintf(stderr, "Unknown solver type.\n");
         exit(-1);
@@ -740,11 +743,7 @@ job_start:
     dispg(job->t_stop);
     dispg(job->dt);
     dispg(job->h);
-    dispd(job->num_particles);
-    dispd(job->num_nodes);
-    dispd(job->num_elements);
 
-    job->threads = (pthread_t *)malloc(sizeof(pthread_t) * num_threads);
     tasks = (threadtask_t *)malloc(sizeof(threadtask_t) * num_threads);
     job->step_barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t));
     job->serialize_barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t));
@@ -876,6 +875,7 @@ _close_files:
     free(job->output.particle_filename_fullpath);
     free(job->output.element_filename_fullpath);
     free(job->output.state_filename_fullpath);
+    free(job->output.log_filename_fullpath);
     mpm_cleanup(job);
 
     free(pdata);
@@ -888,7 +888,43 @@ _cfgfile_error:
     fprintf(stderr, "Exiting.\n");
 
     /* kill all threads */
-    pthread_exit(NULL);
+    // pthread_exit(NULL);
+
+    FREE_AND_NULL(tasks);
+    FREE_AND_NULL(threads);
+    
+    for (i = 0; i < (job->num_colors * job->num_threads); i++) {
+        FREE_AND_NULL(job->particle_by_element_color_lists[i]);
+    }
+
+    FREE_AND_NULL(job->update_elementlists);
+    FREE_AND_NULL(job->particle_by_element_color_lengths);
+    FREE_AND_NULL(job->particle_by_element_color_lists);
+
+    if (job->material.fp64_props != NULL) {
+        free(job->material.fp64_props);
+        job->material.fp64_props = NULL;
+    }
+
+    FREE_AND_NULL(job->material.int_props);
+    FREE_AND_NULL(job->boundary.fp64_props);
+    FREE_AND_NULL(job->boundary.int_props);
+
+    FREE_AND_NULL(job->step_barrier);
+    FREE_AND_NULL(job->serialize_barrier);
+
+    if (job != NULL) {
+        free(job);
+        job = NULL;
+    }
+
+    if (bc_so_handle != NULL) {
+        dlclose(bc_so_handle);
+    }
+    if (material_so_handle != NULL) {
+        dlclose(material_so_handle);
+    }
+
     return 0;
 }
 /*----------------------------------------------------------------------------*/
@@ -908,6 +944,7 @@ void *mpm_run_until(void *_task)
 
     while (job->t < job->t_stop && !want_sigterm) {
         explicit_mpm_step_usl_threaded(task);
+        //explicit_mpm_step_musl_threaded(task);
 
         /* have one thread write out the file */
         rc = pthread_barrier_wait(job->serialize_barrier);
@@ -917,7 +954,7 @@ void *mpm_run_until(void *_task)
             if (job->t >= (job->frame / job->output.sample_rate_hz)) {
                 // v2_write_frame(job->output.directory, job->output.info_fd, job, v2_write_particle, NULL);
                 write_frame(job->output.particle_fd, job->frame, job->t, job);
-                write_element_frame(job->output.element_fd, job->frame, job->t, job);
+                // write_element_frame(job->output.element_fd, job->frame, job->t, job);
 
                 job->frame++;
                 clock_gettime(CLOCK_REALTIME, &(job->toc));

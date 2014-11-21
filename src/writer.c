@@ -107,7 +107,7 @@ size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
     char fp_name_nobase[1024];
     FILE *fp = NULL;
 
-    snprintf(fp_name_nobase, 1024, "fp_%d.h.csv", job->frame);
+    snprintf(fp_name_nobase, 1024, "fp_%zu.h.csv", job->frame);
     snprintf(fp_name, 1024, "%s%s", directory, fp_name_nobase);
     fp = fopen(fp_name, "w+");
     if (fp != NULL) {
@@ -139,7 +139,7 @@ size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
         Write metadata to file (if it exists).
     */
     if (metafd != NULL) {
-        bytes_out += fprintf(metafd, "frame-%d = %s,%zu,%d,%lg\n",
+        bytes_out += fprintf(metafd, "frame-%zu = %s,%zu,%zu,%lg\n",
             job->frame, fp_name_nobase, particles_written, job->frame, job->t);
     }
 
@@ -188,12 +188,10 @@ void write_particle(FILE *fd, particle_t p, double active)
 /*----------------------------------------------------------------------------*/
 
 /*---write_frame--------------------------------------------------------------*/
-void write_frame(FILE *fd, int frame, double time, job_t *job)
+void write_frame(FILE *fd, size_t frame, double time, job_t *job)
 {
-    int i;
-
-    fprintf(fd, "%d %lg %d\n", frame, time, job->num_particles);
-    for (i = 0; i < job->num_particles; i++) {
+    fprintf(fd, "%zu %lg %zu\n", frame, time, job->num_particles);
+    for (size_t i = 0; i < job->num_particles; i++) {
         write_particle(fd, job->particles[i], (double)(job->active[i]));
     }
 
@@ -205,7 +203,7 @@ void write_frame(FILE *fd, int frame, double time, job_t *job)
 /*----------------------------------------------------------------------------*/
 
 /*---write_element_frame------------------------------------------------------*/
-void write_element_frame(FILE *fd, int frame, double time, job_t *job)
+void write_element_frame(FILE *fd, size_t frame, double time, job_t *job)
 {
     int i;
     int e;
@@ -240,7 +238,7 @@ void write_element_frame(FILE *fd, int frame, double time, job_t *job)
         v_acc[e] += job->particles[i].v;
     }
 
-    fprintf(fd, "%d %lg %d\n", frame, time, job->num_elements);
+    fprintf(fd, "%zu %lg %zu\n", frame, time, job->num_elements);
 
     for (i = 0; i < job->num_elements; i++) {
         node_number_to_coords(&x, &y, job->elements[i].nodes[0], job->N, job->h);
@@ -272,7 +270,7 @@ void write_state(FILE *fd, job_t *job)
     int i, j;
 
     fprintf(fd, "%lg %lg %lg\n", job->t, job->dt, job->t_stop);
-    fprintf(fd, "%d %d %d\n", job->num_particles, job->num_nodes, job->num_elements);
+    fprintf(fd, "%zu %zu %zu\n", job->num_particles, job->num_nodes, job->num_elements);
     fprintf(fd, "%d %lg\n", job->N, job->h);
 
     for (i = 0; i < job->num_particles; i++) {

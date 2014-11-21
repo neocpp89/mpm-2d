@@ -35,6 +35,9 @@ def particle_callback(particle):
 if (len(sys.argv) <= 3):
     print 'usage: FRAME_DATA plotvariables frame [outprefix]'
     print '       plotvariables are of the form \'xdata,ydata,...\'.'
+    print '       frame can be either a single number \'#\', a range \'begin:end\','
+    print '             or range with increment \'begin:step:end\'.'
+    print '             end is not included in the count (e.g. 0:10 gives frames 0,1,...,9).'
     exit(127)
 
 infile = sys.argv[1]

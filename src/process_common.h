@@ -82,14 +82,11 @@ typedef struct op_control_s {
     double sample_rate_hz;
 } output_control_t;
 
-// forward declare the job structure
-struct job_s;
-
 typedef struct mat_control_s {
     const char *material_filename;
     int use_builtin;
-    void (*material_init)(struct job_s *);
-    void (*calculate_stress)(struct job_s *);
+    void (*material_init)(void *);
+    void (*calculate_stress)(void *);
     void (*calculate_stress_threaded)(void *);
 
     double *fp64_props;
@@ -117,13 +114,13 @@ typedef struct job_s {
     double t;
     double dt;
     double t_stop;
-    size_t frame;
+    int frame;
     int stepcount;
 
-    size_t num_particles;
-    size_t num_nodes;
-    size_t num_elements;
-    size_t num_colors;
+    int num_particles;
+    int num_nodes;
+    int num_elements;
+    int num_colors;
     size_t *color_indices;
 //    size_t *color_list_lengths;
 //    size_t **element_id_by_color;
@@ -156,16 +153,62 @@ typedef struct job_s {
     double *h2;
     double *h3;
     double *h4;
+//    double *h5;
+//    double *h6;
+//    double *h7;
+//    double *h8;
+//    double *h9;
 
     double *b11;
     double *b12;
     double *b13;
     double *b14;
+//    double *b15;
+//    double *b16;
+//    double *b17;
+//    double *b18;
+//    double *b19;
 
     double *b21;
     double *b22;
     double *b23;
     double *b24;
+//    double *b25;
+//    double *b26;
+//    double *b27;
+//    double *b28;
+//    double *b29;
+
+    double *u_grid;
+    double *du_grid;
+    double *v_grid;
+    double *a_grid;
+    double *m_grid;
+    double *q_grid;
+    double *f_ext_grid;
+    double *f_int_grid;
+
+    /*
+        Maps particle to nodal quantites (and gradient of quantites).
+        The matrix is a compressed sparse matrix, and the transpose will
+        map nodal to particle quantites.
+    */
+    cs *phi;
+    cs *grad_phi;
+    cs *phi_transpose;
+    cs *grad_phi_transpose;
+
+//    double *m_nodes;
+//    double *mx_t_nodes;
+//    double *my_t_nodes;
+//    double *mx_tt_nodes;
+//    double *my_tt_nodes;
+//    double *x_t_nodes;
+//    double *y_t_nodes;
+//    double *x_tt_nodes;
+//    double *y_tt_nodes;
+//    double *fx_nodes;
+//    double *fy_nodes;
 
     /* maps node number to position in u_grid vector. */
     int *node_u_map;
@@ -204,6 +247,7 @@ typedef struct job_s {
     int step_number;
     double step_start_time;
 
+    pthread_t *threads;
     pthread_barrier_t *step_barrier;
     pthread_barrier_t *serialize_barrier;
     int num_threads;
@@ -253,8 +297,6 @@ void implicit_mpm_step(job_t *job);
 void explicit_mpm_step_usf(job_t *job);
 void explicit_mpm_step_usl(job_t *job);
 void explicit_mpm_step_usl_threaded(void *task);
-void explicit_mpm_step_musl_threaded(void *task);
-void explicit_mpm_step_usf_threaded(void *task);
 void mpm_cleanup(job_t *job);
 
 void pt_update_stress(void *args);
@@ -293,6 +335,7 @@ void move_particles_explicit_usf(job_t *job);
 void move_particles_explicit_usl(job_t *job);
 void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop);
 void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop);
+
 
 #endif
 

@@ -174,12 +174,7 @@ void calculate_stress_threaded(threadtask_t *task)
     double tau_tau;
     double scale_factor;
 
-    /* increment using jaumann rate */
-    double dsjxx, dsjxy, dsjyy;
-
     /* trial values */
-    double sxx_tr, sxy_tr, syy_tr;
-    double t0xx_tr, t0xy_tr, t0yy_tr;
     double p_tr, tau_tr;
 
     double nup_tau;
@@ -221,8 +216,8 @@ void calculate_stress_threaded(threadtask_t *task)
         job->particles[i].L[ZZ] = 0;
 
         /* Construct stretching and spin terms. */
-        tensor_skw3(W, job->particles[i].L, 3);
-        tensor_sym3(D, job->particles[i].L, 3);
+        tensor_skw3(W, job->particles[i].L);
+        tensor_sym3(D, job->particles[i].L);
 
         /* Copy stretching to the trial while in cache and get trace.*/
         tensor_copy3(Ttr, D);
