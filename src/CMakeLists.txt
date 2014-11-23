@@ -1,18 +1,9 @@
 ADD_EXECUTABLE(mpm_2d
     main.c
-    element.c
-    implicit.c
-    interpolate.c
-    loading.c
-    map.c
-    material.c
-    particle.c
-    process.c
     reader.c
-    rtsafe.c
-    tensor.c
     writer.c
 )
+target_link_libraries(mpm_2d mpm)
 target_link_libraries(mpm_2d ${CXSPARSE_LIBRARY})
 target_link_libraries(mpm_2d m)
 target_link_libraries(mpm_2d pthread)
