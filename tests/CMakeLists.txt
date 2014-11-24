@@ -1,0 +1,3 @@
+add_executable(particle_movement particle_movement.c)
+target_link_libraries(particle_movement mpm)
+add_test(test_particle_movement particle_movement)
