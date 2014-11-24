@@ -31,8 +31,8 @@
 #include "reader.h"
 #include "writer.h"
 
-#define dispg(x) printf(#x " = %g\n", x)
-#define dispd(x) printf(#x " = %d\n", x)
+//#define dispg(x) printf(#x " = %g\n", x)
+//#define dispd(x) printf(#x " = %d\n", x)
 
 #define MIN(x,y) (((x) > (y))?(y):(x))
 #define MAX(x,y) (((x) < (y))?(y):(x))
@@ -269,7 +269,6 @@ int main(int argc, char **argv)
 
     double h;
     int N;
-    int i;
     int j;
     int len;
     double t_stop;
@@ -394,10 +393,10 @@ int main(int argc, char **argv)
     }
 
     JUMP_IF(read_grid_params(&g, g_state.gridfile) != 0,
-        _read_grid_file_error, "Error reading grid file.\n");
+        _fatal_error, "Error reading grid file.\n");
     printf("Finished reading grid file \"%s\".\n", g_state.gridfile);
     JUMP_IF(read_particles(&pdata, &plen, g_state.particlefile) != 0,
-        _read_particle_file_error, "Error reading particle file.\n");
+        _fatal_error, "Error reading particle file.\n");
     printf("Finished reading particle file \"%s\".\n", g_state.particlefile);
 
     if (leftover_argc >= 1) {
@@ -458,10 +457,10 @@ int main(int argc, char **argv)
     job->material.num_int_props = cfg_size(cfg_material, "integer-properties");
     job->material.fp64_props = (double *)malloc(sizeof(double) * job->material.num_fp64_props);
     job->material.int_props = (int *)malloc(sizeof(int) * job->material.num_int_props);
-    for (i = 0; i < job->material.num_fp64_props; i++) {
+    for (size_t i = 0; i < job->material.num_fp64_props; i++) {
         job->material.fp64_props[i] = cfg_getnfloat(cfg_material, "properties", i);
     }
-    for (i = 0; i < job->material.num_int_props; i++) {
+    for (size_t i = 0; i < job->material.num_int_props; i++) {
         job->material.int_props[i] = cfg_getnint(cfg_material, "integer-properties", i);
     }
 
@@ -472,12 +471,12 @@ int main(int argc, char **argv)
     fprintf(stderr, "num_int_props: %d\n", job->material.num_int_props);
 
     fprintf(stderr, "fp64_props: { ");
-    for (i = 0; i < job->material.num_fp64_props; i++) {
+    for (size_t i = 0; i < job->material.num_fp64_props; i++) {
         fprintf(stderr, "%.3g ", job->material.fp64_props[i]);
     }
     fprintf(stderr, "}\n");
     fprintf(stderr, "int_props: { ");
-    for (i = 0; i < job->material.num_int_props; i++) {
+    for (size_t i = 0; i < job->material.num_int_props; i++) {
         fprintf(stderr, "%d ", job->material.int_props[i]);
     }
     fprintf(stderr, "}\n");
@@ -550,10 +549,10 @@ int main(int argc, char **argv)
     job->boundary.num_int_props = cfg_size(cfg_boundary, "integer-properties");
     job->boundary.fp64_props = (double *)malloc(sizeof(double) * job->boundary.num_fp64_props);
     job->boundary.int_props = (int *)malloc(sizeof(int) * job->boundary.num_int_props);
-    for (i = 0; i < job->boundary.num_fp64_props; i++) {
+    for (size_t i = 0; i < job->boundary.num_fp64_props; i++) {
         job->boundary.fp64_props[i] = cfg_getnfloat(cfg_boundary, "properties", i);
     }
-    for (i = 0; i < job->boundary.num_int_props; i++) {
+    for (size_t i = 0; i < job->boundary.num_int_props; i++) {
         job->boundary.int_props[i] = cfg_getnint(cfg_boundary, "integer-properties", i);
     }
 
@@ -564,12 +563,12 @@ int main(int argc, char **argv)
     fprintf(stderr, "num_int_props: %d\n", job->boundary.num_int_props);
 
     fprintf(stderr, "fp64_props: { ");
-    for (i = 0; i < job->boundary.num_fp64_props; i++) {
+    for (size_t i = 0; i < job->boundary.num_fp64_props; i++) {
         fprintf(stderr, "%.3g ", job->boundary.fp64_props[i]);
     }
     fprintf(stderr, "}\n");
     fprintf(stderr, "int_props: { ");
-    for (i = 0; i < job->boundary.num_int_props; i++) {
+    for (size_t i = 0; i < job->boundary.num_int_props; i++) {
         fprintf(stderr, "%d ", job->boundary.int_props[i]);
     }
     fprintf(stderr, "}\n");
@@ -740,9 +739,8 @@ int main(int argc, char **argv)
 
     job->dt = job->timestep.dt;
 job_start:
-    dispg(job->t_stop);
-    dispg(job->dt);
-    dispg(job->h);
+    fprintf(stderr, "\nRunning Simulation to %g seconds.\n", job->t_stop);
+    fprintf(stderr, "Grid size is (%d, %d); spacing is %g.\n", job->N, job->N, job->h);
 
     tasks = (threadtask_t *)malloc(sizeof(threadtask_t) * num_threads);
     job->step_barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t));
@@ -750,7 +748,7 @@ job_start:
     psplit = (job->num_particles / num_threads) + ((job->num_particles % num_threads != 0)?(1):(0));
     nsplit = (job->num_nodes / num_threads) + ((job->num_nodes % num_threads != 0)?(1):(0));
     esplit = (job->num_elements / num_threads) + ((job->num_elements % num_threads != 0)?(1):(0));
-    for (i = 0; i < num_threads; i++) {
+    for (size_t i = 0; i < num_threads; i++) {
         tasks[i].id = i;
         tasks[i].num_threads = num_threads;
         tasks[i].job = job;
@@ -788,7 +786,7 @@ job_start:
 
     /* create element color lists on first step. */
     job->update_elementlists = (int *)malloc(sizeof(int) * job->num_threads);
-    for (i = 0; i < job->num_threads; i++) {
+    for (size_t i = 0; i < job->num_threads; i++) {
         job->update_elementlists[i] = 1;
     }
 
@@ -799,12 +797,12 @@ job_start:
 
     job->particle_by_element_color_lengths = (size_t *)malloc(sizeof(size_t) * job->num_colors * job->num_threads);
     job->particle_by_element_color_lists = (size_t **)malloc(sizeof(size_t *) * job->num_colors * job->num_threads);
-    for (i = 0; i < (job->num_colors * job->num_threads); i++) {
+    for (size_t i = 0; i < (job->num_colors * job->num_threads); i++) {
         job->particle_by_element_color_lists[i] = (size_t *)malloc(sizeof(size_t) * job->num_particles);
     }
 
     /* Actually find filled elements for creating parallel list. */
-    for (i = 0; i < job->num_elements; i++) {
+    for (size_t i = 0; i < job->num_elements; i++) {
         job->elements[i].filled = 0;
         job->elements[i].n = 0;
         job->elements[i].m = 0;
@@ -829,12 +827,12 @@ job_start:
     clock_gettime(CLOCK_REALTIME, &(job->tic));
     job->stepcount = 0;
 
-    for (i = 0; i < (job->num_threads - 1); i++) {
+    for (size_t i = 0; i < (job->num_threads - 1); i++) {
         pthread_create(&(threads[i]), NULL, &mpm_run_until, &(tasks[i]));
     }
     mpm_run_until(&(tasks[job->num_threads-1]));
 
-    for (i = 0; i < (job->num_threads - 1); i++) {
+    for (size_t i = 0; i < (job->num_threads - 1); i++) {
         pthread_join(threads[i], NULL);
     }
 
@@ -849,40 +847,43 @@ job_start:
 _fatal_error:
 _close_files:
     printf("Closing files.\n");
-    if (job->output.info_fd != NULL) {
-        fclose(job->output.info_fd);
-    }
-    if (job->output.log_fd != NULL) {
-        fclose(job->output.log_fd);
-    }
-    if (job->output.state_fd != NULL) {
-        fclose(job->output.state_fd);
-    }
-    if (job->output.element_fd != NULL) {
-        fclose(job->output.element_fd);
-    }
-    if (job->output.particle_fd != NULL) {
-        fclose(job->output.particle_fd);
+    if (job != NULL) {
+        if (job->output.info_fd != NULL) {
+            fclose(job->output.info_fd);
+        }
+        if (job->output.log_fd != NULL) {
+            fclose(job->output.log_fd);
+        }
+        if (job->output.state_fd != NULL) {
+            fclose(job->output.state_fd);
+        }
+        if (job->output.element_fd != NULL) {
+            fclose(job->output.element_fd);
+        }
+        if (job->output.particle_fd != NULL) {
+            fclose(job->output.particle_fd);
+        }
     }
 
     printf("\n");
     printf("Freeing allocated memory.\n");
 
-    cfg_free(cfg);
-    if (job->output.modified_directory != 0) {
-        free(job->output.directory);
+    if (cfg != NULL) {
+        cfg_free(cfg);
     }
-    free(job->output.particle_filename_fullpath);
-    free(job->output.element_filename_fullpath);
-    free(job->output.state_filename_fullpath);
-    free(job->output.log_filename_fullpath);
-    mpm_cleanup(job);
+    if (job != NULL) {
+        if (job->output.modified_directory != 0) {
+            FREE_AND_NULL(job->output.directory);
+        }
+        FREE_AND_NULL(job->output.particle_filename_fullpath);
+        FREE_AND_NULL(job->output.element_filename_fullpath);
+        FREE_AND_NULL(job->output.state_filename_fullpath);
+        FREE_AND_NULL(job->output.log_filename_fullpath);
+        mpm_cleanup(job);
+    }
 
-    free(pdata);
-    pdata = NULL;
+    FREE_AND_NULL(pdata);
 
-_read_particle_file_error:
-_read_grid_file_error:
 _commandline_error:
 _cfgfile_error:
     fprintf(stderr, "Exiting.\n");
@@ -892,32 +893,28 @@ _cfgfile_error:
 
     FREE_AND_NULL(tasks);
     FREE_AND_NULL(threads);
-   
-    if (job->particle_by_element_color_lists != NULL) { 
-        for (i = 0; i < (job->num_colors * job->num_threads); i++) {
-            FREE_AND_NULL(job->particle_by_element_color_lists[i]);
-        }
-    }
-
-    FREE_AND_NULL(job->update_elementlists);
-    FREE_AND_NULL(job->particle_by_element_color_lengths);
-    FREE_AND_NULL(job->particle_by_element_color_lists);
-
-    if (job->material.fp64_props != NULL) {
-        free(job->material.fp64_props);
-        job->material.fp64_props = NULL;
-    }
-
-    FREE_AND_NULL(job->material.int_props);
-    FREE_AND_NULL(job->boundary.fp64_props);
-    FREE_AND_NULL(job->boundary.int_props);
-
-    FREE_AND_NULL(job->step_barrier);
-    FREE_AND_NULL(job->serialize_barrier);
 
     if (job != NULL) {
-        free(job);
-        job = NULL;
+        if (job->particle_by_element_color_lists != NULL) {
+            for (size_t i = 0; i < (job->num_colors * job->num_threads); i++) {
+                FREE_AND_NULL(job->particle_by_element_color_lists[i]);
+            }
+        }
+
+        FREE_AND_NULL(job->update_elementlists);
+        FREE_AND_NULL(job->particle_by_element_color_lengths);
+        FREE_AND_NULL(job->particle_by_element_color_lists);
+
+        FREE_AND_NULL(job->material.fp64_props);
+        FREE_AND_NULL(job->material.int_props);
+
+        FREE_AND_NULL(job->boundary.fp64_props);
+        FREE_AND_NULL(job->boundary.int_props);
+
+        FREE_AND_NULL(job->step_barrier);
+        FREE_AND_NULL(job->serialize_barrier);
+
+        FREE_AND_NULL(job);
     }
 
     if (bc_so_handle != NULL) {

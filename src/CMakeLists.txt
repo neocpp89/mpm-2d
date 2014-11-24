@@ -6,6 +6,7 @@ ADD_EXECUTABLE(mpm_2d
 target_link_libraries(mpm_2d mpm)
 target_link_libraries(mpm_2d ${CXSPARSE_LIBRARY})
 target_link_libraries(mpm_2d m)
+target_link_libraries(mpm_2d rt) # for clock_gettime
 target_link_libraries(mpm_2d pthread)
 target_link_libraries(mpm_2d ${CONFUSE_LIBRARY})
 target_link_libraries(mpm_2d ${DL_LIBRARIES})

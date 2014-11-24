@@ -206,7 +206,7 @@ typedef struct job_s {
 
     pthread_barrier_t *step_barrier;
     pthread_barrier_t *serialize_barrier;
-    int num_threads;
+    size_t num_threads;
 
     int *update_elementlists;
     int *update_elementlists_flag;
