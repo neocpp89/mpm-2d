@@ -1,57 +1,51 @@
 #!/usr/bin/env python
 import sys
 import os
-import Image
 import numpy as np
 
-# linear material points per pixel (linear, so 2 -> 4 points in 1 pixel)
-lmpp = 2
-rho = 1500
-# cell spacing for material point per pixel
-cs = 1.0 / lmpp
-s = map(lambda k: (0.5 + k) * cs, range(0, lmpp))
-xy_s = [(x,y) for x in s for y in s]
+mp_per_width = 25
 
-if (len(sys.argv) > 2):
-    imgfile = Image.open(sys.argv[-2])
+width = 0.25
+height = 0.15
+
+x_center = 0.5
+y_center = 0.25
+
+x_ll = 0.0
+y_ll = 0.0
+
+# position the block with the x_ll and y_ll coordinates instead of the center
+useLowerLeft = True
+
+# material properties
+rho = 1500
+
+# cell spacing for material points (sampling in both directions is the same)
+cs = width / mp_per_width
+mp_per_height = int(height / cs)
+sx = map(lambda k: (0.5 + k) * cs, range(0, mp_per_width))
+sy = map(lambda k: (0.5 + k) * cs, range(0, mp_per_height))
+xy_s = [(x,y) for x in sx for y in sy]
+
+if (len(sys.argv) > 1):
     outfile = open(sys.argv[-1], "w")
 else:
-    print sys.argv[0], "imagefile outfile"
+    print sys.argv[0], "outfile"
     exit(0)
 
-# make image black/white
-im = imgfile.convert("1")
+if (useLowerLeft):
+    disp = (x_ll, y_ll)
+else:
+    disp = (x_center - width/2.0, y_center - height/2.0)
 
-print "File", sys.argv[-2], "has size", im.size, "pixels."
-
-# pixel spacing
-dx = float(1) / im.size[0]
-dy = float(1) / im.size[1]
-
-ij_array = [(i, j) for i in xrange(0, im.size[0]) for j in xrange(0, im.size[1])]
-pixel_array = map(im.getpixel, ij_array)
-
-# if pixel is black, we have material points in that location
-filled_array = [ij_array[idx] for idx, pixel in enumerate(pixel_array) if pixel == 0]
-
-#print filled_array
-
-# i and j are measured from top left of image (i column, j row).
-# mpm_2d measures from bottom left, so convert coordinates.
-# xy nodes now has a tuple containing the coordinates of the bottom left node
-# of the filled element
-xy_nodes = map(lambda ij:
-                ((float(ij[0])/im.size[0]),(1.0-(float(ij[1])+1)/im.size[1])),
-                filled_array)
-
-xy_material_points = [(n[0]+dx*sp[0], n[1]+dy*sp[1]) for n in xy_nodes for sp in xy_s]
+xy_material_points = [(disp[0]+sp[0], disp[1]+sp[1]) for sp in xy_s]
 
 #print xy_nodes
-#print xy_material_points
+print xy_material_points
 #sys.exit(0)
 
 material_points = map(lambda xy: {
-                        'm':cs*cs*rho*dx*dy, 'v':cs*cs*dx*dy,
+                        'm':cs*cs*rho, 'v':cs*cs,
                         'x':xy[0], 'y':xy[1],
                         'x_t':0, 'y_t':0,
                         'sxx':0, 'sxy':0, 'syy':0}, xy_material_points)
