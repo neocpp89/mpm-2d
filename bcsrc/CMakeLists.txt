@@ -8,5 +8,6 @@ foreach(bcc ${BOUNDARY_CONDITIONS})
     add_library(${bcso} SHARED ${bcc})
     target_link_libraries(${bcso} mpm)
     set_target_properties(${bcso} PROPERTIES PREFIX "")
+    install(TARGETS ${bcso} LIBRARY DESTINATION mpm/bc)
 endforeach(bcc)
 

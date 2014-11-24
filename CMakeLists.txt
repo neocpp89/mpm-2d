@@ -54,3 +54,5 @@ if (FTGL_FOUND AND FREETYPE_FOUND
     AND SDL_FOUND)
     ADD_SUBDIRECTORY(vizsrc)
 endif()
+
+install(DIRECTORY examples DESTINATION mpm)
