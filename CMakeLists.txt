@@ -5,6 +5,9 @@ SET(CMAKE_C_FLAGS "-fPIC -march=native -std=gnu99 -g -O3 -Wall -Wextra")
 SET(CMAKE_CXX_FLAGS "-fPIC -march=native -std=c++11 -g -O3 -Wall -Wextra")
 # SET(CMAKE_C_FLAGS "-march=native -std=gnu99 -g -O3 -Wall -Wextra -Werror")
 
+# for all binaries:
+# SET(CMAKE_INSTALL_RPATH "$ORIGIN/../mpm/material/:$ORIGIN/../mpm/bc/:$ORIGIN/")
+
 # default install is to a subdirectory of build dir
 # override with `cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..`
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -55,4 +58,13 @@ if (FTGL_FOUND AND FREETYPE_FOUND
     ADD_SUBDIRECTORY(vizsrc)
 endif()
 
+# create output directories for examples
+file(MAKE_DIRECTORY examples/silo/ouptut)
+file(MAKE_DIRECTORY examples/heap/ouptut)
+file(MAKE_DIRECTORY examples/square-hopper/ouptut)
+file(MAKE_DIRECTORY examples/hopper/ouptut)
+
+# copy examples over
 install(DIRECTORY examples DESTINATION mpm)
+
+
