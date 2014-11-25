@@ -249,50 +249,17 @@ typedef struct s_threadtask {
 } threadtask_t;
 
 job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t);
-void implicit_mpm_step(job_t *job);
-void explicit_mpm_step_usf(job_t *job);
-void explicit_mpm_step_usl(job_t *job);
-void explicit_mpm_step_usl_threaded(void *task);
-void explicit_mpm_step_musl_threaded(void *task);
-void explicit_mpm_step_usf_threaded(void *task);
-void mpm_cleanup(job_t *job);
-
-void pt_update_stress(void *args);
-
-void create_particle_to_element_map(job_t *job);
-void calculate_shapefunctions(job_t *job);
-void calculate_node_velocity(job_t *job);
-void calculate_strainrate(job_t *job);
-void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop);
-void update_grid(job_t *job);
-void move_grid(job_t *job);
-void move_particles(job_t *job);
-void update_deformation_gradient(job_t *job);
-void update_particle_domains(job_t *job);
-void update_particle_densities(job_t *job);
-
-void update_particle_vectors(job_t *job);
-void update_corner_positions(job_t *job);
-
-void generate_mappings(job_t *job);
-void map_particles_to_nodes(double *node_var, cs *phi, double *particle_var);
-void map_gradient_particles_to_nodes(double *node_var, cs *grad_phi, double *particle_var);
-void map_nodes_to_particles(double *particle_var, cs *phi_transpose, double *node_var);
-
+void explicit_mpm_step_musl_threaded(void *_task);
+void explicit_mpm_step_usl_threaded(void *_task);
 void move_grid_split(job_t *job, size_t n_start, size_t n_stop);
-void create_particle_to_element_map_split(job_t *job, size_t p_start, size_t p_stop);
 void create_particle_to_element_map_threaded(threadtask_t *task);
 void find_filled_elements(job_t *job);
 void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop);
-void update_stress(job_t *job);
-void implicit_solve(job_t *job);
-void map_to_grid_explicit(job_t *job);
+void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop);
 void map_to_grid_explicit_split(job_t *job, size_t thread_id);
-void map_to_grid(job_t *job);
-void move_particles_explicit_usf(job_t *job);
-void move_particles_explicit_usl(job_t *job);
 void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop);
 void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop);
+void mpm_cleanup(job_t *job);
 
 #endif
 

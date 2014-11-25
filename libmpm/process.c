@@ -58,7 +58,7 @@
 
 /* XXX: ugly, fix soon */
 #define WHICH_ELEMENT4(xp,yp,N,h) \
-    (((xp)<1.0 && (xp)>=0.0 && (yp)<1.0 && (yp)>=0.0)?((floor((xp)/(h)) + floor((yp)/(h))*((N)-1))):(-1))
+    ((int)(((xp)<1.0 && (xp)>=0.0 && (yp)<1.0 && (yp)>=0.0)?((floor((xp)/(h)) + floor((yp)/(h))*((N)-1))):(-1)))
 
 #define ACCUMULATE4(acc_tok,j,tok,i,n,s) \
     j->nodes[__N(j,i,0)].acc_tok += j->s ## 1[i] * j->particles[i].tok; \
@@ -584,26 +584,6 @@ void explicit_mpm_step_usl_threaded(void *_task)
 
     pthread_barrier_wait(job->serialize_barrier);
 
-#if 0
-    if (task->id == 0) {
-        double dtcalcmin, mmin = 100000;
-        dtcalcmin = job->material.fp64_props[0] * job->h;
-        for (i = 0; i < job->num_nodes; i++) {
-            if (job->nodes[i].m > 0) {
-                if (job->nodes[i].m < mmin) {
-                    mmin = job->nodes[i].m;
-                }
-            }
-        }
-        dtcalcmin = 2.0 * sqrt(mmin / dtcalcmin);
-/*        fprintf(stdout, "\n%g, %g, %g, %g", mmin, job->dt, dtcalcmin, job->dt / dtcalcmin);*/
-        if (job->dt > 0.4 * dtcalcmin) {
-            fprintf(stdout, " XXX ");
-/*            job->dt = 0.4 * dtcalcmin;*/
-        }
-    }
-#endif
-
     /*
         Update momentum and velocity at nodes.
         Wait for all threads to finish updating nodes before calculating
@@ -629,12 +609,6 @@ void explicit_mpm_step_usl_threaded(void *_task)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void move_grid(job_t *job)
-{
-    move_grid_split(job, 0, job->num_nodes);
-    return;
-}
-
 void move_grid_split(job_t *job, size_t n_start, size_t n_stop)
 {
     double m;
@@ -766,12 +740,6 @@ void find_filled_elements(job_t *job)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void calculate_shapefunctions(job_t *job)
-{
-    calculate_shapefunctions_split(job, 0, job->num_particles);
-    return;
-}
-
 void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
 {
     size_t i, p, n;
@@ -809,51 +777,6 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void calculate_node_velocity(job_t *job)
-{
-    int i;
-    double m;
-
-    for (i = 0; i < job->num_nodes; i++) {
-        m = job->nodes[i].m;
-        if (m > TOL) {
-            job->nodes[i].x_t = job->nodes[i].mx_t / m;
-            job->nodes[i].y_t = job->nodes[i].my_t / m;
-        } else {
-            job->nodes[i].x_t = 0;
-            job->nodes[i].y_t = 0;
-        }
-    }
-
-    int i_new;
-    for (i = 0; i < job->num_nodes; i++) {
-        i_new = job->node_number_override[NODAL_DOF * i] / NODAL_DOF;
-
-        if (i == i_new) { continue; }
-
-        assert(job->nodes[i].ux == job->nodes[i_new].ux);
-        assert(job->nodes[i].uy == job->nodes[i_new].uy);
-        assert(job->nodes[i].mx_t == job->nodes[i_new].mx_t);
-        assert(job->nodes[i].my_t == job->nodes[i_new].my_t);
-        assert(job->nodes[i].mx_tt == job->nodes[i_new].mx_tt);
-        assert(job->nodes[i].my_tt == job->nodes[i_new].my_tt);
-        assert(job->nodes[i].x_t == job->nodes[i_new].x_t);
-        assert(job->nodes[i].y_t == job->nodes[i_new].y_t);
-        assert(job->nodes[i].x_tt == job->nodes[i_new].x_tt);
-        assert(job->nodes[i].y_tt == job->nodes[i_new].y_tt);
-    }
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void calculate_strainrate(job_t *job)
-{
-    calculate_strainrate_split(job, 0, job->num_particles);
-    return;
-}
-
 void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
 {
     int i, j, k;
@@ -1005,12 +928,6 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void move_particles_explicit_usl(job_t *job)
-{
-    move_particles_explicit_usl_split(job, 0, job->num_particles);
-    return;
-}
-
 void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop)
 {
     for (size_t i = p_start; i < p_stop; i++) {
@@ -1058,12 +975,6 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void update_particle_densities(job_t *job)
-{
-    update_particle_densities_split(job, 0, job->num_particles);
-    return;
-}
-
 void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop)
 {
     for (size_t i = p_start; i < p_stop; i++) {

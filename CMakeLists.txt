@@ -1,7 +1,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
 PROJECT(mpm-2d)
 SET(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
-SET(CMAKE_C_FLAGS "-fPIC -march=native -std=gnu99 -g -O3 -Wall -Wextra")
+SET(CMAKE_C_FLAGS "-fPIC -march=native -std=gnu99 -g -O3 -Wall -Wextra -Wstrict-prototypes")
 SET(CMAKE_CXX_FLAGS "-fPIC -march=native -std=c++11 -g -O3 -Wall -Wextra")
 # SET(CMAKE_C_FLAGS "-march=native -std=gnu99 -g -O3 -Wall -Wextra -Werror")
 
