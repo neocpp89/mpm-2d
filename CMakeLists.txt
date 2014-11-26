@@ -59,10 +59,10 @@ if (FTGL_FOUND AND FREETYPE_FOUND
 endif()
 
 # create output directories for examples
-file(MAKE_DIRECTORY examples/silo/ouptut)
-file(MAKE_DIRECTORY examples/heap/ouptut)
-file(MAKE_DIRECTORY examples/square-hopper/ouptut)
-file(MAKE_DIRECTORY examples/hopper/ouptut)
+file(MAKE_DIRECTORY examples/silo/output)
+file(MAKE_DIRECTORY examples/heap/output)
+file(MAKE_DIRECTORY examples/square-hopper/output)
+file(MAKE_DIRECTORY examples/hopper/output)
 
 # copy examples over
 install(DIRECTORY examples DESTINATION mpm)
