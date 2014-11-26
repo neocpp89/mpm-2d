@@ -1,6 +1,5 @@
 add_library(mpm
     element.c
-    implicit.c
     interpolate.c
     loading.c
     map.c
