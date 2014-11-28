@@ -1,9 +1,10 @@
 /**
-    \file bc.c
+    \file box.c
     \author Sachith Dunatunga
     \date 04.06.12
 
-    mpm_2d -- An implementation of the Material Point Method in 2D.
+    A boundary condition file for a 2D box. You can set the dimensions as well
+    as the friction boundary conditions as properties in the configuration file.
 */
 #include <stdio.h>
 #include <stdlib.h>
