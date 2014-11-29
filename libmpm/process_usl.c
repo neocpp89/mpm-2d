@@ -15,6 +15,7 @@
 #include "particle.h"
 #include "node.h"
 #include "process.h"
+#include "process_usl.h"
 #include "material.h"
 #include "exitcodes.h"
 #include "map.h"
@@ -23,8 +24,6 @@
 #include <assert.h>
 
 #define TOL 1e-10
-
-#define signum(x) ((int)((0 < x) - (x < 0)))
 
 #define ijton(i,j,N) ((j)*N + (i))
 #define N_TO_P(j,tok,i) SMEAR(j,tok,i,h)
@@ -52,9 +51,6 @@
 #define __E(j,p) j->in_element[p]
 #define __N(j,p,n) j->elements[__E(j,p)].nodes[n]
 #define __NE(j,e,n) j->elements[e].nodes[n]
-
-/*#define WHICH_ELEMENT4(xp,yp,N,h) \*/
-/*    (floor(xp/h) + floor(yp/h)*(N-1))*/
 
 /* XXX: ugly, fix soon */
 #define WHICH_ELEMENT4(xp,yp,N,h) \
@@ -105,12 +101,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->num_elements = (N - 1) * (N - 1);
 
     /* Copy particles from given ICs. */
-    fprintf(stderr, "Each particle is %zu bytes.\n", sizeof(particle_t));
     job->particles = (particle_t *)calloc(num_particles, sizeof(particle_t));
-    fprintf(stderr, "%zu bytes (%.2g MB) allocated for %d particles.\n",
-        num_particles * sizeof(particle_t),
-        num_particles * sizeof(particle_t) / 1048576.0,
-        num_particles);
     memcpy(job->particles, particles, num_particles * sizeof(particle_t));
 
     /* Set stress, strain to zero. */
@@ -152,27 +143,16 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
         job->particles[i].corners[3][1] = 0;
         job->particles[i].color = 0;
     }
-    fprintf(stderr, "Done setting initial particle data.\n");
 
     /* Get node coordinates. */
-    fprintf(stderr, "Each node is %zu bytes.\n", sizeof(node_t));
     job->nodes = (node_t *)calloc(job->num_nodes, sizeof(node_t));
-    fprintf(stderr, "%zu bytes (%.2g MB) allocated for %zu nodes.\n",
-        job->num_nodes * sizeof(node_t),
-        job->num_nodes * sizeof(node_t) / 1048576.0,
-        job->num_nodes);
     for (i = 0; i < job->num_nodes; i++) {
         node_number_to_coords(&(job->nodes[i].x), &(job->nodes[i].y), i, N, h);
         /* printf("preprocessing: xn=%g yn=%g\n", job->nodes[i].x, job->nodes[i].y); */
     }
 
     /* Get node numbering for elements. */
-    fprintf(stderr, "Each element is %zu bytes.\n", sizeof(element_t));
     job->elements = (element_t *)calloc(job->num_elements, sizeof(element_t));
-    fprintf(stderr, "%zu bytes (%.2g MB) allocated for %zu elements.\n",
-        job->num_elements * sizeof(element_t),
-        job->num_elements * sizeof(element_t) / 1048576.0,
-        job->num_elements);
     for (i = 0; i < job->num_elements; i++) {
         n = ijton(i % (job->N - 1), i / (job->N - 1), job->N);
 
@@ -283,8 +263,6 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     job->material.fp64_props = NULL;
     job->material.int_props = NULL;
     job->material.material_filename = NULL;
-    //job->material.material_filename = (char *)malloc(16);
-    //strcpy(job->material.material_filename, "builtin");
     job->material.material_init = &material_init_linear_elastic;
     job->material.calculate_stress = &calculate_stress_linear_elastic;
 

@@ -5,7 +5,7 @@ add_library(mpm
     map.c
     material.c
     particle.c
-    process.c
+    process_usl.c
     rtsafe.c
     tensor.c
 )
