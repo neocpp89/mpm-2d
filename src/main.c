@@ -278,7 +278,7 @@ int main(int argc, char **argv)
 
     grid_t g;
     particle_t *pdata = NULL;
-    int plen;
+    size_t plen;
 
     job_t *job = NULL;
     FILE *state_fd;

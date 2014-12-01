@@ -9,7 +9,7 @@
 #define __PROCESS_USL_H__
 #include "process.h"
 
-job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t);
+job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, double t);
 void explicit_mpm_step_musl_threaded(void *_task);
 void explicit_mpm_step_usl_threaded(void *_task);
 void move_grid_split(job_t *job, size_t n_start, size_t n_stop);

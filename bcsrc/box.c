@@ -105,17 +105,14 @@ void bc_time_varying(job_t *job)
 /*----------------------------------------------------------------------------*/
 void generate_dirichlet_bcs(job_t *job)
 {
-    int n;
-    int i, j;
-
-    for (i = 0; i < job->num_nodes; i++) {
-        for (j = 0; j < NODAL_DOF; j++) {
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        for (size_t j = 0; j < NODAL_DOF; j++) {
             job->u_dirichlet_mask[NODAL_DOF * i + j] = 0;
         }
     }
 
     /* Floor and ceiling. */
-    for (n = left_col; n <= right_col; n++) {
+    for (size_t n = left_col; n <= right_col; n++) {
         size_t b = n + bottom_row * job->N;
         size_t t = n + top_row * job->N;
 
@@ -141,7 +138,7 @@ void generate_dirichlet_bcs(job_t *job)
     }
 
     /* Side walls. */
-    for (n = bottom_row; n <= top_row; n++) {
+    for (size_t n = bottom_row; n <= top_row; n++) {
         size_t l = n*job->N + left_col;
         size_t r = n*job->N + right_col;
 
@@ -173,10 +170,8 @@ void generate_dirichlet_bcs(job_t *job)
 /*----------------------------------------------------------------------------*/
 void generate_node_number_override(job_t *job)
 {
-    int i, j;
-
-    for (i = 0; i < job->num_nodes; i++) {
-        for (j = 0; j < NODAL_DOF; j++) {
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        for (size_t j = 0; j < NODAL_DOF; j++) {
             job->node_number_override[NODAL_DOF * i + j] = (NODAL_DOF * i + j);
         }
     }
@@ -187,12 +182,10 @@ void generate_node_number_override(job_t *job)
 /* Only zeros out entries for now... */
 void bc_momentum(job_t *job)
 {
-    int i, j, m, n;
-
-    for (i = 0; i < job->num_nodes; i++) {
-        for (j = 0; j < NODAL_DOF; j++) {
-            n = NODAL_DOF * i + j;
-            m = job->node_number_override[n];
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        for (size_t j = 0; j < NODAL_DOF; j++) {
+            size_t n = NODAL_DOF * i + j;
+            size_t m = job->node_number_override[n];
             if (job->u_dirichlet_mask[m] != 0) {
                 /* only handle 0 displacement right now. */
                 if (job->u_dirichlet[m] == 0) {
@@ -211,12 +204,10 @@ void bc_momentum(job_t *job)
 /* Only zero out entries for now... */
 void bc_force(job_t *job)
 {
-    int i, j, m, n;
-
-    for (i = 0; i < job->num_nodes; i++) {
-        for (j = 0; j < NODAL_DOF; j++) {
-            n = NODAL_DOF * i + j;
-            m = job->node_number_override[n];
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        for (size_t j = 0; j < NODAL_DOF; j++) {
+            size_t n = NODAL_DOF * i + j;
+            size_t m = job->node_number_override[n];
             if (job->u_dirichlet_mask[m] != 0) {
                 /* only handle 0 displacement right now. */
                 if (job->u_dirichlet[m] == 0) {

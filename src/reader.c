@@ -37,15 +37,13 @@ int read_grid_params(grid_t *grid, const char *fname)
 /*----------------------------------------------------------------------------*/
 
 /*---read_particles-----------------------------------------------------------*/
-int read_particles(particle_t **particles, int *num_particles, const char *fname)
+int read_particles(particle_t **particles, size_t *num_particles, const char *fname)
 {
     FILE *fp;
-    int i, r;
+    int r;
 
     char s[16384];
     char *tok;
-    double value;
-    int field;
 
     fp = fopen(fname, "r");
     if (fp == NULL) {
@@ -60,17 +58,17 @@ int read_particles(particle_t **particles, int *num_particles, const char *fname
         printf("Couldn't read number of particles!\n");
         exit(-1);
     }
-    *particles = (particle_t *)malloc(sizeof(particle_t) * (*num_particles));
+    *particles = calloc(*num_particles, sizeof(particle_t));
 
-
-    for (i = 0; i < *num_particles; i++) {
+    for (size_t i = 0; i < *num_particles; i++) {
         if (NULL == fgets(s, sizeof(s)/sizeof(char), fp)) {
             fprintf(stderr, "can't read initial particle file.\n");
             continue;
         }
-        field = 0;
+        int field = 0;
         tok = strtok(s, " ,");
         while (tok != NULL) {
+            double value;
             sscanf(tok, "%lg", &value);
             switch (field) {
                 case 0:
@@ -111,7 +109,7 @@ int read_particles(particle_t **particles, int *num_particles, const char *fname
             (*particles)[i].syy = 0;
         }
         if (field < 6) {
-            fprintf(stderr, "error reading particle %d\n", i);
+            fprintf(stderr, "error reading particle %zu\n", i);
         }
     }
 
@@ -124,13 +122,12 @@ int read_particles(particle_t **particles, int *num_particles, const char *fname
 /*---read_state---------------------------------------------------------------*/
 job_t *read_state(FILE *fd)
 {
-    int i, j, r;
     int dep;
     job_t *job;
 
-    job = (job_t *)malloc(sizeof(job_t));
+    job = calloc(1, sizeof(job_t));
 
-    r = fscanf(fd, "%lg %lg %lg", &(job->t), &(job->dt), &(job->t_stop));
+    int r = fscanf(fd, "%lg %lg %lg", &(job->t), &(job->dt), &(job->t_stop));
     r += fscanf(fd, "%zu %zu %zu", &(job->num_particles), &(job->num_nodes), &(job->num_elements));
     r += fscanf(fd, "%d %lg", &(job->N), &(job->h));
 
@@ -139,45 +136,30 @@ job_t *read_state(FILE *fd)
         exit(-1);
     }
 
-    job->particles = (particle_t *)malloc(sizeof(particle_t) * job->num_particles);
-    job->nodes = (node_t *)malloc(sizeof(node_t) * job->num_nodes);
-    job->elements = (element_t *)malloc(sizeof(element_t) * job->num_elements);
+    job->particles = calloc(job->num_particles, sizeof(particle_t));
+    job->nodes = calloc(job->num_nodes, sizeof(node_t));
+    job->elements = calloc(job->num_elements, sizeof(element_t));
 
     /* Allocate space for tracking element->particle map. */
     job->in_element =  (int *)malloc(job->num_particles * sizeof(int));
 
     /* Allocate space for interpolation functions. */
-    job->h1 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h2 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h3 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h4 = (double *)malloc(job->num_particles * sizeof(double));
-/*    job->h5 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->h6 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->h7 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->h8 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->h9 = (double *)malloc(job->num_particles * sizeof(double));*/
+    job->h1 = calloc(sizeof(double), job->num_particles);
+    job->h2 = calloc(sizeof(double), job->num_particles);
+    job->h3 = calloc(sizeof(double), job->num_particles);
+    job->h4 = calloc(sizeof(double), job->num_particles);
 
-    job->b11 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b12 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b13 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b14 = (double *)malloc(job->num_particles * sizeof(double));
-/*    job->b15 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->b16 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->b17 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->b18 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->b19 = (double *)malloc(job->num_particles * sizeof(double));*/
+    job->b11 = calloc(sizeof(double), job->num_particles);
+    job->b12 = calloc(sizeof(double), job->num_particles);
+    job->b13 = calloc(sizeof(double), job->num_particles);
+    job->b14 = calloc(sizeof(double), job->num_particles);
 
-    job->b21 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b22 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b23 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b24 = (double *)malloc(job->num_particles * sizeof(double));
-/*    job->b25 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->b26 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->b27 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->b28 = (double *)malloc(job->num_particles * sizeof(double));*/
-/*    job->b29 = (double *)malloc(job->num_particles * sizeof(double));*/
+    job->b21 = calloc(sizeof(double), job->num_particles);
+    job->b22 = calloc(sizeof(double), job->num_particles);
+    job->b23 = calloc(sizeof(double), job->num_particles);
+    job->b24 = calloc(sizeof(double), job->num_particles);
 
-    for (i = 0; i < job->num_particles; i++) {
+    for (size_t i = 0; i < job->num_particles; i++) {
         /* Position */
         r = fscanf(fd, "%lg %lg", &(job->particles[i].x), &(job->particles[i].y));
 
@@ -225,7 +207,7 @@ job_t *read_state(FILE *fd)
 
         /* State Variables (for constitutive law) */
         r += fscanf(fd, "%d", &dep);
-        for (j = 0; j < dep; j++) {
+        for (int j = 0; j < dep; j++) {
             r += fscanf(fd, "%lg", &(job->particles[i].state[j]));
         }
 
@@ -233,25 +215,25 @@ job_t *read_state(FILE *fd)
         r += fscanf(fd, "%d", &(job->active[i]));
 
         if (r != (26 + dep + 1)) {
-            printf("error reading state of particle %d\n", i);
+            printf("error reading state of particle %zu\n", i);
         }
     }
 
-    for (i = 0; i < job->num_nodes; i++) {
-        r = fscanf(fd, "%lg %lg", &(job->nodes[i].x), &(job->nodes[i].y));
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        int r = fscanf(fd, "%lg %lg", &(job->nodes[i].x), &(job->nodes[i].y));
         if (r != 2) {
-            printf("error reading state of node %d\n", i);
+            printf("error reading state of node %zu\n", i);
         }
     }
 
-    for (i = 0; i < job->num_elements; i++) {
-        r = fscanf(fd, "%d %d %d %d",
+    for (size_t i = 0; i < job->num_elements; i++) {
+        int r = fscanf(fd, "%d %d %d %d",
             &(job->elements[i].nodes[0]),
             &(job->elements[i].nodes[1]),
             &(job->elements[i].nodes[2]),
             &(job->elements[i].nodes[3]));
         if (r != 4) {
-            printf("error reading state of element %d\n", i);
+            printf("error reading state of element %zu\n", i);
         }
     }
 

@@ -78,7 +78,7 @@
 #define CHECK_ACTIVE(j,i) if (j->active[i] == 0) { continue; }
 
 /*----------------------------------------------------------------------------*/
-job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t)
+job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, double t)
 {
     int n;
 
