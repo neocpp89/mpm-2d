@@ -25,28 +25,15 @@
 
 #define TOL 1e-10
 
-#define ijton(i,j,N) ((j)*N + (i))
+#define ijton(i,j,N) ((j)*(N) + (i))
 #define N_TO_P(j,tok,i) SMEAR(j,tok,i,h)
 #define DX_N_TO_P(j,tok,c,i) (c) * SMEAR(j,tok,i,b1)
 #define DY_N_TO_P(j,tok,c,i) (c) * SMEAR(j,tok,i,b2)
-
-#define IS_VALID_ELEMENT_COORD4(r,c,N) \
-    (((r) < (N)) && ((r) >= 0) && ((c) < (N)) && ((c) >= 0))
-
-#define FILL_ELEMENT_NEIGHBOR(en,r,c,N) \
-    do { \
-        if (IS_VALID_ELEMENT_COORD((r),(c),(N))) { \
-            en = (r)*(N) + (c); \
-        } else { \
-            en = -1; \
-        } \
-    } while(0)
 
 #define SMEAR SMEAR4
 #define ACCUMULATE ACCUMULATE4
 #define ACCUMULATE_WITH_MUL ACCUMULATE_WITH_MUL4
 #define WHICH_ELEMENT WHICH_ELEMENT4
-#define IS_VALID_ELEMENT_COORD IS_VALID_ELEMENT_COORD4
 
 #define __E(j,p) j->in_element[p]
 #define __N(j,p,n) j->elements[__E(j,p)].nodes[n]
@@ -163,6 +150,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, do
 /*    for (i = 0; i < job->num_colors; i++) {*/
 /*        job->color_list_lengths[i] = 0;*/
 /*    }*/
+    const size_t Ne = job->N - 1;
     for (size_t i = 0; i < job->num_elements; i++) {
         size_t r = i / (job->N - 1);
         size_t c = i % (job->N - 1);
@@ -173,16 +161,40 @@ job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, do
 
         /*
             Fill neighbor array starting with element to the right and
-           moving in a postive direction (ccw).
+            moving in a postive direction (ccw). If there is no neighbor,
+            set that neighbor to (-1).
         */
-        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[0], r, c+1, (job->N - 1));
-        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[1], r+1, c+1, (job->N - 1));
-        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[2], r+1, c, (job->N - 1));
-        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[3], r+1, c-1, (job->N - 1));
-        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[4], r, c-1, (job->N - 1));
-        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[5], r-1, c-1, (job->N - 1));
-        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[6], r-1, c, (job->N - 1));
-        FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[7], r-1, c+1, (job->N - 1));
+        for (size_t j = 0; j < 8; j++) {
+            job->elements[i].neighbors[j] = -1;
+        }
+
+        if (r != Ne) {
+            job->elements[i].neighbors[2] = ijton(r+1, c, Ne);
+            if (c != Ne) {
+                job->elements[i].neighbors[1] = ijton(r+1, c+1, Ne);
+            }
+            if (c != 0) {
+                job->elements[i].neighbors[3] = ijton(r+1, c-1, Ne);
+            }
+        }
+
+        if (r != 0) {
+            job->elements[i].neighbors[6] = ijton(r-1, c, Ne);
+            if (c != Ne) {
+                job->elements[i].neighbors[7] = ijton(r-1, c+1, Ne);
+            }
+            if (c != 0) {
+                job->elements[i].neighbors[5] = ijton(r-1, c-1, Ne);
+            }
+        }
+
+        if (c != Ne) {
+            job->elements[i].neighbors[0] = ijton(r, c+1, Ne);
+        }
+
+        if (c != 0) {
+            job->elements[i].neighbors[4] = ijton(r, c-1, Ne);
+        }
 
     }
     for (size_t i = 0; i < job->num_colors; i++) {

@@ -97,8 +97,8 @@ headerinfo_t particle_out_fields[] = {
 
 /*---Version 2 of output format-----------------------------------------------*/
 size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
-    size_t (*particle_output_fn)(FILE *, job_t *, particle_t *),
-    size_t (*element_output_fn)(FILE *, job_t *, element_t *))
+    size_t (*particle_output_fn)(FILE *, particle_t *),
+    size_t (*element_output_fn)(FILE *, element_t *))
 {
     size_t i = 0;
     size_t bytes_out = 0;
@@ -124,7 +124,7 @@ size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
             /* Write particle data from simulation. */
             for (i = 0; i < job->num_particles; i++) {
                 if (job->active[i]) {
-                    bytes_out += (*particle_output_fn)(fp, job, &(job->particles[i]));
+                    bytes_out += (*particle_output_fn)(fp, &(job->particles[i]));
                     particles_written++;
                 }
             }
@@ -146,13 +146,12 @@ size_t v2_write_frame(const char *directory, FILE *metafd, job_t *job,
     return bytes_out;
 }
 
-size_t v2_write_particle(FILE *fd, job_t *job, particle_t *p)
+size_t v2_write_particle(FILE *fd, particle_t *p)
 {
-    size_t i = 0;
-    size_t bytes_out = 0;
-
-    bytes_out += fprintf(fd, "%zu", p->id); 
-    for (i = 0; i < sizeof(particle_out_fields)/sizeof(particle_out_fields[0]); i++) {
+    const size_t num_fields =
+            sizeof(particle_out_fields) / sizeof(particle_out_fields[0]);
+    size_t bytes_out = fprintf(fd, "%zu", p->id);
+    for (size_t i = 0; i < num_fields; i++) {
         bytes_out += fprintf(fd, ",");
         bytes_out += fprintf(fd,
             particle_out_fields[i].format_specifier,
@@ -205,7 +204,6 @@ void write_frame(FILE *fd, size_t frame, double time, job_t *job)
 /*---write_element_frame------------------------------------------------------*/
 void write_element_frame(FILE *fd, size_t frame, double time, job_t *job)
 {
-    int i;
     int e;
     double *sxx_acc;
     double *sxy_acc;
@@ -220,14 +218,14 @@ void write_element_frame(FILE *fd, size_t frame, double time, job_t *job)
     syy_acc = (double *)malloc(sizeof(double) * job->num_elements);
     v_acc = (double *)malloc(sizeof(double) * job->num_elements);
 
-    for (i = 0; i < job->num_elements; i++) {
+    for (size_t i = 0; i < job->num_elements; i++) {
         sxx_acc[i] = 0.0f;
         sxy_acc[i] = 0.0f;
         syy_acc[i] = 0.0f;
         v_acc[i] = 0.0f;
     }
 
-    for (i = 0; i < job->num_particles; i++) {
+    for (size_t i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
             continue;
         }
@@ -240,7 +238,7 @@ void write_element_frame(FILE *fd, size_t frame, double time, job_t *job)
 
     fprintf(fd, "%zu %lg %zu\n", frame, time, job->num_elements);
 
-    for (i = 0; i < job->num_elements; i++) {
+    for (size_t i = 0; i < job->num_elements; i++) {
         node_number_to_coords(&x, &y, job->elements[i].nodes[0], job->N, job->h);
         fprintf(fd, "%lg %lg ", x, y);
         node_number_to_coords(&x, &y, job->elements[i].nodes[1], job->N, job->h);
@@ -267,13 +265,11 @@ void write_element_frame(FILE *fd, size_t frame, double time, job_t *job)
 /*---write_state--------------------------------------------------------------*/
 void write_state(FILE *fd, job_t *job)
 {
-    int i, j;
-
     fprintf(fd, "%lg %lg %lg\n", job->t, job->dt, job->t_stop);
     fprintf(fd, "%zu %zu %zu\n", job->num_particles, job->num_nodes, job->num_elements);
-    fprintf(fd, "%d %lg\n", job->N, job->h);
+    fprintf(fd, "%zu %lg\n", job->N, job->h);
 
-    for (i = 0; i < job->num_particles; i++) {
+    for (size_t i = 0; i < job->num_particles; i++) {
         /* Position */
         fprintf(fd, "%lg %lg\n", job->particles[i].x, job->particles[i].y);
 
@@ -360,7 +356,7 @@ void write_state(FILE *fd, job_t *job)
 
         /* State Variables (for constitutive law) */
         fprintf(fd, "%d\n", DEPVAR);
-        for (j = 0; j < DEPVAR; j++) {
+        for (size_t j = 0; j < DEPVAR; j++) {
             fprintf(fd, "%lg\n", job->particles[i].state[j]);
         }
 
@@ -368,11 +364,11 @@ void write_state(FILE *fd, job_t *job)
         fprintf(fd, "%d\n", job->active[i]);
     }
 
-    for (i = 0; i < job->num_nodes; i++) {
+    for (size_t i = 0; i < job->num_nodes; i++) {
         fprintf(fd, "%lg %lg\n", job->nodes[i].x, job->nodes[i].y);
     }
 
-    for (i = 0; i < job->num_elements; i++) {
+    for (size_t i = 0; i < job->num_elements; i++) {
          fprintf(fd, "%d %d %d %d\n",
             job->elements[i].nodes[0],
             job->elements[i].nodes[1],

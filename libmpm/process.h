@@ -94,8 +94,8 @@ typedef struct mat_control_s {
 
     double *fp64_props;
     int *int_props;
-    int num_fp64_props;
-    int num_int_props;
+    size_t num_fp64_props;
+    size_t num_int_props;
 } material_control_t;
 
 typedef struct bc_control_s {
@@ -109,8 +109,8 @@ typedef struct bc_control_s {
     
     double *fp64_props;
     int *int_props;
-    int num_fp64_props;
-    int num_int_props;
+    size_t num_fp64_props;
+    size_t num_int_props;
 } boundary_control_t;
 
 typedef struct job_s {

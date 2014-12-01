@@ -53,7 +53,7 @@ int read_particles(particle_t **particles, size_t *num_particles, const char *fn
     if (NULL == fgets(s, sizeof(s)/sizeof(char), fp)) {
         fprintf(stderr, "can't read initial particle file (num particles).\n");
     }
-    r = sscanf(s, "%d", num_particles);
+    r = sscanf(s, "%zu", num_particles);
     if (r != 1) {
         printf("Couldn't read number of particles!\n");
         exit(-1);
@@ -129,7 +129,7 @@ job_t *read_state(FILE *fd)
 
     int r = fscanf(fd, "%lg %lg %lg", &(job->t), &(job->dt), &(job->t_stop));
     r += fscanf(fd, "%zu %zu %zu", &(job->num_particles), &(job->num_nodes), &(job->num_elements));
-    r += fscanf(fd, "%d %lg", &(job->N), &(job->h));
+    r += fscanf(fd, "%zu %lg", &(job->N), &(job->h));
 
     if (r != 8) {
         printf("Error reading state header!\n");

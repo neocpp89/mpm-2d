@@ -44,12 +44,12 @@ int bc_validate(job_t *job)
     double x0, y0, w, h;
 
     if (job->boundary.num_fp64_props != 4) {
-        fprintf(stderr, "%s:%s: Wrong number of floating point boundary condition properties. Expected 4, got %d.\n", __FILE__, __func__, job->boundary.num_fp64_props);
+        fprintf(stderr, "%s:%s: Wrong number of floating point boundary condition properties. Expected 4, got %zu.\n", __FILE__, __func__, job->boundary.num_fp64_props);
         return 0;
     }
 
     if (job->boundary.num_int_props != 4) {
-        fprintf(stderr, "%s:%s: Wrong number of integer boundary condition properties. Expected 4, got %d.\n", __FILE__, __func__, job->boundary.num_int_props);
+        fprintf(stderr, "%s:%s: Wrong number of integer boundary condition properties. Expected 4, got %zu.\n", __FILE__, __func__, job->boundary.num_int_props);
         return 0;
     }
 

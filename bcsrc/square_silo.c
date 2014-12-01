@@ -32,7 +32,7 @@ void bc_init(job_t *job)
 int bc_validate(job_t *job)
 {
     if (job->boundary.num_fp64_props != 3) {
-        fprintf(stderr, "%s:%s: Wrong number of floating point boundary condition properties. Expected 3, got %d.\n", __FILE__, __func__, job->boundary.num_fp64_props);
+        fprintf(stderr, "%s:%s: Wrong number of floating point boundary condition properties. Expected 3, got %zu.\n", __FILE__, __func__, job->boundary.num_fp64_props);
         return 0;
     }
 

@@ -28,6 +28,7 @@
 #include "particle.h"
 #include "point.h"
 #include "process.h"
+#include "process_usl.h"
 #include "reader.h"
 #include "writer.h"
 
@@ -79,10 +80,12 @@ void *mpm_run_until(void *_task);
 /*----------------------------------------------------------------------------*/
 void signal_callback_handler(int signum)
 {
-   want_sigterm = 1;
-   fprintf(stderr, "\nRecieved sigterm, terminating.\n");
-   exit(0);
-   return;
+    if (signum == SIGTERM) {
+        want_sigterm = 1;
+    }
+    fprintf(stderr, "\nRecieved sigterm, terminating.\n");
+    exit(0);
+    return;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -263,7 +266,7 @@ int main(int argc, char **argv)
         "N/A"
     };
 
-    int num_threads = 1;
+    size_t num_threads = 1;
     char *s;
     char *s_dlerror;
 
@@ -467,8 +470,8 @@ int main(int argc, char **argv)
     fprintf(stderr, "\nMaterial options set:\n");
     fprintf(stderr, "material_filename: %s\n", (job->material.use_builtin)?"builtin":job->material.material_filename);
     fprintf(stderr, "use_builtin: %d\n", job->material.use_builtin);
-    fprintf(stderr, "num_fp64_props: %d\n", job->material.num_fp64_props);
-    fprintf(stderr, "num_int_props: %d\n", job->material.num_int_props);
+    fprintf(stderr, "num_fp64_props: %zu\n", job->material.num_fp64_props);
+    fprintf(stderr, "num_int_props: %zu\n", job->material.num_int_props);
 
     fprintf(stderr, "fp64_props: { ");
     for (size_t i = 0; i < job->material.num_fp64_props; i++) {
@@ -559,8 +562,8 @@ int main(int argc, char **argv)
     fprintf(stderr, "\nBoundary options set:\n");
     fprintf(stderr, "bc_filename: %s\n", job->boundary.bc_filename);
     fprintf(stderr, "use_builtin: %d\n", job->boundary.use_builtin);
-    fprintf(stderr, "num_fp64_props: %d\n", job->boundary.num_fp64_props);
-    fprintf(stderr, "num_int_props: %d\n", job->boundary.num_int_props);
+    fprintf(stderr, "num_fp64_props: %zu\n", job->boundary.num_fp64_props);
+    fprintf(stderr, "num_int_props: %zu\n", job->boundary.num_int_props);
 
     fprintf(stderr, "fp64_props: { ");
     for (size_t i = 0; i < job->boundary.num_fp64_props; i++) {
@@ -740,7 +743,7 @@ int main(int argc, char **argv)
     job->dt = job->timestep.dt;
 job_start:
     fprintf(stderr, "\nRunning Simulation to %g seconds.\n", job->t_stop);
-    fprintf(stderr, "Grid size is (%d, %d); spacing is %g.\n", job->N, job->N, job->h);
+    fprintf(stderr, "Grid size is (%zu, %zu); spacing is %g.\n", job->N, job->N, job->h);
 
     tasks = (threadtask_t *)malloc(sizeof(threadtask_t) * num_threads);
     job->step_barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t));
@@ -772,7 +775,7 @@ job_start:
     }
     job->num_threads = num_threads;
     threads = (pthread_t *)malloc(sizeof(pthread_t) * job->num_threads);
-    printf("Using %d %s.\n", num_threads, (num_threads > 1)?"threads":"thread");
+    printf("Using %zu %s.\n", num_threads, (num_threads > 1)?"threads":"thread");
     if(pthread_barrier_init(job->step_barrier, NULL, num_threads))
     {
         fprintf(stderr, "Could not create pthread step_barrier!\n");
@@ -888,9 +891,6 @@ _commandline_error:
 _cfgfile_error:
     fprintf(stderr, "Exiting.\n");
 
-    /* kill all threads */
-    // pthread_exit(NULL);
-
     FREE_AND_NULL(tasks);
     FREE_AND_NULL(threads);
 
@@ -923,6 +923,9 @@ _cfgfile_error:
     if (material_so_handle != NULL) {
         dlclose(material_so_handle);
     }
+
+    /* kill all threads */
+    pthread_exit(NULL);
 
     return 0;
 }
