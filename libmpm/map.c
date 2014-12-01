@@ -61,8 +61,6 @@ void accumulate_p_to_n_doublescalar(node_t *nodes,
     return;
 }
 /*----------------------------------------------------------------------------*/
-#pragma GCC push_options
-#pragma GCC optimize ("unroll-loops")
 /*---Accumulates a list of scalars of type double to nodes.  -----------------*/
 void accumulate_p_to_n_ds_list(node_t *nodes,
     const size_t * restrict node_field_offset, const int * restrict nodelist, const double * restrict sfvalues, 
@@ -123,4 +121,3 @@ void accumulate_p_to_n_ds_list42(node_t *nodes,
     return;
 }
 /*----------------------------------------------------------------------------*/
-#pragma GCC pop_options
