@@ -30,7 +30,8 @@ foreach(matc ${LOCAL_MATERIALS})
     target_link_libraries(material_${mat} pthread)
     target_link_libraries(material_${mat} m)
     target_link_libraries(material_${mat} mpm)
-    add_test(test_material_${mat} material_${mat})
+    configure_file(${mat}.cfg ${CMAKE_CURRENT_BINARY_DIR}/${mat}.cfg COPYONLY)
+    add_test(test_material_${mat} material_${mat} ${mat}.cfg)
 endforeach(matc)
 
 # We need a different test for the nonlocal materials...

@@ -16,6 +16,7 @@
 #include "material.h"
 #include "exitcodes.h"
 
+void material_init(job_t *job);
 void calculate_stress(job_t *job);
 
 double mu(particle_t *p)
@@ -87,13 +88,52 @@ void update_density(particle_t *p, double dt)
 
 int main(int argc, char **argv)
 {
+    const size_t maxlinelen = 80;
+    char line[maxlinelen];
+
+    if (argc <= 1) {
+        printf("%s usage: %s CONFIGURATION [TIMESTEP]\n", argv[0], argv[0]);
+        printf(" CONFIGURATION: file where the first two lines are hex file\n");
+        printf("                and decimal file respectively. Next lines\n");
+        printf("                are floating point options for material.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    const char *infile = argv[1];
+    int num_lines = 0;
+    FILE *cfg = fopen(infile, "r");
+    if (cfg == NULL) {
+        fprintf(stderr, "error opening configuration file.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    FILE *fp = NULL;
+    FILE *fpd = NULL;
+    double *testprops = NULL;
+    while (NULL != fgets(line, maxlinelen, cfg)) {
+        if (num_lines == 0) {
+            line[strlen(line)-1] = '\0'; //remove newline
+            fp = fopen(line, "w");
+        } else if (num_lines == 1) {
+            line[strlen(line)-1] = '\0'; //remove newline
+            fpd = fopen(line, "w");
+        } else {
+            testprops = realloc(testprops, sizeof(double)*((num_lines-2)+1));
+            sscanf(line, "%lg", &(testprops[num_lines-2]));
+        }
+        num_lines++;
+    }
+
+    if (num_lines < 2) {
+        fprintf(stderr, "error in configuration file.\n");
+        exit(EXIT_FAILURE);
+    }
+
     job_t testjob;
-/*    double testprops[2] = { 72.0e3/7.0, 2.0/7.0 };*/
     int a[1] = {1};
-    // double testprops[2] = { 1e4, 0.3 };
-    double testprops[2] = { 1e6, 0.3 };
     double t_stop = 1.25;
     particle_t p;
+    memset(&p, 0, sizeof(particle_t));
 
     p.sxx = -1;
     p.sxy = 0;
@@ -104,23 +144,18 @@ int main(int argc, char **argv)
     testjob.num_particles = 1;
     testjob.active = a;
     testjob.particles = &p;
-    testjob.material.num_fp64_props = 2;
+    testjob.material.num_fp64_props = num_lines - 2;
     testjob.material.fp64_props = testprops;
     testjob.t = 0;
     testjob.dt = 1e-3;
 
-
-    if (argc > 1) {
-        testjob.dt = atof(argv[1]);
+    if (argc > 2) {
+        testjob.dt = atof(argv[2]);
     }
 
     if (testjob.dt <= 0) {
         testjob.dt = 1e-3;
     }
-
-
-    FILE *fp = fopen("mattest_output.csv", "w");
-    FILE *fpd = fopen("mattest_output_dec.csv", "w");
     
     material_init(&testjob);
     fprintf(fp, "%a,%a,%a,%a,%a,%a,%a,%a,%a,%a\n",
