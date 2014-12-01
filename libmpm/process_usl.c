@@ -80,7 +80,6 @@
 /*----------------------------------------------------------------------------*/
 job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, double t)
 {
-    int i;
     int n;
 
     int r,c;
@@ -105,10 +104,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     memcpy(job->particles, particles, num_particles * sizeof(particle_t));
 
     /* Set stress, strain to zero. */
-    for (i = 0; i < job->num_particles; i++) {
-/*        job->particles[i].sxx = 0;*/
-/*        job->particles[i].sxy = 0;*/
-/*        job->particles[i].syy = 0;*/
+    for (size_t i = 0; i < job->num_particles; i++) {
         job->particles[i].real_sxx = job->particles[i].sxx;
         job->particles[i].real_sxy = job->particles[i].sxy;
         job->particles[i].real_syy = job->particles[i].syy;
@@ -146,14 +142,14 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 
     /* Get node coordinates. */
     job->nodes = (node_t *)calloc(job->num_nodes, sizeof(node_t));
-    for (i = 0; i < job->num_nodes; i++) {
+    for (size_t i = 0; i < job->num_nodes; i++) {
         node_number_to_coords(&(job->nodes[i].x), &(job->nodes[i].y), i, N, h);
         /* printf("preprocessing: xn=%g yn=%g\n", job->nodes[i].x, job->nodes[i].y); */
     }
 
     /* Get node numbering for elements. */
     job->elements = (element_t *)calloc(job->num_elements, sizeof(element_t));
-    for (i = 0; i < job->num_elements; i++) {
+    for (size_t i = 0; i < job->num_elements; i++) {
         n = ijton(i % (job->N - 1), i / (job->N - 1), job->N);
 
         job->elements[i].nodes[0] = n + ijton(0,0,job->N);
@@ -169,7 +165,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
 /*    for (i = 0; i < job->num_colors; i++) {*/
 /*        job->color_list_lengths[i] = 0;*/
 /*    }*/
-    for (i = 0; i < job->num_elements; i++) {
+    for (size_t i = 0; i < job->num_elements; i++) {
         r = i / (job->N - 1);
         c = i % (job->N - 1);
 
@@ -191,12 +187,12 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
         FILL_ELEMENT_NEIGHBOR(job->elements[i].neighbors[7], r-1, c+1, (job->N - 1));
 
     }
-    for (i = 0; i < job->num_colors; i++) {
+    for (size_t i = 0; i < job->num_colors; i++) {
         job->color_indices[i] = 0;
     }
 
     /* Allocate space for tracking element->particle map. */
-    job->in_element =  (int *)malloc(job->num_particles * sizeof(int));
+    job->in_element = (int *)malloc(job->num_particles * sizeof(int));
 
     /* Allocate space for map of active particles. */
     job->active = (int *)malloc(job->num_particles * sizeof(int));
@@ -227,10 +223,10 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     /* for periodic BCs */
     job->node_number_override = (int *)malloc(job->vec_len * sizeof(int));
 
-    for (i = 0; i < job->num_particles; i++) {
+    for (size_t i = 0; i < job->num_particles; i++) {
         job->in_element[i] = WHICH_ELEMENT(
             job->particles[i].x, job->particles[i].y, job->N, job->h);
-        if (job->in_element[i] < 0 || job->in_element[i] > job->num_elements) {
+        if (job->in_element[i] < 0 || (size_t)job->in_element[i] > job->num_elements) {
             job->active[i] = 0;
         } else {
             job->active[i] = 1;
@@ -238,7 +234,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, int num_particles, doubl
     }
 
     /* set particle domains */
-    for (i = 0; i < job->num_particles; i++) {
+    for (size_t i = 0; i < job->num_particles; i++) {
         /* seems backwards, but only because loader contains
         current particle volume only. */
         job->particles[i].v0 = job->particles[i].v;
@@ -757,12 +753,11 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
 /*----------------------------------------------------------------------------*/
 void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
 {
-    int i, j, k;
     int ce, nn[4];
     double dx_tdy;
     double dy_tdx;
 
-    for (i = p_start; i < p_stop; i++) {
+    for (size_t i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
         job->particles[i].exx_t = 0;
         job->particles[i].exy_t = 0;
@@ -771,13 +766,13 @@ void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
 
         if (job->use_cpdi) {
             /* loop over corners */
-            for (j = 0; j < 4; j++) {
+            for (size_t j = 0; j < 4; j++) {
                 ce = job->particles[i].corner_elements[j];
                 /* corner is outside of particle domain. should probably deal with this better... */
                 if (ce == -1) {
                     continue;
                 }
-                for (k = 0; k < 4; k++) {
+                for (size_t k = 0; k < 4; k++) {
                     nn[k] = job->elements[ce].nodes[k];
 
                     /* actual volume of particle here (not averaging volume) */
