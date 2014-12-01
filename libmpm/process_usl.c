@@ -82,8 +82,6 @@ job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, do
 {
     int n;
 
-    int r,c;
-
     job_t *job;
 
     job = (job_t *)malloc(sizeof(job_t));
@@ -166,8 +164,8 @@ job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, do
 /*        job->color_list_lengths[i] = 0;*/
 /*    }*/
     for (size_t i = 0; i < job->num_elements; i++) {
-        r = i / (job->N - 1);
-        c = i % (job->N - 1);
+        size_t r = i / (job->N - 1);
+        size_t c = i % (job->N - 1);
 
         job->elements[i].color = 2 * (r % 2)  + ((c % 2) + 1) - 1;
 /*        job->color_list_lengths[job->elements[i].color % job->num_colors]++;*/
