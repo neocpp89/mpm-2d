@@ -26,7 +26,6 @@
 
 #include "material.h"
 #include "particle.h"
-#include "point.h"
 #include "process.h"
 #include "process_usl.h"
 #include "reader.h"

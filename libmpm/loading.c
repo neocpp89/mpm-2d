@@ -12,7 +12,6 @@
 
 #include "material.h"
 #include "particle.h"
-#include "point.h"
 #include "process.h"
 
 #define G_MAG 9.8
