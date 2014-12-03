@@ -63,6 +63,8 @@ void solve_diffusion_part(job_t *job);
 void calculate_stress_threaded(threadtask_t *task);
 
 static double E, nu, G, K;
+static double *Kp; //vector which is a solution of the matrix-vector product.
+static double *g; //nodal values of g
 
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
@@ -103,6 +105,12 @@ void material_init(job_t *job)
             __FILE__, __func__, E, nu, G , K);
     }
 
+    Kp = calloc(job->num_nodes, sizeof(double));
+    printf("%s:%s: Done allocating storage for matrix-vector multiply.\n",
+        __FILE__, __func__);
+    g = calloc(job->num_nodes, sizeof(double));
+    printf("%s:%s: Done allocating storage for nodal values of g.\n",
+        __FILE__, __func__);
     printf("%s:%s: (material version %s) done initializing material.\n",
         __FILE__,  __func__, MAT_VERSION_STRING);
     return;
