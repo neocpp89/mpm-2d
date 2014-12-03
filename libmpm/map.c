@@ -6,6 +6,7 @@
     mpm_2d -- An implementation of the Material Point Method in 2D.
 */
 #include "process.h"
+#include "map.h"
 
 /* IMPORTANT: Does not clear nodal quantites before accumulating! */
 /*---Maps scalars of type double to nodes. Uses shape functions.--------------*/
@@ -80,44 +81,26 @@ void accumulate_p_to_n_ds_list(node_t *nodes,
 
     return;
 }
-void accumulate_p_to_n_ds_list47(node_t *nodes,
-    const size_t * restrict node_field_offset, const int * restrict nodelist, const double * restrict sfvalues,
-    const double * restrict pdata)
-{
-    size_t i, j;
-    double * restrict ndata;
-    char * restrict nodeoff;
 
-    // nodelist length = 4
-    // pdata length = 7
-    for (i = 0; i < 4; i++) {
-        nodeoff = (char *)&(nodes[nodelist[i]]);
-        for (j = 0; j < 7; j++) {
-            ndata = (double *)(nodeoff + node_field_offset[j]);
-            *ndata += sfvalues[i] * pdata[j];
-        }
-    }
-
-    return;
+#define FIXED_ACCUMULATE_DOUBLE_LIST(Nn,Np) \
+void accumulate_p_to_n_ds_list##Nn##Np(node_t *nodes, \
+    const size_t * restrict node_field_offset, const int * restrict nodelist, const double * restrict sfvalues, \
+    const double * restrict pdata) \
+{ \
+    size_t i, j; \
+    double * restrict ndata; \
+    char * restrict nodeoff; \
+    for (i = 0; i < Nn; i++) { \
+        nodeoff = (char *)&(nodes[nodelist[i]]); \
+        for (j = 0; j < Np; j++) { \
+            ndata = (double *)(nodeoff + node_field_offset[j]); \
+            *ndata += sfvalues[i] * pdata[j]; \
+        } \
+    } \
+    return; \
 }
-void accumulate_p_to_n_ds_list42(node_t *nodes,
-    const size_t * restrict node_field_offset, const int * restrict nodelist, const double * restrict sfvalues, 
-    const double * restrict pdata)
-{
-    size_t i, j;
-    double * restrict ndata;
-    char * restrict nodeoff;
 
-    // nodelist length = 4
-    // pdata length = 2
-    for (i = 0; i < 4; i++) {
-        nodeoff = (char *)&(nodes[nodelist[i]]);
-        for (j = 0; j < 2; j++) {
-            ndata = (double *)(nodeoff + node_field_offset[j]);
-            *ndata += sfvalues[i] * pdata[j];
-        }
-    }
+FIXED_ACCUMULATE_DOUBLE_LIST(4,2)
+FIXED_ACCUMULATE_DOUBLE_LIST(4,7)
 
-    return;
-}
 /*----------------------------------------------------------------------------*/
