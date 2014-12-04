@@ -60,6 +60,7 @@ endif()
 
 # create output directories for examples
 file(MAKE_DIRECTORY examples/silo/output)
+file(MAKE_DIRECTORY examples/silo/rycroft-output)
 file(MAKE_DIRECTORY examples/heap/output)
 file(MAKE_DIRECTORY examples/square-hopper/output)
 file(MAKE_DIRECTORY examples/hopper/output)
