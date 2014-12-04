@@ -21,35 +21,16 @@
 
 #include <assert.h>
 
-#define signum(x) ((int)((0 < x) - (x < 0)))
-
 #define jp(x) job->particles[i].x
 
 #undef EMOD
 #undef NUMOD
-
-/* from Dave + Ken's paper */
-#define MU_S 0.3819
-#define GRAINS_RHO 2450
-#define A 0.48
-
-/* from Jop */
-#define MU_2 0.6435
-#define I_0 0.278
-
-/* from geometric considerations */
-#define GRAINS_D 0.005
-
-/* parameter */
-#define RHO_CRITICAL 1485.0
 
 #define dense jp(state[0])
 #define gf jp(state[3])
 #define eta jp(state[4])
 #define gf_local jp(state[5])
 #define xisq_inv jp(state[6])
-/*#define Etxy jp(state[7])*/
-/*#define Etyy jp(state[8])*/
 #define gammap jp(state[9])
 #define gammadotp jp(state[10])
 
@@ -63,22 +44,21 @@ void solve_diffusion_part(job_t *job);
 void calculate_stress_threaded(threadtask_t *task);
 
 static double E, nu, G, K;
+static double mu_s, mu_2, I_0, rho_s, rho_c, d, A;
 static double *Kp; //vector which is a solution of the matrix-vector product.
 static double *g; //nodal values of g
 
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
 {
-    int i, j;
-
-    for (i = 0; i < job->num_particles; i++) {
-        for (j = 0; j < DEPVAR; j++) {
+    for (size_t i = 0; i < job->num_particles; i++) {
+        for (size_t j = 0; j < DEPVAR; j++) {
             job->particles[i].state[j] = 0;
         }
     }
 
-    for (i = 0; i < job->num_particles; i++) {
-        if ((job->particles[i].m / job->particles[i].v) > RHO_CRITICAL) {
+    for (size_t i = 0; i < job->num_particles; i++) {
+        if ((job->particles[i].m / job->particles[i].v) > rho_c) {
             dense = 1;
         } else {
             dense = 0;
@@ -91,18 +71,27 @@ void material_init(job_t *job)
         xisq_inv = 0;
     }
 
-    if (job->material.num_fp64_props < 2) {
+    if (job->material.num_fp64_props < 9) {
         fprintf(stderr,
-            "%s:%s: Need at least 2 properties defined (E, nu).\n",
+            "%s:%s: Need at least 9 properties defined (%s).\n",
+            "E, nu, mu_s, mu_2, I_0, rho_s, rho_c, d, A",
             __FILE__, __func__);
         exit(EXIT_ERROR_MATERIAL_FILE);
     } else {
         E = job->material.fp64_props[0];
         nu = job->material.fp64_props[1];
+        mu_s = job->material.fp64_props[2];
+        mu_2 = job->material.fp64_props[3];
+        I_0 = job->material.fp64_props[4];
+        rho_s = job->material.fp64_props[5];
+        rho_c = job->material.fp64_props[6];
+        d = job->material.fp64_props[7];
+        A = job->material.fp64_props[8];
         G = E / (2.0 * (1.0 + nu));
         K = E / (3.0 * (1.0 - 2*nu));
-        printf("%s:%s: properties (E = %g, nu = %g, G = %g, K = %g).\n",
-            __FILE__, __func__, E, nu, G , K);
+        printf("%s:%s: properties (E = %g, nu = %g, G = %g, K = %g, mu_s = %g,"
+            " mu_2 = %g, I_0 = %g, rho_s = %g, rho_c = %g, d = %g, A = %g).\n",
+            __FILE__, __func__, E, nu, G, K, mu_s, mu_2, I_0, rho_s, rho_c, d, A);
     }
 
     Kp = calloc(job->num_nodes, sizeof(double));
@@ -133,9 +122,6 @@ void calculate_stress_threaded(threadtask_t *task)
 /*----------------------------------------------------------------------------*/
 void calculate_stress(job_t *job)
 {
-    /* values from previous timestep */
-    double p_t, mu_t;
-
     /* value at end of timestep */
     double tau_tau;
     double scale_factor;
@@ -152,28 +138,20 @@ void calculate_stress(job_t *job)
 
     double const c = 0;
 
-    double f;
-    int density_flag;
-    
-    size_t i;
-
-    double inertial_num;
-    
-    double trD, lambda;
-
     /* solve for g_local */
     calculate_bulk_granular_fluidity(job);
 
     /* build FEM diffusion array/load vector and solve for g_nonlocal */
     solve_diffusion_part(job);
 
-    for (i = 0; i < job->num_particles; i++) {
+    for (size_t i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
             continue;
         }
+        const double lambda = K - 2.0 * G / 3.0;
 
         /* Calculate tau and p trial values. */
-        trD = job->particles[i].exx_t + job->particles[i].eyy_t;
+        const double trD = job->particles[i].exx_t + job->particles[i].eyy_t;
         dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
         dsjxy = 2.0 * G * job->particles[i].exy_t;
         dsjyy = lambda * trD + 2.0 * G * job->particles[i].eyy_t;
@@ -192,7 +170,7 @@ void calculate_stress(job_t *job)
         tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
 
 #if 0
-        if ((job->particles[i].m / job->particles[i].v) < RHO_CRITICAL) {
+        if ((job->particles[i].m / job->particles[i].v) < rho_c) {
             dense = 0;
 /*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
         } else {
@@ -201,7 +179,7 @@ void calculate_stress(job_t *job)
 #endif
 
         if (dense == 0 || p_tr <= c) {
-            nup_tau = 0;
+            nup_tau = (tau_tr / G) / job->dt;
             job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
             job->particles[i].syy = 0;
@@ -292,7 +270,7 @@ void calculate_bulk_granular_fluidity(job_t *job)
         t0yy_tr = syy_tr + p_tr;
         tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
 
-        if ((job->particles[i].m / job->particles[i].v) < RHO_CRITICAL || p_tr < 0) {
+        if ((job->particles[i].m / job->particles[i].v) < rho_c || p_tr < 0) {
             dense = 0;
 /*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
         } else {
@@ -303,20 +281,20 @@ void calculate_bulk_granular_fluidity(job_t *job)
             gf_local = 0;
             xisq_inv = 0;
         } else if (p_tr > c) {
-            S0 = MU_S * p_tr;
+            S0 = mu_s * p_tr;
             if (tau_tr <= S0) {
                 tau_tau = tau_tr;
                 scale_factor = 1.0;
             } else {
-                S2 = MU_2 * p_tr;
-                alpha = G * I_0 * job->dt * sqrt(p_tr / GRAINS_RHO) / GRAINS_D;
+                S2 = mu_2 * p_tr;
+                alpha = G * I_0 * job->dt * sqrt(p_tr / rho_s) / d;
                 B = -(S2 + tau_tr + alpha);
                 H = S2 * tau_tr + S0 * alpha;
                 tau_tau = negative_root(1.0, B, H);
                 scale_factor = (tau_tau / tau_tr);
             }
             gf_local = (p_tr / (G * job->dt)) * ((1.0 / scale_factor) - 1.0);
-            xisq_inv = fabs((tau_tau / p_tr) - MU_S) / (A * A * GRAINS_D * GRAINS_D);
+            xisq_inv = fabs((tau_tau / p_tr) - mu_s) * (mu_2 - mu_s) / (fabs(mu_2 - (tau_tau / p_tr)) * (A * A * d * d));
         } else {
 /*            fprintf(stderr, "u %zu %3.3g %3.3g %d ", i, f, p_tr, density_flag);*/
             fprintf(stderr, "u");
@@ -510,6 +488,7 @@ void solve_diffusion_part(job_t *job)
         }
     }
 
+    /* keep matrix from being dengerate when an element is filled with open particles. */
     for (i = 0; i < slda; i++) {
         cs_entry(triplets, i, i, 1e-10);
     }
