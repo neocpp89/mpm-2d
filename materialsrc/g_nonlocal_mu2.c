@@ -48,6 +48,44 @@ static double mu_s, mu_2, I_0, rho_s, rho_c, d, A;
 static double *Kp; //vector which is a solution of the matrix-vector product.
 static double *g; //nodal values of g
 
+void cs_print_to_file(const cs *A)
+{
+
+    int p, j, m, n, nzmax, nz, *Ap, *Ai ;
+    double *Ax ;
+    if (!A) { printf ("(null)\n") ; return (0) ; }
+    m = A->m ; n = A->n ; Ap = A->p ; Ai = A->i ; Ax = A->x ;
+    nzmax = A->nzmax ; nz = A->nz ;
+    
+    double *A_dense = calloc(sizeof(double), m*n);
+    FILE *fp = fopen("matrix.cs", "w");
+
+    for (j = 0 ; j < n ; j++)
+    {
+        printf ("    col %g : locations %g to %g\n", (double) j, 
+            (double) (Ap [j]), (double) (Ap [j+1]-1)) ;
+        for (p = Ap [j] ; p < Ap [j+1] ; p++)
+        {
+            A_dense[Ai[p]*n + j] = Ax[p];
+            printf ("      %g : %g\n", (double) (Ai [p]), Ax ? Ax [p] : 1) ;
+        }
+    }
+
+    for (int i = 0; i < m; i++) {
+        for (j = 0; j < n; j++) {
+            fprintf(fp, "%lg,", A_dense[i*n + j]);
+        }
+        fprintf(fp, "\n");
+    }
+
+    if (fp != NULL) {
+        fclose(fp);
+    }
+    free(A_dense);
+
+    return;
+}
+
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
 {
@@ -277,10 +315,16 @@ void calculate_bulk_granular_fluidity(job_t *job)
             dense = 1;
         }
 
-        if (dense == 0 || p_tr <= c) {
+        const double p_t = -0.5 * (job->particles[i].sxx + job->particles[i].syy);
+        const double t0xx_t = job->particles[i].sxx + p_tr;
+        const double t0xy_t = job->particles[i].sxy;
+        const double t0yy_t = job->particles[i].syy + p_tr;
+        const double tau_t = sqrt(0.5*(t0xx_t*t0xx_t + 2*t0xy_t*t0xy_t + t0yy_t*t0yy_t));
+
+        if (dense == 0 || p_t <= c) {
             gf_local = 0;
             xisq_inv = 0;
-        } else if (p_tr > c) {
+        } else if (p_t > c) {
             S0 = mu_s * p_tr;
             if (tau_tr <= S0) {
                 tau_tau = tau_tr;
@@ -293,8 +337,15 @@ void calculate_bulk_granular_fluidity(job_t *job)
                 tau_tau = negative_root(1.0, B, H);
                 scale_factor = (tau_tau / tau_tr);
             }
-            gf_local = (p_tr / (G * job->dt)) * ((1.0 / scale_factor) - 1.0);
-            xisq_inv = fabs((tau_tau / p_tr) - mu_s) * (mu_2 - mu_s) / (fabs(mu_2 - (tau_tau / p_tr)) * (A * A * d * d));
+            // gf_local = (p_tr / (G * job->dt)) * ((1.0 / scale_factor) - 1.0);
+            // xisq_inv = fabs((tau_tau / p_tr) - mu_s) * (mu_2 - mu_s) / (fabs(mu_2 - (tau_tau / p_tr)) * (A * A * d * d));
+            double s = 0;
+            if (tau_t > S0) {
+                s = (tau_t - S0) / (tau_t * (tau_t - S2));
+            }
+            const double zeta = I_0 / (d * sqrt(rho_s));
+            gf_local = p_t * sqrt(p_t) * zeta * s;
+            xisq_inv = fabs((tau_t/ p_t) - mu_s) * (mu_2 - mu_s) / (fabs(mu_2 - (tau_t / p_t)) * (A * A * d * d));
         } else {
 /*            fprintf(stderr, "u %zu %3.3g %3.3g %d ", i, f, p_tr, density_flag);*/
             fprintf(stderr, "u");
@@ -479,11 +530,17 @@ void solve_diffusion_part(job_t *job)
 
                 sgi = node_map[gi];
                 sgj = node_map[gj];
+        
+                assert(isfinite(gf_local));
+                assert(isfinite(xisq_inv));
+                assert(isfinite(job->particles[i].v));
+
+                const double k_component = job->particles[i].v * (xisq_inv * s[ei] * s[ej] + 
+                        (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
+
+                assert(isfinite(k_component));
                 
-                cs_entry(triplets, sgi, sgj,
-                    job->particles[i].v * (xisq_inv * s[ei] * s[ej] + 
-                        (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]))
-                );
+                cs_entry(triplets, sgi, sgj, k_component);
             }
         }
     }
@@ -501,6 +558,8 @@ void solve_diffusion_part(job_t *job)
         fprintf(stderr, "lusol error!\n");
         if (cs_qrsol(1, smat, f)) {
             fprintf(stderr, "qrsol error!\n");
+            cs_print(smat, 0); // print out matrix for debugging
+            cs_print_to_file(smat);
             exit(EXIT_ERROR_CS_SOL);
         }
     }
