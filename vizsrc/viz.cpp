@@ -30,6 +30,8 @@
 
 using namespace FTGL;
 
+#define SMOOTH
+
 #define CROSS_SIZE 0.05f
 #define PARTICLE_SIZE 5.0f
 
