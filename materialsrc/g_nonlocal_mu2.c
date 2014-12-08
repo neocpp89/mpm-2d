@@ -324,6 +324,7 @@ void calculate_bulk_granular_fluidity(job_t *job)
         if (dense == 0 || p_t <= c) {
             gf_local = 0;
             xisq_inv = 0;
+            dense = 0;
         } else if (p_t > c) {
             S0 = mu_s * p_tr;
             if (tau_tr <= S0) {
@@ -346,11 +347,15 @@ void calculate_bulk_granular_fluidity(job_t *job)
             const double zeta = I_0 / (d * sqrt(rho_s));
             gf_local = p_t * sqrt(p_t) * zeta * s;
             xisq_inv = fabs((tau_t/ p_t) - mu_s) * (mu_2 - mu_s) / (fabs(mu_2 - (tau_t / p_t)) * (A * A * d * d));
+            assert(gf_local >= 0);
+            assert(xisq_inv >= 0);
+            dense = 1;
         } else {
 /*            fprintf(stderr, "u %zu %3.3g %3.3g %d ", i, f, p_tr, density_flag);*/
             fprintf(stderr, "u");
             gf_local = 0;
             xisq_inv = 0;
+            dense = 0;
         }
     }
 
@@ -587,6 +592,10 @@ void solve_diffusion_part(job_t *job)
             continue;
         }
 
+        if (dense == 0) {
+            continue;
+        }
+
         p = job->in_element[i];
         if (p == -1) {
             continue;
@@ -607,6 +616,11 @@ void solve_diffusion_part(job_t *job)
 
             gf += gf_nodes[gi] * s[ei];
         }
+
+        if (gf < 0) {
+            fprintf(stderr, "%d: %lg\n", i, gf);
+        }
+        assert(gf >= 0);
     }
 
     cs_spfree(triplets);
