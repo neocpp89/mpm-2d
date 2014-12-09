@@ -58,12 +58,19 @@ double calculate_g_local(double tau_bar, double p)
         const double S2 = mu_2 * p;
         const double zeta = I_0 / (d * sqrt(rho_s));
 
+        /*
         if (tau_bar >= S2) {
             fprintf(stderr, "\n%g > %g: %g\n", tau_bar, S2, tau_bar / p);
         }
         assert(tau_bar < S2);
+        */
 
-        g_local = p * sqrt(p) * zeta * (1.0 - S0 / tau_bar) / (S2 - tau_bar);
+        if (tau_bar < S2) {
+            g_local = p * sqrt(p) * zeta * (1.0 - S0 / tau_bar) / (S2 - tau_bar);
+        } else {
+            g_local = 100;
+        }
+
     }
     return g_local;
 }
@@ -114,6 +121,57 @@ void cs_print_to_file(const cs *A)
     }
     free(A_dense);
 
+    return;
+}
+
+double dot(const double * a, const double * b, size_t n);
+double dot(const double * a, const double * b, size_t n)
+{
+    double s = 0;
+    for (size_t i = 0; i < n; i++) {
+        s += a[i] * b[i];
+    }
+    return s;
+}
+
+void cs_cg(const cs * restrict K, double * restrict f, size_t n, double tol);
+void cs_cg(const cs * restrict K, double * restrict f, size_t n, double tol)
+{
+    double * restrict u = calloc(sizeof(double), n);
+    double * restrict r = malloc(sizeof(double) * n);
+    memcpy(r, f, sizeof(double) * n);
+    double * restrict p = malloc(sizeof(double) * n);
+    memcpy(p, r, sizeof(double) * n);
+    const double rsq_tol = tol*tol;
+
+    double * restrict Kp = malloc(sizeof(double) * n);
+    for (size_t i = 0; i < n; i++) {
+        const double rTr = dot(r, r, n);
+        if (rTr <= rsq_tol) {
+            break;
+        }
+        for (size_t j = 0; j < n; j++) {
+            Kp[j] = 0;
+        }
+        cs_gaxpy(K, p, Kp); // Kp is now K * p[i-1]
+        const double pTKp = dot(p, Kp, n);
+        assert(pTKp != 0);
+        const double alpha = rTr / pTKp;
+        for (size_t j = 0; j < n; j++) {
+            u[j] = u[j] + alpha * p[j];
+            r[j] = r[j] - alpha * Kp[j];
+        }
+        const double rTr_new = dot(r, r, n);
+        const double beta = rTr_new / rTr;
+        for (size_t j = 0; j < n; j++) {
+            p[j] = r[j] + beta * p[j];
+        }
+    }
+
+    memcpy(f, u, sizeof(double) * n);
+    free(u);
+    free(r);
+    free(p);
     return;
 }
 
@@ -430,7 +488,10 @@ void solve_diffusion_part(job_t *job)
             
             assert(sgi != -1);
 
-            f[sgi] += (job->particles[i].v) * gf_local * xisq_inv * s[ei];
+            const double f_component = (job->particles[i].v) * gf_local * xisq_inv * s[ei];
+            assert(f_component >= 0);
+
+            f[sgi] += f_component;
         }
     }
     
@@ -485,6 +546,7 @@ void solve_diffusion_part(job_t *job)
                         (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
 
                 assert(isfinite(k_component));
+                assert(k_component >= 0);
                 
                 cs_entry(triplets, sgi, sgj, k_component);
             }
@@ -492,14 +554,17 @@ void solve_diffusion_part(job_t *job)
     }
 
     /* keep matrix from being dengerate when an element is filled with open particles. */
-    for (i = 0; i < slda; i++) {
+    /* for (i = 0; i < slda; i++) {
         cs_entry(triplets, i, i, 1e-10);
-    }
+    } */
 
     /* create compressed sparse matrix */
     smat = cs_compress(triplets);
     cs_dupl(smat);
 
+    cs_cg(smat, f, slda, 1e-12);
+
+    /* 
     if (!cs_lusol(1, smat, f, 1e-12)) {
         fprintf(stderr, "lusol error!\n");
         if (cs_qrsol(1, smat, f)) {
@@ -509,6 +574,7 @@ void solve_diffusion_part(job_t *job)
             exit(EXIT_ERROR_CS_SOL);
         }
     }
+    */
 
     for (i = 0; i < job->num_nodes; i++) {
         i_new = (job->node_number_override[NODAL_DOF * i + 0] - 0) / NODAL_DOF;
