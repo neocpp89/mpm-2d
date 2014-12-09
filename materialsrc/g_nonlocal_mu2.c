@@ -81,7 +81,12 @@ double calculate_xisq_inverse(double tau_bar, double p)
     if (p > 0) {
         const double S0 = mu_s * p;
         const double S2 = mu_2 * p;
-        xisq_inverse = fabs(tau_bar - S0) * (mu_2 - mu_s) / (fabs(S2 - tau_bar) * A * A * d * d);
+
+        if (tau_bar < S2) {
+            xisq_inverse = fabs(tau_bar - S0) * (mu_2 - mu_s) / (fabs(S2 - tau_bar) * A * A * d * d);
+        } else {
+            xisq_inverse = 0;
+        }
     }
     return xisq_inverse;
 }
@@ -134,15 +139,35 @@ double dot(const double * a, const double * b, size_t n)
     return s;
 }
 
-void cs_cg(const cs * restrict K, double * restrict f, size_t n, double tol);
-void cs_cg(const cs * restrict K, double * restrict f, size_t n, double tol)
+void cs_cg(const cs *K, double *f, const double *u_0, double tol);
+void cs_cg(const cs *K, double *f, const double *u_0, double tol)
 {
-    double * restrict u = calloc(sizeof(double), n);
+    if (K->m != K->n) {
+        return; //nonsquare matrix
+    }
+    const size_t n = K->n;
+
+    double * restrict u = malloc(sizeof(double) * n);
     double * restrict r = malloc(sizeof(double) * n);
-    memcpy(r, f, sizeof(double) * n);
     double * restrict p = malloc(sizeof(double) * n);
-    memcpy(p, r, sizeof(double) * n);
     const double rsq_tol = tol*tol;
+
+    if (u_0 != NULL) {
+        memcpy(u, u_0, sizeof(double) * n);
+        for (size_t j = 0; j < n; j++) {
+            r[j] = 0;
+        }
+        cs_gaxpy(K, u, r); // r is now K * u_0
+        for (size_t j = 0; j < n; j++) {
+            r[j] = f[j] - r[j];
+        }
+    } else {
+        for (size_t j = 0; j < n; j++) {
+            u[j] = 0;
+        }
+        memcpy(r, f, sizeof(double) * n);
+    }
+    memcpy(p, r, sizeof(double) * n);
 
     double * restrict Kp = malloc(sizeof(double) * n);
     for (size_t i = 0; i < n; i++) {
@@ -153,7 +178,7 @@ void cs_cg(const cs * restrict K, double * restrict f, size_t n, double tol)
         for (size_t j = 0; j < n; j++) {
             Kp[j] = 0;
         }
-        cs_gaxpy(K, p, Kp); // Kp is now K * p[i-1]
+        cs_gaxpy(K, p, Kp); // Kp is now K * p_{i-1}
         const double pTKp = dot(p, Kp, n);
         assert(pTKp != 0);
         const double alpha = rTr / pTKp;
@@ -489,9 +514,12 @@ void solve_diffusion_part(job_t *job)
             assert(sgi != -1);
 
             const double f_component = (job->particles[i].v) * gf_local * xisq_inv * s[ei];
+            const double gf_component = (job->particles[i].v) * gf_local * s[ei];
             assert(f_component >= 0);
+            assert(gf_component >= 0);
 
             f[sgi] += f_component;
+            gf_nodes[sgi] += gf_component;
         }
     }
     
@@ -537,7 +565,7 @@ void solve_diffusion_part(job_t *job)
 
                 sgi = node_map[gi];
                 sgj = node_map[gj];
-        
+
                 assert(isfinite(gf_local));
                 assert(isfinite(xisq_inv));
                 assert(isfinite(job->particles[i].v));
@@ -546,7 +574,6 @@ void solve_diffusion_part(job_t *job)
                         (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
 
                 assert(isfinite(k_component));
-                assert(k_component >= 0);
                 
                 cs_entry(triplets, sgi, sgj, k_component);
             }
@@ -562,7 +589,8 @@ void solve_diffusion_part(job_t *job)
     smat = cs_compress(triplets);
     cs_dupl(smat);
 
-    cs_cg(smat, f, slda, 1e-12);
+    cs_cg(smat, f, gf_nodes, 1e-12);
+    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
 
     /* 
     if (!cs_lusol(1, smat, f, 1e-12)) {
