@@ -88,7 +88,8 @@ double calculate_xisq_inverse(double tau_bar, double p)
             xisq_inverse = 0;
         }
     }
-    return xisq_inverse;
+    // return xisq_inverse;
+    return A * A * d * d;
 }
 
 void cs_print_to_file(const cs *A)
@@ -139,11 +140,12 @@ double dot(const double * a, const double * b, size_t n)
     return s;
 }
 
-void cs_cg(const cs *K, double *f, const double *u_0, double tol);
-void cs_cg(const cs *K, double *f, const double *u_0, double tol)
+int cs_cg(const cs *K, double *f, const double *u_0, double tol);
+int cs_cg(const cs *K, double *f, const double *u_0, double tol)
 {
+    int converged = 0;
     if (K->m != K->n) {
-        return; //nonsquare matrix
+        return converged; //nonsquare matrix
     }
     const size_t n = K->n;
 
@@ -173,6 +175,7 @@ void cs_cg(const cs *K, double *f, const double *u_0, double tol)
     for (size_t i = 0; i < n; i++) {
         const double rTr = dot(r, r, n);
         if (rTr <= rsq_tol) {
+            converged = 1;
             break;
         }
         for (size_t j = 0; j < n; j++) {
@@ -197,7 +200,7 @@ void cs_cg(const cs *K, double *f, const double *u_0, double tol)
     free(u);
     free(r);
     free(p);
-    return;
+    return converged;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -581,18 +584,22 @@ void solve_diffusion_part(job_t *job)
     }
 
     /* keep matrix from being dengerate when an element is filled with open particles. */
-    /* for (i = 0; i < slda; i++) {
+    for (i = 0; i < slda; i++) {
         cs_entry(triplets, i, i, 1e-10);
-    } */
+    }
 
     /* create compressed sparse matrix */
     smat = cs_compress(triplets);
     cs_dupl(smat);
-
-    cs_cg(smat, f, gf_nodes, 1e-12);
-    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
-
-    /* 
+//    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
+#ifndef DIRECT_SOLVE
+    if (!cs_cg(smat, f, gf_nodes, 1e-12)) {
+        fprintf(stderr, "cg error!\n");
+        cs_print(smat, 0); // print out matrix for debugging
+        cs_print_to_file(smat);
+        exit(EXIT_ERROR_CS_SOL);
+    }
+#else
     if (!cs_lusol(1, smat, f, 1e-12)) {
         fprintf(stderr, "lusol error!\n");
         if (cs_qrsol(1, smat, f)) {
@@ -602,7 +609,7 @@ void solve_diffusion_part(job_t *job)
             exit(EXIT_ERROR_CS_SOL);
         }
     }
-    */
+#endif
 
     for (i = 0; i < job->num_nodes; i++) {
         i_new = (job->node_number_override[NODAL_DOF * i + 0] - 0) / NODAL_DOF;
