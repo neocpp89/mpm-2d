@@ -34,8 +34,6 @@
 #define gammap jp(state[9])
 #define gammadotp jp(state[10])
 
-#define TOL 0
-
 #define MAT_VERSION_STRING "1.0 " __DATE__ " " __TIME__
 
 void calculate_stress(job_t *job);
@@ -45,27 +43,31 @@ void calculate_stress_threaded(threadtask_t *task);
 static double E, nu, G, K;
 static double mu_s, mu_2, I_0, rho_s, rho_c, d, A;
 static double *Kp; //vector which is a solution of the matrix-vector product.
+static double *g_loc; //nodal values of g_local
 static double *g; //nodal values of g
-static double *v; //nodal volumes
+static double *v; //nodal volumes (nodal mass already computed)
+static double *tau_tr; // nodal values of tau_tr
+static double *p_tr; // nodal values of p_tr
 
-double calculate_g_local(double tau_bar, double p);
-double calculate_xisq_inverse(double tau_bar, double p);
+double calculate_g_local(double tau, double p);
+double calculate_xisq_inverse(double tau, double p);
+double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double delta_t);
 
-double calculate_g_local(double tau_bar, double p)
+double calculate_g_local(double tau, double p)
 {
     double g_local = 0;
     const double S0 = mu_s * p;
-    if (tau_bar > S0 && p > 0) {
+    if (tau > S0 && p > 0) {
         const double S2 = mu_2 * p;
         const double zeta = I_0 / (d * sqrt(rho_s));
 
-        if (tau_bar >= S2) {
-            fprintf(stderr, "\n%g > %g: %g\n", tau_bar, S2, tau_bar / p);
+        if (tau >= S2) {
+            fprintf(stderr, "\n%g > %g: %g\n", tau, S2, tau / p);
         }
-        assert(tau_bar < S2);
+        assert(tau < S2);
 
-        if (tau_bar < S2) {
-            g_local = p * sqrt(p) * zeta * (1.0 - S0 / tau_bar) / (S2 - tau_bar);
+        if (tau < S2) {
+            g_local = p * sqrt(p) * zeta * (1.0 - S0 / tau) / (S2 - tau);
         } else {
             g_local = 1;
         }
@@ -74,48 +76,154 @@ double calculate_g_local(double tau_bar, double p)
     return g_local;
 }
 
-double calculate_xisq_inverse(double tau_bar, double p)
+double calculate_xisq_inverse(double tau, double p)
 {
     double xisq_inverse = 0;
     if (p > 0) {
         const double S0 = mu_s * p;
         const double S2 = mu_2 * p;
-        if (tau_bar < S2) {
-            xisq_inverse = fabs(tau_bar - S0) * (mu_2 - mu_s) / (fabs(S2 - tau_bar) * A * A * d * d);
+
+        if (tau >= S2) {
+            fprintf(stderr, "\n%g > %g: %g\n", tau, S2, tau / p);
+        }
+        assert(tau < S2);
+
+        if (tau < S2) {
+            xisq_inverse = fabs(tau - S0) * (mu_2 - mu_s) / (fabs(S2 - tau) * A * A * d * d);
         } else {
             xisq_inverse = 1;
         }
-        // xisq_inverse = fabs(tau_bar - S0) / (A * A * d * d);
     }
     return xisq_inverse;
-    // return A * A * d * d;
+}
+
+double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double delta_t)
+{
+    double g_local = 0;
+    if (g >= 0 && tau_tr > 0 && p_tr > 0) {
+        const double zeta = I_0 / (d * sqrt(rho_s));
+        const double s = g * G * delta_t + p_tr;
+        g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - mu_s * s) / (mu_2 * s - tau_tr);
+
+    }
+    return g_local;
+}
+
+typedef struct p_trial_s {
+    double tau_tr;
+    double p_tr;
+
+    double t0xx_tr;
+    double t0xy_tr;
+    double t0yy_tr;
+
+    double tau_tau;
+    double p_tau;
+
+    double s; // scaling factor
+} trial_t;
+
+void trial_step(const particle_t *p, const double dt, trial_t *trial)
+{
+    const double lambda = K - 2.0 * G / 3.0;
+
+    const double trD = p->exx_t + p->eyy_t;
+    const double dsjxx = lambda * trD + 2.0 * G * p->exx_t + 2 * p->wxy_t * p->sxy;
+    const double dsjxy = 2.0 * G * p->exy_t - p->wxy_t * (p->sxx - p->syy);
+    const double dsjyy = lambda * trD + 2.0 * G * p->eyy_t - 2 * p->wxy_t * p->sxy;
+
+    const double sxx_tr = p->sxx + dt * dsjxx;
+    const double sxy_tr = p->sxy + dt * dsjxy;
+    const double syy_tr = p->syy + dt * dsjyy;
+
+    const double p_tr = -0.5 * (sxx_tr + syy_tr);
+    const double t0xx_tr = sxx_tr + p_tr;
+    const double t0xy_tr = sxy_tr;
+    const double t0yy_tr = syy_tr + p_tr;
+    const double tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
+
+    trial->tau_tr = tau_tr;
+    trial->p_tr = p_tr;
+    trial->t0xx_tr = t0xx_tr;
+    trial->t0xy_tr = t0xy_tr;
+    trial->t0yy_tr = t0yy_tr;
+
+    return;
+}
+
+// assume an active, valid particle is passed in to p
+// retuns dot(bar(gamma))^p
+//double local_step(particle_t *p, double dt, double * restrict tau_tau, double * restrict p_tau, int * restrict flag);
+double local_step(const particle_t *p, double dt, trial_t *trial, int *flag);
+
+double local_step(const particle_t *p, double dt, trial_t *trial, int *flag)
+{
+    trial_step(p, dt, trial);
+
+    const double rho = (p->m / p->v);
+    const double tau_tr = trial->tau_tr;
+    const double p_tr = trial->p_tr;
+
+    double nup_tau;
+    double tau_tau;
+    trial->s = 0;
+    if (rho < rho_c || p_tr <= 0) {
+        *flag = 0;
+        nup_tau = (tau_tr) / (G * dt);
+        tau_tau = 0;
+    } else if (p_tr > 0) {
+        *flag = 1;
+        const double S0 = mu_s * p_tr;
+        double scale_factor = 1.0;
+        tau_tau = tau_tr;
+        if (tau_tr > S0) {
+            const double S2 = mu_2 * p_tr;
+            const double alpha = G * I_0 * dt * sqrt(p_tr / rho_s) / d;
+            const double B = S2 + tau_tr + alpha;
+            const double H = S2 * tau_tr + S0 * alpha;
+            tau_tau = 2.0 * H / (B + sqrt(B * B - 4 * H));
+            scale_factor = (tau_tau / tau_tr);
+        }
+
+        assert(scale_factor <= 1.0);
+        assert(scale_factor > 0);
+        nup_tau = tau_tr * (1.0 - scale_factor) / G / dt;
+        trial->s = scale_factor;
+    } else {
+        fprintf(stderr, "u");
+        *flag = 0;
+        tau_tau = 0;
+        nup_tau = 0;
+    }
+    trial->tau_tau = tau_tau;
+    if (p_tr > 0) {
+        trial->p_tau = p_tr;
+    } else {
+        trial->p_tau = 0;
+    }
+    return nup_tau;
 }
 
 void cs_print_to_file(const cs *A)
 {
 
-    int p, j, m, n, nzmax, nz, *Ap, *Ai ;
+    int m, n, nzmax, nz, *Ap, *Ai ;
     double *Ax ;
-    if (!A) { printf ("(null)\n") ; return (0) ; }
+    if (!A) { return ; }
     m = A->m ; n = A->n ; Ap = A->p ; Ai = A->i ; Ax = A->x ;
     nzmax = A->nzmax ; nz = A->nz ;
     
     double *A_dense = calloc(sizeof(double), m*n);
     FILE *fp = fopen("matrix.cs", "w");
 
-    for (j = 0 ; j < n ; j++)
-    {
-        printf ("    col %g : locations %g to %g\n", (double) j, 
-            (double) (Ap [j]), (double) (Ap [j+1]-1)) ;
-        for (p = Ap [j] ; p < Ap [j+1] ; p++)
-        {
+    for (int j = 0; j < n; j++) {
+        for (int p = Ap [j]; p < Ap [j+1]; p++) {
             A_dense[Ai[p]*n + j] = Ax[p];
-            printf ("      %g : %g\n", (double) (Ai [p]), Ax ? Ax [p] : 1) ;
         }
     }
 
     for (int i = 0; i < m; i++) {
-        for (j = 0; j < n; j++) {
+        for (int j = 0; j < n; j++) {
             fprintf(fp, "%lg,", A_dense[i*n + j]);
         }
         fprintf(fp, "\n");
@@ -254,6 +362,9 @@ void material_init(job_t *job)
     printf("%s:%s: Done allocating storage for matrix-vector multiply.\n",
         __FILE__, __func__);
     g = calloc(job->num_nodes, sizeof(double));
+    g_loc = calloc(job->num_nodes, sizeof(double));
+    tau_tr = calloc(job->num_nodes, sizeof(double));
+    p_tr = calloc(job->num_nodes, sizeof(double));
     printf("%s:%s: Done allocating storage for nodal values of g.\n",
         __FILE__, __func__);
     v = calloc(job->num_nodes, sizeof(double));
@@ -281,22 +392,6 @@ void calculate_stress_threaded(threadtask_t *task)
 /*----------------------------------------------------------------------------*/
 void calculate_stress(job_t *job)
 {
-    /* value at end of timestep */
-    double tau_tau;
-    double scale_factor;
-
-    /* increment using jaumann rate */
-    double dsjxx, dsjxy, dsjyy;
-
-    /* trial values */
-    double sxx_tr, sxy_tr, syy_tr;
-    double t0xx_tr, t0xy_tr, t0yy_tr;
-    double p_tr, tau_tr;
-
-    double nup_tau;
-
-    double const c = 0;
-
     /* g_local is calculated when we create the stiffness matrix. */
     /* build FEM diffusion array/load vector and solve for g_nonlocal */
     solve_diffusion_part(job);
@@ -306,36 +401,30 @@ void calculate_stress(job_t *job)
             continue;
         }
 
+        double nup_tau = 0;
+        trial_t tr;
+        trial_step(&(job->particles[i]), job->dt, &tr);
+
+        const double p_tr = tr.p_tr;
+        const double t0xx_tr = tr.t0xx_tr;
+        const double t0xy_tr = tr.t0xy_tr;
+        const double t0yy_tr = tr.t0yy_tr;
+        const double tau_tr = tr.tau_tr;
+
         if (dense) {
-            const double lambda = K - 2.0 * G / 3.0;
-
-            /* Calculate tau and p trial values. */
-            const double trD = job->particles[i].exx_t + job->particles[i].eyy_t;
-            dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
-            dsjxy = 2.0 * G * job->particles[i].exy_t;
-            dsjyy = lambda * trD + 2.0 * G * job->particles[i].eyy_t;
-            dsjxx += 2 * job->particles[i].wxy_t * job->particles[i].sxy;
-            dsjxy -= job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
-            dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
-
-            sxx_tr = job->particles[i].sxx + job->dt * dsjxx;
-            sxy_tr = job->particles[i].sxy + job->dt * dsjxy;
-            syy_tr = job->particles[i].syy + job->dt * dsjyy;
-
-            p_tr = -0.5 * (sxx_tr + syy_tr);
-            t0xx_tr = sxx_tr + p_tr;
-            t0xy_tr = sxy_tr;
-            t0yy_tr = syy_tr + p_tr;
-            tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
-
-            scale_factor = p_tr / (G * job->dt * gf + p_tr);
-            tau_tau = tau_tr * scale_factor;
+            const double scale_factor = p_tr / (G * job->dt * gf + p_tr);
+            const double tau_tau = tau_tr * scale_factor;
 
             nup_tau = ((tau_tr - tau_tau) / G) / job->dt;
 
             job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
             job->particles[i].sxy = scale_factor * t0xy_tr;
             job->particles[i].syy = scale_factor * t0yy_tr - p_tr;
+        } else {
+            nup_tau = (tau_tr / G) / job->dt;
+            job->particles[i].sxx = 0;
+            job->particles[i].sxy = 0;
+            job->particles[i].syy = 0;
         }
 
         /* use strain rate to calculate stress increment */
@@ -346,19 +435,6 @@ void calculate_stress(job_t *job)
     return;
 }
 /*----------------------------------------------------------------------------*/
-
-double negative_root(double a, double b, double c);
-
-double negative_root(double a, double b, double c)
-{
-    double x;
-    if (b > 0) {
-        x = (-b - sqrt(b*b - 4*a*c)) / (2*a);
-    } else {
-        x = (2*c) / (-b + sqrt(b*b - 4*a*c));
-    }
-    return x;
-}
 
 /*----------------------------------------------------------------------------*/
 void solve_diffusion_part(job_t *job)
@@ -385,8 +461,6 @@ void solve_diffusion_part(job_t *job)
     double s[4];
     double grad_s[4][2];
 
-/*    double m_frac;*/
-
     int p;
     int *nn;
 
@@ -394,6 +468,10 @@ void solve_diffusion_part(job_t *job)
     gf_nodes = (double *)malloc(job->num_nodes * sizeof(double));
     for (i = 0; i < job->num_nodes; i++) {
         gf_nodes[i] = 0;
+        g[i] = 0;
+        g_loc[i] = 0;
+        tau_tr[i] = 0;
+        p_tr[i] = 0;
         // clear volumes
         v[i] = 0;
     }
@@ -413,7 +491,7 @@ void solve_diffusion_part(job_t *job)
             continue;
         }
 
-        if (job->nodes[i_new].m > TOL) {
+        if (job->nodes[i_new].m > 0) {
             node_map[i_new] = slda;
             inv_node_map[slda] = i_new;
             slda++;
@@ -436,18 +514,9 @@ void solve_diffusion_part(job_t *job)
         }
     }
     nnz += slda;
-    /*
-    for (i = 0; i < job->num_elements; i++) {
-        if (job->elements[i].filled != 0) {
-            nnz += (NODES_PER_ELEMENT * NODES_PER_ELEMENT) * 1;
-        }
-    }
-    */
 
     /* slda contains degrees of freedom of new matrix */
     triplets = cs_spalloc(slda, slda, nnz, 1, 1);
-/*    fprintf(stderr, "%s:%s: slda = %zu, nnz = %zu.\n",*/
-/*        __FILE__, __func__, slda, nnz);*/
 
     /* project xi and g_local onto background grid (volume-weighted) */
     for (i = 0; i < job->num_particles; i++) {
@@ -460,96 +529,30 @@ void solve_diffusion_part(job_t *job)
             continue;
         }
 
-        const double lambda = K - 2.0 * G / 3.0;
-
-        /* Calculate tau and p trial values. */
-        const double trD = job->particles[i].exx_t + job->particles[i].eyy_t;
-        double dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
-        double dsjxy = 2.0 * G * job->particles[i].exy_t;
-        double dsjyy = lambda * trD + 2.0 * G * job->particles[i].eyy_t;
-        dsjxx += 2 * job->particles[i].wxy_t * job->particles[i].sxy;
-        dsjxy -= job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
-        dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
-
-        const double sxx_tr = job->particles[i].sxx + job->dt * dsjxx;
-        const double sxy_tr = job->particles[i].sxy + job->dt * dsjxy;
-        const double syy_tr = job->particles[i].syy + job->dt * dsjyy;
-
-        const double p_tr = -0.5 * (sxx_tr + syy_tr);
-        const double t0xx_tr = sxx_tr + p_tr;
-        const double t0xy_tr = sxy_tr;
-        const double t0yy_tr = syy_tr + p_tr;
-        const double tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr));
-
-        const double p_t = -0.5 * (job->particles[i].sxx + job->particles[i].syy);
-        const double t0xx_t = job->particles[i].sxx + p_tr;
-        const double t0xy_t = job->particles[i].sxy;
-        const double t0yy_t = job->particles[i].syy + p_tr;
-        const double tau_t = sqrt(0.5*(t0xx_t*t0xx_t + 2*t0xy_t*t0xy_t + t0yy_t*t0yy_t));
-
-        const double rho = (job->particles[i].m / job->particles[i].v);
-
-        double nup_tau;
-        if (rho < rho_c || p_tr <= 0) {
-            dense = 0;
-            nup_tau = (tau_tr) / (G * job->dt);
-            job->particles[i].sxx = 0;
-            job->particles[i].sxy = 0;
-            job->particles[i].syy = 0;
+        trial_t tr;
+        int flag = 0;
+        double nu_p = local_step(&(job->particles[i]), job->dt, &tr, &flag);
+        dense = flag;
+        // printf("%g, %g, %g\n", tr.tau_tau, tr.p_tau, tr.tau_tau / tr.p_tau);
+        if (flag == 1) {
+            gf_local = tr.tau_tr * ((1.0 / tr.s) - 1.0) / (G * job->dt);
+            xisq_inv = calculate_xisq_inverse(tr.tau_tau, tr.p_tau);
+        } else {
             gf_local = 0;
             xisq_inv = 0;
-        } else if (p_tr > 0) {
-            dense = 1;
-            const double S0 = mu_s * p_tr;
-            double scale_factor = 1.0;
-            double tau_tau = tau_tr;
-            if (tau_tr > S0) {
-                const double S2 = mu_2 * p_tr;
-                const double alpha = G * I_0 * job->dt * sqrt(p_tr / rho_s) / d;
-                const double B = S2 + tau_tr + alpha ;
-                const double H = S2 * tau_tr + S0 * alpha;
-                const double tau_tau = 2.0 * H / (B + sqrt(B * B - 4 * H));
-                scale_factor = (tau_tau / tau_tr);
-            }
-
-            assert(scale_factor <= 1.0);
-            assert(scale_factor > 0);
-            nup_tau = tau_tr * (1.0 - scale_factor) / G / job->dt;
-            /*
-            job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
-            job->particles[i].sxy = scale_factor * t0xy_tr;
-            job->particles[i].syy = scale_factor * t0yy_tr - p_tr;
-            */
-
-            gf_local = p_tr * ((1.0 / scale_factor) - 1.0) / (G * job->dt);
-            if (gf_local < 0) {
-                printf("gflocal: %lg\n", gf_local);
-            }
-            assert(gf_local >= 0);
-            xisq_inv = calculate_xisq_inverse(tau_tau, p_tr);
-        } else {
-/*            fprintf(stderr, "u %zu %3.3g %3.3g %d ", i, f, p_tr, density_flag);*/
-            fprintf(stderr, "u");
-            dense = 0;
-        }
-#if 0
-        if (rho < rho_c || p_tr < 0 || tau_t >= (p_t * mu_2)) {
-            dense = 0;
             job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
             job->particles[i].syy = 0;
-
-            // don't add contribution to stiffness matrix
-            continue;
-        } else {
-            dense = 1;
-
-            gf_local = calculate_g_local(tau_t, p_t);
-            xisq_inv = calculate_xisq_inverse(tau_t, p_t);
-            assert(gf_local >= 0);
-            assert(xisq_inv >= 0);
+            continue; // don't add contribution to stiffness matrix
         }
-#endif
+        assert(gf_local >= 0);
+        assert(xisq_inv >= 0);
+
+        if (dense == 0) {
+            continue;
+        }
+
+        assert(tr.tau_tau >= 0 && tr.tau_tau <= tr.p_tau * mu_2);
 
         s[0] = job->h1[i];
         s[1] = job->h2[i];
@@ -575,6 +578,7 @@ void solve_diffusion_part(job_t *job)
             }
             assert(f_component >= 0);
             assert(gf_component >= 0);
+
 
             f[sgi] += f_component;
             gf_nodes[sgi] += gf_component;
@@ -640,18 +644,27 @@ void solve_diffusion_part(job_t *job)
     }
 
     /* figure out local values of g at nodes */
-    for (i = 0; i < job->num_nodes; i++) {
+    for (i = 0; i < slda; i++) {
         if (v[i] > 0) {
             gf_nodes[i] = gf_nodes[i] / v[i];
+        } else {
+            gf_nodes[i] = 0;
         }
+        g_loc[i] = gf_nodes[i];
+        assert(gf_nodes[i] >= 0);
     }
 
+    for (i = 0; i < slda; i++) {
+        p_tr[i] = f[i]; // copy load;
+    }
+
+#define DIRECT_SOLVE
+#ifndef DIRECT_SOLVE
     /* create compressed sparse matrix */
     smat = cs_compress(triplets);
     cs_dupl(smat);
 //    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
-#ifndef DIRECT_SOLVE
-    if (!cs_cg(smat, f, gf_nodes, 1e-12)) {
+    if (!cs_cg(smat, f, gf_nodes, 1e-15)) {
         fprintf(stderr, "cg error!\n");
         cs_print(smat, 0); // print out matrix for debugging
         cs_print_to_file(smat);
@@ -662,6 +675,10 @@ void solve_diffusion_part(job_t *job)
     for (i = 0; i < slda; i++) {
         cs_entry(triplets, i, i, 1e-10);
     }
+    /* create compressed sparse matrix */
+    smat = cs_compress(triplets);
+    cs_dupl(smat);
+//    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
 
     if (!cs_lusol(1, smat, f, 1e-12)) {
         fprintf(stderr, "lusol error!\n");
@@ -673,6 +690,10 @@ void solve_diffusion_part(job_t *job)
         }
     }
 #endif
+
+    for (i = 0; i < job->num_nodes; i++) {
+        gf_nodes[i] = 0; // clear guess values
+    }
 
     for (i = 0; i < job->num_nodes; i++) {
         i_new = (job->node_number_override[NODAL_DOF * i + 0] - 0) / NODAL_DOF;
@@ -719,11 +740,27 @@ void solve_diffusion_part(job_t *job)
             gi = (job->node_number_override[NODAL_DOF * gi + 0] - 0) / NODAL_DOF;
             sgi = node_map[gi];
 
+            if (gf_nodes[gi] < 0) {
+                fprintf(stderr, "%d: %lg\n", gi, gf_nodes[gi]);
+                cs_print_to_file(smat);
+                FILE *ff = fopen("load.cs", "w");
+                for (size_t j = 0; j < slda; j++) {
+                fprintf(ff, "%lg\n", p_tr[j]);
+            }
+            fclose(ff);
+            }
+            assert(gf_nodes[gi] >= 0);
             gf += gf_nodes[gi] * s[ei];
         }
 
         if (gf < 0) {
             fprintf(stderr, "%d: %lg\n", i, gf);
+            cs_print_to_file(smat);
+            FILE *ff = fopen("load.cs", "w");
+            for (size_t j = 0; j < slda; j++) {
+                fprintf(ff, "%lg\n", p_tr[j]);
+            }
+            fclose(ff);
         }
         assert(gf >= 0);
     }
