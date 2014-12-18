@@ -692,17 +692,21 @@ void solve_diffusion_part(job_t *job)
     }
 
     double rtr = 1;
-    smat = NULL;
     int inner_iterations = 0;
+//#define DIRECT_SOLVE
+#ifdef DIRECT_SOLVE
+    /* keep matrix from being dengerate when an element is filled with open particles. */
+    for (i = 0; i < slda; i++) {
+        cs_entry(triplets, i, i, 1e-10);
+    }
+#endif
+    /* create compressed sparse matrix */
+    smat = cs_compress(triplets);
+    cs_dupl(smat);
+
+
     do {
-    //#define DIRECT_SOLVE
     #ifndef DIRECT_SOLVE
-        /* create compressed sparse matrix */
-        if (smat != NULL) {
-            cs_spfree(smat);
-        }
-        smat = cs_compress(triplets);
-        cs_dupl(smat);
     //    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
         if (!cs_cg(smat, f, gf_nodes, 1e-15)) {
             fprintf(stderr, "cg error!\n");
@@ -711,15 +715,7 @@ void solve_diffusion_part(job_t *job)
             exit(EXIT_ERROR_CS_SOL);
         }
     #else
-        /* keep matrix from being dengerate when an element is filled with open particles. */
-        for (i = 0; i < slda; i++) {
-            cs_entry(triplets, i, i, 1e-10);
-        }
-        /* create compressed sparse matrix */
-        smat = cs_compress(triplets);
-        cs_dupl(smat);
     //    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
-
         if (!cs_lusol(1, smat, f, 1e-15)) {
             fprintf(stderr, "lusol error!\n");
             if (cs_qrsol(1, smat, f)) {
