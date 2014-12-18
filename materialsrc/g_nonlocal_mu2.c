@@ -691,8 +691,10 @@ void solve_diffusion_part(job_t *job)
         f_old[i] = f[i]; // copy load;
     }
 
-    double rtr = 1;
+    double rel_error = 1;
+    const double max_rel_error = 1e-6;
     int inner_iterations = 0;
+    const int max_inner_iterations = 1000;
 //#define DIRECT_SOLVE
 #ifdef DIRECT_SOLVE
     /* keep matrix from being dengerate when an element is filled with open particles. */
@@ -704,13 +706,12 @@ void solve_diffusion_part(job_t *job)
     smat = cs_compress(triplets);
     cs_dupl(smat);
 
-
     do {
     #ifndef DIRECT_SOLVE
     //    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
         if (!cs_cg(smat, f, gf_nodes, 1e-15)) {
             fprintf(stderr, "cg error!\n");
-            cs_print(smat, 0); // print out matrix for debugging
+            //cs_print(smat, 0); // print out matrix for debugging
             cs_print_to_file(smat);
             exit(EXIT_ERROR_CS_SOL);
         }
@@ -720,7 +721,7 @@ void solve_diffusion_part(job_t *job)
             fprintf(stderr, "lusol error!\n");
             if (cs_qrsol(1, smat, f)) {
                 fprintf(stderr, "qrsol error!\n");
-                cs_print(smat, 0); // print out matrix for debugging
+                //cs_print(smat, 0); // print out matrix for debugging
                 cs_print_to_file(smat);
                 exit(EXIT_ERROR_CS_SOL);
             }
@@ -733,10 +734,17 @@ void solve_diffusion_part(job_t *job)
             residual[i] = ng[i] - f[i];
             gf_nodes[i] = ng[i];
         }
-        rtr = dot(residual, residual, slda);
+        const rtr = dot(residual, residual, slda);
+        const gtg = dot(f, f, slda);
+        if (gtg > 0) {
+            rel_error = rtr / gtg;
+        } else {
+            rel_error = 0;
+        }
         // printf("%g ", rtr);
-    } while (rtr > 1e-10 && inner_iterations <= 100);
-    printf("%g\n", rtr);
+        inner_iterations++;
+    } while (rel_error > max_rel_error && inner_iterations <= max_inner_iterations);
+    printf("%d: %d %g\n", job->stepcount, inner_iterations, rel_error);
     // printf("\n");
 
     for (i = 0; i < job->num_nodes; i++) {
