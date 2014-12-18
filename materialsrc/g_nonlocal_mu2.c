@@ -43,11 +43,11 @@ void calculate_stress_threaded(threadtask_t *task);
 static double E, nu, G, K;
 static double mu_s, mu_2, I_0, rho_s, rho_c, d, A;
 static double *Kp; //vector which is a solution of the matrix-vector product.
-static double *g_loc; //nodal values of g_local
-static double *g; //nodal values of g
-static double *v; //nodal volumes (nodal mass already computed)
-static double *tau_tr; // nodal values of tau_tr
-static double *p_tr; // nodal values of p_tr
+static double *ng_loc; //nodal values of g_local
+static double *ng; //nodal values of g
+static double *nv; //nodal volumes (nodal mass already computed)
+static double *ntau_tr; // nodal values of tau_tr
+static double *np_tr; // nodal values of p_tr
 
 double calculate_g_local(double tau, double p);
 double calculate_xisq_inverse(double tau, double p);
@@ -107,6 +107,26 @@ double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double del
 
     }
     return g_local;
+}
+
+double calculate_load_from_g(double tau_tr, double p_tr, double g, double delta_t, double v);
+double calculate_load_from_g(double tau_tr, double p_tr, double g, double delta_t, double v)
+{
+    double load = 0;
+    if (g >= 0 && tau_tr > 0 && p_tr > 0) {
+        const double zeta = I_0 / (d * sqrt(rho_s));
+        const double s = g * G * delta_t + p_tr;
+        if ((tau_tr / s) < mu_s) {
+            load = 0;
+        } else if ((tau_tr / s) < mu_2) {
+            const double g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - mu_s * s) / (mu_2 * s - tau_tr);
+            const double xisq_inverse = calculate_xisq_inverse(tau_tr * p_tr / s, p_tr);
+            load = v * g_local * xisq_inverse; 
+        } else {
+            load = 1;
+        }
+    }
+    return load;
 }
 
 typedef struct p_trial_s {
@@ -250,6 +270,7 @@ double dot(const double * a, const double * b, size_t n)
 int cs_cg(const cs *K, double *f, const double *u_0, double tol);
 int cs_cg(const cs *K, double *f, const double *u_0, double tol)
 {
+    const size_t residual_recalculation_interval = 10;
     int converged = 0;
     if (K->m != K->n) {
         return converged; //nonsquare matrix
@@ -309,6 +330,7 @@ int cs_cg(const cs *K, double *f, const double *u_0, double tol)
     free(u);
     free(r);
     free(p);
+    free(Kp);
     return converged;
 }
 
@@ -361,13 +383,13 @@ void material_init(job_t *job)
     Kp = calloc(job->num_nodes, sizeof(double));
     printf("%s:%s: Done allocating storage for matrix-vector multiply.\n",
         __FILE__, __func__);
-    g = calloc(job->num_nodes, sizeof(double));
-    g_loc = calloc(job->num_nodes, sizeof(double));
-    tau_tr = calloc(job->num_nodes, sizeof(double));
-    p_tr = calloc(job->num_nodes, sizeof(double));
+    ng = calloc(job->num_nodes, sizeof(double));
+    ng_loc = calloc(job->num_nodes, sizeof(double));
+    ntau_tr = calloc(job->num_nodes, sizeof(double));
+    np_tr = calloc(job->num_nodes, sizeof(double));
     printf("%s:%s: Done allocating storage for nodal values of g.\n",
         __FILE__, __func__);
-    v = calloc(job->num_nodes, sizeof(double));
+    nv = calloc(job->num_nodes, sizeof(double));
     printf("%s:%s: Done allocating storage for nodal values of v.\n",
         __FILE__, __func__);
     printf("%s:%s: (material version %s) done initializing material.\n",
@@ -457,6 +479,8 @@ void solve_diffusion_part(job_t *job)
     double *gf_nodes;
 
     double *f;
+    double *f_old;
+    double *residual;
 
     double s[4];
     double grad_s[4][2];
@@ -468,12 +492,12 @@ void solve_diffusion_part(job_t *job)
     gf_nodes = (double *)malloc(job->num_nodes * sizeof(double));
     for (i = 0; i < job->num_nodes; i++) {
         gf_nodes[i] = 0;
-        g[i] = 0;
-        g_loc[i] = 0;
-        tau_tr[i] = 0;
-        p_tr[i] = 0;
+        ng[i] = 0;
+        ng_loc[i] = 0;
+        ntau_tr[i] = 0;
+        np_tr[i] = 0;
         // clear volumes
-        v[i] = 0;
+        nv[i] = 0;
     }
 
     /* get number of dofs and initialize mapping arrays */
@@ -505,6 +529,8 @@ void solve_diffusion_part(job_t *job)
     }
 
     f = calloc(sizeof(double), slda);
+    f_old = calloc(sizeof(double), slda);
+    residual = calloc(sizeof(double), slda);
 
     /*  calculate number of nonzero elements (before summing duplicates). */
     nnz = 0;
@@ -536,7 +562,8 @@ void solve_diffusion_part(job_t *job)
         // printf("%g, %g, %g\n", tr.tau_tau, tr.p_tau, tr.tau_tau / tr.p_tau);
         if (flag == 1) {
             gf_local = tr.tau_tr * ((1.0 / tr.s) - 1.0) / (G * job->dt);
-            xisq_inv = calculate_xisq_inverse(tr.tau_tau, tr.p_tau);
+            // xisq_inv = calculate_xisq_inverse(tr.tau_tau, tr.p_tau);
+            xisq_inv = 100;
         } else {
             gf_local = 0;
             xisq_inv = 0;
@@ -582,7 +609,9 @@ void solve_diffusion_part(job_t *job)
 
             f[sgi] += f_component;
             gf_nodes[sgi] += gf_component;
-            v[sgi] += s[ei] * job->particles[i].v;
+            nv[sgi] += s[ei] * job->particles[i].v;
+            np_tr[sgi] += s[ei] * job->particles[i].v * (tr.p_tr);
+            ntau_tr[sgi] += s[ei] * job->particles[i].v * (tr.tau_tr);
         }
     }
     
@@ -645,51 +674,74 @@ void solve_diffusion_part(job_t *job)
 
     /* figure out local values of g at nodes */
     for (i = 0; i < slda; i++) {
-        if (v[i] > 0) {
-            gf_nodes[i] = gf_nodes[i] / v[i];
+        if (nv[i] > 0) {
+            gf_nodes[i] = gf_nodes[i] / nv[i];
+            np_tr[i] = np_tr[i] /nv[i];
+            ntau_tr[i] = ntau_tr[i] /nv[i];
         } else {
             gf_nodes[i] = 0;
+            np_tr[i] = 0;
+            ntau_tr[i] = 0;
         }
-        g_loc[i] = gf_nodes[i];
+        ng_loc[i] = gf_nodes[i];
         assert(gf_nodes[i] >= 0);
     }
 
     for (i = 0; i < slda; i++) {
-        p_tr[i] = f[i]; // copy load;
+        f_old[i] = f[i]; // copy load;
     }
 
-#define DIRECT_SOLVE
-#ifndef DIRECT_SOLVE
-    /* create compressed sparse matrix */
-    smat = cs_compress(triplets);
-    cs_dupl(smat);
-//    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
-    if (!cs_cg(smat, f, gf_nodes, 1e-15)) {
-        fprintf(stderr, "cg error!\n");
-        cs_print(smat, 0); // print out matrix for debugging
-        cs_print_to_file(smat);
-        exit(EXIT_ERROR_CS_SOL);
-    }
-#else
-    /* keep matrix from being dengerate when an element is filled with open particles. */
-    for (i = 0; i < slda; i++) {
-        cs_entry(triplets, i, i, 1e-10);
-    }
-    /* create compressed sparse matrix */
-    smat = cs_compress(triplets);
-    cs_dupl(smat);
-//    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
-
-    if (!cs_lusol(1, smat, f, 1e-12)) {
-        fprintf(stderr, "lusol error!\n");
-        if (cs_qrsol(1, smat, f)) {
-            fprintf(stderr, "qrsol error!\n");
+    double rtr = 1;
+    smat = NULL;
+    int inner_iterations = 0;
+    do {
+    //#define DIRECT_SOLVE
+    #ifndef DIRECT_SOLVE
+        /* create compressed sparse matrix */
+        if (smat != NULL) {
+            cs_spfree(smat);
+        }
+        smat = cs_compress(triplets);
+        cs_dupl(smat);
+    //    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
+        if (!cs_cg(smat, f, gf_nodes, 1e-15)) {
+            fprintf(stderr, "cg error!\n");
             cs_print(smat, 0); // print out matrix for debugging
             cs_print_to_file(smat);
             exit(EXIT_ERROR_CS_SOL);
         }
-    }
-#endif
+    #else
+        /* keep matrix from being dengerate when an element is filled with open particles. */
+        for (i = 0; i < slda; i++) {
+            cs_entry(triplets, i, i, 1e-10);
+        }
+        /* create compressed sparse matrix */
+        smat = cs_compress(triplets);
+        cs_dupl(smat);
+    //    fprintf(stderr, "%d by %d\n", smat->m, smat->n); // print out matrix for debugging
+
+        if (!cs_lusol(1, smat, f, 1e-15)) {
+            fprintf(stderr, "lusol error!\n");
+            if (cs_qrsol(1, smat, f)) {
+                fprintf(stderr, "qrsol error!\n");
+                cs_print(smat, 0); // print out matrix for debugging
+                cs_print_to_file(smat);
+                exit(EXIT_ERROR_CS_SOL);
+            }
+        }
+    #endif
+
+        for (i = 0; i < slda; i++) {
+            ng[i] = f[i];
+            f[i] = calculate_load_from_g(ntau_tr[i], np_tr[i], f[i], job->dt, nv[i]);
+            residual[i] = ng[i] - f[i];
+            gf_nodes[i] = ng[i];
+        }
+        rtr = dot(residual, residual, slda);
+        // printf("%g ", rtr);
+    } while (rtr > 1e-10 && inner_iterations <= 100);
+    printf("%g\n", rtr);
+    // printf("\n");
 
     for (i = 0; i < job->num_nodes; i++) {
         gf_nodes[i] = 0; // clear guess values
@@ -704,6 +756,7 @@ void solve_diffusion_part(job_t *job)
     }
 
     /* ensure periodic BCs ok */
+#if 0
     for (i = 0; i < job->num_nodes; i++) {
         i_new = (job->node_number_override[NODAL_DOF * i + 0] - 0) / NODAL_DOF;
 
@@ -711,6 +764,7 @@ void solve_diffusion_part(job_t *job)
             assert(gf_nodes[i] == gf_nodes[i_new]);
         }
     }
+#endif
 
     /* map nodal g_nonlocal back to particles */
     for (i = 0; i < job->num_particles; i++) {
@@ -739,7 +793,7 @@ void solve_diffusion_part(job_t *job)
             gi = nn[ei];
             gi = (job->node_number_override[NODAL_DOF * gi + 0] - 0) / NODAL_DOF;
             sgi = node_map[gi];
-
+/*
             if (gf_nodes[gi] < 0) {
                 fprintf(stderr, "%d: %lg\n", gi, gf_nodes[gi]);
                 cs_print_to_file(smat);
@@ -750,7 +804,9 @@ void solve_diffusion_part(job_t *job)
             fclose(ff);
             }
             assert(gf_nodes[gi] >= 0);
+*/
             gf += gf_nodes[gi] * s[ei];
+            // gf += gf_nodes[gi] * 0.25;
         }
 
         if (gf < 0) {
@@ -758,7 +814,7 @@ void solve_diffusion_part(job_t *job)
             cs_print_to_file(smat);
             FILE *ff = fopen("load.cs", "w");
             for (size_t j = 0; j < slda; j++) {
-                fprintf(ff, "%lg\n", p_tr[j]);
+                fprintf(ff, "%lg\n", np_tr[j]);
             }
             fclose(ff);
         }
@@ -774,6 +830,8 @@ void solve_diffusion_part(job_t *job)
     free(gf_nodes);
 
     free(f);
+    free(f_old);
+    free(residual);
 
     return;
 }
