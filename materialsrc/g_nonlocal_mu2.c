@@ -30,7 +30,7 @@
 #define gf jp(state[3])
 #define eta jp(state[4])
 #define gf_local jp(state[5])
-#define xisq_inv jp(state[6])
+#define xisq jp(state[7])
 #define gammap jp(state[9])
 #define gammadotp jp(state[10])
 
@@ -97,6 +97,32 @@ double calculate_xisq_inverse(double tau, double p)
     return xisq_inverse;
 }
 
+double calculate_xisq(double tau, double p)
+{
+    const double cap = 100 * d;
+    double xisqc = 0;
+    if (p > 0) {
+        const double S0 = mu_s * p;
+        const double S2 = mu_2 * p;
+
+        if (tau > S2) {
+            fprintf(stderr, "\n%g > %g: %g\n", tau, S2, tau / p);
+        }
+        assert(tau <= S2);
+
+        if (tau != S0) {
+            xisqc  = (fabs(S2 - tau) * A * A * d * d) / (fabs(tau - S0) * (mu_2 - mu_s));
+        } else {
+            xisqc = cap;
+        }
+
+        if (xisqc > cap) {
+            xisqc = cap;
+        }
+    }
+    return xisqc;
+}
+
 double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double delta_t)
 {
     double g_local = 0;
@@ -120,8 +146,7 @@ double calculate_load_from_g(double tau_tr, double p_tr, double g, double delta_
             load = 0;
         } else if ((tau_tr / s) < mu_2) {
             const double g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - mu_s * s) / (mu_2 * s - tau_tr);
-            const double xisq_inverse = calculate_xisq_inverse(tau_tr * p_tr / s, p_tr);
-            load = v * g_local * xisq_inverse; 
+            load = v * g_local; 
         } else {
             load = 1;
         }
@@ -354,7 +379,7 @@ void material_init(job_t *job)
         gammadotp = 0;
         gf = 0;
         gf_local = 0;
-        xisq_inv = 0;
+        xisq = 0;
     }
 
     if (job->material.num_fp64_props < 9) {
@@ -461,14 +486,14 @@ void calculate_stress(job_t *job)
 /*----------------------------------------------------------------------------*/
 void solve_diffusion_part(job_t *job)
 {
-    size_t i, j;
-    size_t i_new, j_new;
+    size_t i;
+    size_t i_new;
     size_t ei, ej;
     size_t gi, gj;
-    size_t sgi, sgj;
+    long int sgi, sgj;
 
-    size_t *node_map;
-    size_t *inv_node_map;
+    long int *node_map;
+    long int *inv_node_map;
 
     size_t slda;
     size_t nnz;
@@ -501,8 +526,8 @@ void solve_diffusion_part(job_t *job)
     }
 
     /* get number of dofs and initialize mapping arrays */
-    node_map = (size_t *)malloc(job->num_nodes * sizeof(size_t));
-    inv_node_map = (size_t *)malloc(job->num_nodes * sizeof(size_t));
+    node_map = malloc(job->num_nodes * sizeof(long int));
+    inv_node_map = malloc(job->num_nodes * sizeof(long int));
     slda = 0;
     for (i = 0; i < job->num_nodes; i++) {
         node_map[i] = -1;
@@ -562,18 +587,17 @@ void solve_diffusion_part(job_t *job)
         // printf("%g, %g, %g\n", tr.tau_tau, tr.p_tau, tr.tau_tau / tr.p_tau);
         if (flag == 1) {
             gf_local = tr.tau_tr * ((1.0 / tr.s) - 1.0) / (G * job->dt);
-            // xisq_inv = calculate_xisq_inverse(tr.tau_tau, tr.p_tau);
-            xisq_inv = 100;
+            xisq = calculate_xisq(tr.tau_tau, tr.p_tau);
         } else {
             gf_local = 0;
-            xisq_inv = 0;
+            xisq = 0;
             job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
             job->particles[i].syy = 0;
             continue; // don't add contribution to stiffness matrix
         }
         assert(gf_local >= 0);
-        assert(xisq_inv >= 0);
+        assert(xisq >= 0);
 
         if (dense == 0) {
             continue;
@@ -589,7 +613,7 @@ void solve_diffusion_part(job_t *job)
         nn = job->elements[p].nodes;
 
         assert(isfinite(gf_local));
-        assert(isfinite(xisq_inv));
+        assert(isfinite(xisq));
         
         for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
             gi = nn[ei];
@@ -598,7 +622,7 @@ void solve_diffusion_part(job_t *job)
             
             assert(sgi != -1);
 
-            const double f_component = (job->particles[i].v) * gf_local * xisq_inv * s[ei];
+            const double f_component = (job->particles[i].v) * gf_local * s[ei];
             const double gf_component = (job->particles[i].v) * gf_local * s[ei];
             if (f_component < 0) {
                 printf("v: %lg\nf: %lg\n", job->particles[i].v, f_component);
@@ -659,11 +683,11 @@ void solve_diffusion_part(job_t *job)
                 sgj = node_map[gj];
 
                 assert(isfinite(gf_local));
-                assert(isfinite(xisq_inv));
+                assert(isfinite(xisq));
                 assert(isfinite(job->particles[i].v));
 
-                const double k_component = job->particles[i].v * (xisq_inv * s[ei] * s[ej] + 
-                        (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
+                const double k_component = job->particles[i].v * (s[ei] * s[ej] + 
+                        xisq * (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
 
                 assert(isfinite(k_component));
                 
@@ -695,7 +719,7 @@ void solve_diffusion_part(job_t *job)
     const double max_rel_error = 1e-6;
     int inner_iterations = 0;
     const int max_inner_iterations = 1000;
-//#define DIRECT_SOLVE
+#define DIRECT_SOLVE
 #ifdef DIRECT_SOLVE
     /* keep matrix from being dengerate when an element is filled with open particles. */
     for (i = 0; i < slda; i++) {
@@ -734,8 +758,8 @@ void solve_diffusion_part(job_t *job)
             residual[i] = ng[i] - f[i];
             gf_nodes[i] = ng[i];
         }
-        const rtr = dot(residual, residual, slda);
-        const gtg = dot(f, f, slda);
+        const double rtr = dot(residual, residual, slda);
+        const double gtg = dot(f, f, slda);
         if (gtg > 0) {
             rel_error = rtr / gtg;
         } else {
@@ -814,7 +838,7 @@ void solve_diffusion_part(job_t *job)
         }
 
         if (gf < 0) {
-            fprintf(stderr, "%d: %lg\n", i, gf);
+            fprintf(stderr, "%zu: %lg\n", i, gf);
             cs_print_to_file(smat);
             FILE *ff = fopen("load.cs", "w");
             for (size_t j = 0; j < slda; j++) {
