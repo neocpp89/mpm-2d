@@ -1,8 +1,11 @@
-ADD_EXECUTABLE(mpm_2d
+set(SOURCES
     main.c
     reader.c
     writer.c
 )
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/GitSHA1.c.in" "${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.c" @ONLY)
+list(APPEND SOURCES "${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.c" GitSHA1.h)
+ADD_EXECUTABLE(mpm_2d ${SOURCES})
 target_link_libraries(mpm_2d mpm)
 target_link_libraries(mpm_2d ${CXSPARSE_LIBRARY})
 target_link_libraries(mpm_2d m)
