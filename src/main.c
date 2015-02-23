@@ -719,6 +719,11 @@ int main(int argc, char **argv)
         JUMP_IF_NULL(job->output.particle_fd, _close_files,
             "Can't open log file for output.\n");
 
+    /*
+        Write git version which generated this output.
+    */
+    fprintf(job->output.info_fd, "%s Git Hash: %s\n", argv[0], g_GIT_SHA1);
+
     /* sampling rate */
     job->output.sample_rate_hz = cfg_getfloat(cfg_output, "sample-rate");
     if (job->output.sample_rate_hz < 0) {
