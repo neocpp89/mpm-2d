@@ -304,7 +304,6 @@ enum e_particle_variables {
     NUM_VAR_PARTICLES
 };
 
-
 #include "node.hpp"
 #include "backgroundmesh.hpp"
 

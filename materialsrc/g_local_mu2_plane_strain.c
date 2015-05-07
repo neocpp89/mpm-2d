@@ -32,15 +32,9 @@
 #define MU_2 0.6435
 #define I_0 (0.278 / 1.0)
 
-/*
-    from geometric considerations -- artificially increased to make
-    velocity field reasonable in chute.
-*/
-#define GRAINS_D (0.001 * 5)
-
 #define mu_y jp(state[0])
 #define szz jp(state[1])
-/*#define Epyy jp(state[2])*/
+#define material_type jp(state[2])
 #define gf jp(state[3])
 #define eta jp(state[4])
 #define beta jp(state[5])
@@ -65,6 +59,7 @@ static double E;
 static double nu;
 static double G;
 static double K;
+static double grains_d;
 
 void quadratic_roots(double *x1, double *x2, double a, double b, double c)
 {
@@ -118,20 +113,27 @@ void material_init(job_t *job)
         gammap = 0;
         gammadotp = 0;
         gf = 0;
+
+        if (job->particles[i].y > 0.5) {
+            material_type = 0;
+        } else { 
+            material_type = 1;
+        }
     }
 
-    if (job->material.num_fp64_props < 2) {
+    if (job->material.num_fp64_props < 3) {
         fprintf(stderr,
-            "%s:%s: Need at least 2 properties defined (E, nu).\n",
+            "%s:%s: Need at least 3 properties defined (E, nu, grain diameter).\n",
             __FILE__, __func__);
         exit(EXIT_ERROR_MATERIAL_FILE);
     } else {
         E = job->material.fp64_props[0];
         nu = job->material.fp64_props[1];
+        grains_d = job->material.fp64_props[2];
         G = E / (2.0 * (1.0 + nu));
         K = E / (3.0 * (1.0 - 2*nu));
-        printf("%s:%s: properties (E = %g, nu = %g, G = %g, K = %g).\n",
-            __FILE__, __func__, E, nu, G , K);
+        printf("%s:%s: properties (E = %g, nu = %g, G = %g, K = %g, d = %g).\n",
+            __FILE__, __func__, E, nu, G , K, grains_d);
     }
 
     printf("%s:%s: (material version %s) done initializing material.\n",
@@ -208,6 +210,14 @@ void calculate_stress_threaded(threadtask_t *task)
         syy_tr = job->particles[i].syy + job->dt * dsjyy;
         szz_tr = szz + job->dt * lambda * trD;
 
+        if (material_type == 0) {
+            job->particles[i].sxx = sxx_tr;
+            job->particles[i].sxy = sxy_tr;
+            job->particles[i].syy = syy_tr;
+            szz = szz_tr;
+            continue;
+        }
+
         p_tr = -(sxx_tr + syy_tr + szz_tr) / 3.0;
         t0xx_tr = sxx_tr + p_tr;
         t0xy_tr = sxy_tr;
@@ -237,7 +247,7 @@ void calculate_stress_threaded(threadtask_t *task)
                 scale_factor = 1.0;
             } else {
                 S2 = MU_2 * p_tr;
-                alpha = G * I_0 * job->dt * sqrt(p_tr / GRAINS_RHO) / GRAINS_D;
+                alpha = G * I_0 * job->dt * sqrt(p_tr / GRAINS_RHO) / grains_d;
                 B = -(S2 + tau_tr + alpha);
                 H = S2 * tau_tr + S0 * alpha;
                 tau_tau = negative_root(1.0, B, H);

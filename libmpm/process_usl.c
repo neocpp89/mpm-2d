@@ -23,7 +23,7 @@
 
 #include <assert.h>
 
-#define TOL 1e-10
+#define TOL 5e-11
 
 #define ijton(i,j,N) ((j)*(N) + (i))
 #define N_TO_P(j,tok,i) SMEAR(j,tok,i,h)
