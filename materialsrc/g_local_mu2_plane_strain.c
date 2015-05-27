@@ -26,7 +26,8 @@
 
 /* from Dave + Ken's paper */
 #define MU_S 0.3819
-#define GRAINS_RHO 2450
+#define GRAINS_RHO 1200
+#define RHO_CRITICAL (GRAINS_RHO*0.7)
 
 /* from Jop (modified I_0) */
 #define MU_2 0.6435
@@ -95,11 +96,30 @@ double negative_root(double a, double b, double c)
 void material_init(job_t *job)
 {
     int i, j;
+    double intruder_y_velocity;
 
     for (i = 0; i < job->num_particles; i++) {
         for (j = 0; j < DEPVAR; j++) {
             job->particles[i].state[j] = 0;
         }
+    }
+
+    if (job->material.num_fp64_props < 4) {
+        // Bit of a hack, but it's okay for now. Just close your eyes and code it anyways.
+        fprintf(stderr,
+            "%s:%s: Need at least 4 properties defined (E, nu, grain diameter, intruder-y-vel).\n",
+            __FILE__, __func__);
+        exit(EXIT_ERROR_MATERIAL_FILE);
+    } else {
+        E = job->material.fp64_props[0];
+        nu = job->material.fp64_props[1];
+        grains_d = job->material.fp64_props[2];
+        intruder_y_velocity = job->material.fp64_props[3];
+        G = E / (2.0 * (1.0 + nu));
+        K = E / (3.0 * (1.0 - 2*nu));
+        printf("%s:%s: properties (E = %g, nu = %g, G = %g, K = %g, d = %g).\n",
+            __FILE__, __func__, E, nu, G , K, grains_d);
+        printf("%s:%s intruder y-velocity = %g\n", __FILE__, __func__, intruder_y_velocity);
     }
 
     for (i = 0; i < job->num_particles; i++) {
@@ -116,24 +136,11 @@ void material_init(job_t *job)
 
         if (job->particles[i].y > 0.5) {
             material_type = 0;
+            // this is the intruder, so set the y-velocity
+            job->particles[i].y_t = intruder_y_velocity;
         } else { 
             material_type = 1;
         }
-    }
-
-    if (job->material.num_fp64_props < 3) {
-        fprintf(stderr,
-            "%s:%s: Need at least 3 properties defined (E, nu, grain diameter).\n",
-            __FILE__, __func__);
-        exit(EXIT_ERROR_MATERIAL_FILE);
-    } else {
-        E = job->material.fp64_props[0];
-        nu = job->material.fp64_props[1];
-        grains_d = job->material.fp64_props[2];
-        G = E / (2.0 * (1.0 + nu));
-        K = E / (3.0 * (1.0 - 2*nu));
-        printf("%s:%s: properties (E = %g, nu = %g, G = %g, K = %g, d = %g).\n",
-            __FILE__, __func__, E, nu, G , K, grains_d);
     }
 
     printf("%s:%s: (material version %s) done initializing material.\n",
@@ -225,7 +232,7 @@ void calculate_stress_threaded(threadtask_t *task)
         t0zz_tr = szz_tr + p_tr; 
         tau_tr = sqrt(0.5*(t0xx_tr*t0xx_tr + 2*t0xy_tr*t0xy_tr + t0yy_tr*t0yy_tr + t0zz_tr*t0zz_tr));
 
-        if ((job->particles[i].m / job->particles[i].v) < 1485.0f) {
+        if ((job->particles[i].m / job->particles[i].v) < RHO_CRITICAL) {
             density_flag = 1;
 /*            printf("%4d: density %lf\n", i, (job->particles[i].m / job->particles[i].v));*/
         } else {
