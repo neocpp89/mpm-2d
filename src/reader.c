@@ -129,7 +129,7 @@ job_t *read_state(FILE *fd)
 
     int r = fscanf(fd, "%lg %lg %lg", &(job->t), &(job->dt), &(job->t_stop));
     r += fscanf(fd, "%zu %zu %zu", &(job->num_particles), &(job->num_nodes), &(job->num_elements));
-    r += fscanf(fd, "%zu %lg", &(job->N), &(job->h));
+    r += fscanf(fd, "%zu %lg", &(job->N), &(job->hx));
 
     if (r != 8) {
         printf("Error reading state header!\n");

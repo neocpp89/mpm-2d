@@ -269,7 +269,6 @@ int main(int argc, char **argv)
     char *s;
     char *s_dlerror;
 
-    double h;
     int N;
     int j;
     int len;
@@ -408,11 +407,14 @@ int main(int argc, char **argv)
     }
 
     N = g.N;
-    h = g.len / (N-1);
+    const double Lx = g.len;
+    const double Ly = g.len;
+    const double hx = Lx / (N-1);
+    const double hy = Ly / (N-1);
 
-    printf("Grid parameters: N = %d, h = %g.\n", N, h);
+    printf("Grid parameters: N = %d, Lx = %g, hx = %g.\n", N, Lx, hx);
 
-    job = mpm_init(N, h, pdata, plen, t_stop);
+    job = mpm_init(N, hx, hy, Lx, Ly, pdata, plen, t_stop);
 
     /* section for material options */
     cfg_material = cfg_getsec(cfg, "material");
@@ -742,7 +744,8 @@ int main(int argc, char **argv)
     job->dt = job->timestep.dt;
 job_start:
     fprintf(stderr, "\nRunning Simulation to %g seconds.\n", job->t_stop);
-    fprintf(stderr, "Grid size is (%zu, %zu); spacing is %g.\n", job->N, job->N, job->h);
+    fprintf(stderr, "Grid size is (%zu, %zu); spacing is %g.\n", job->N, job->N, job->hx);
+    fprintf(stderr, "Grid dimensions are (%g, %g).\n", job->Lx, job->Ly);
 
     tasks = (threadtask_t *)malloc(sizeof(threadtask_t) * num_threads);
     job->step_barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t));

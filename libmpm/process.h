@@ -136,7 +136,11 @@ typedef struct job_s {
     size_t **particle_by_element_color_lists;
 
     size_t N;
-    double h;
+    // double h;
+    double Lx;
+    double Ly;
+    double hx;
+    double hy;
 
     int use_cpdi;
     struct timespec tic, toc;
@@ -248,7 +252,7 @@ typedef struct s_threadtask {
     job_t *job;
 } threadtask_t;
 
-job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, double t);
+job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *particles, size_t num_particles, double t);
 void explicit_mpm_step_usl_threaded(void *_task);
 void mpm_cleanup(job_t *job);
 

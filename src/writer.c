@@ -239,13 +239,13 @@ void write_element_frame(FILE *fd, size_t frame, double time, job_t *job)
     fprintf(fd, "%zu %lg %zu\n", frame, time, job->num_elements);
 
     for (size_t i = 0; i < job->num_elements; i++) {
-        node_number_to_coords(&x, &y, job->elements[i].nodes[0], job->N, job->h);
+        node_number_to_coords(&x, &y, job->elements[i].nodes[0], job->N, job->hx);
         fprintf(fd, "%lg %lg ", x, y);
-        node_number_to_coords(&x, &y, job->elements[i].nodes[1], job->N, job->h);
+        node_number_to_coords(&x, &y, job->elements[i].nodes[1], job->N, job->hx);
         fprintf(fd, "%lg %lg ", x, y);
-        node_number_to_coords(&x, &y, job->elements[i].nodes[2], job->N, job->h);
+        node_number_to_coords(&x, &y, job->elements[i].nodes[2], job->N, job->hx);
         fprintf(fd, "%lg %lg ", x, y);
-        node_number_to_coords(&x, &y, job->elements[i].nodes[3], job->N, job->h);
+        node_number_to_coords(&x, &y, job->elements[i].nodes[3], job->N, job->hx);
         fprintf(fd, "%lg %lg ", x, y);
         fprintf(fd, "%lg %lg %lg\n",
             (v_acc[i] > 0) ? (sxx_acc[i] / v_acc[i]) : 0.0f,
@@ -267,7 +267,7 @@ void write_state(FILE *fd, job_t *job)
 {
     fprintf(fd, "%lg %lg %lg\n", job->t, job->dt, job->t_stop);
     fprintf(fd, "%zu %zu %zu\n", job->num_particles, job->num_nodes, job->num_elements);
-    fprintf(fd, "%zu %lg\n", job->N, job->h);
+    fprintf(fd, "%zu %lg\n", job->N, job->hx);
 
     for (size_t i = 0; i < job->num_particles; i++) {
         /* Position */

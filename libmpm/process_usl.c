@@ -40,8 +40,13 @@
 #define __NE(j,e,n) j->elements[e].nodes[n]
 
 /* XXX: ugly, fix soon */
+#if 0
 #define WHICH_ELEMENT4(xp,yp,N,h) \
     ((int)(((xp)<1.0 && (xp)>=0.0 && (yp)<1.0 && (yp)>=0.0)?((floor((xp)/(h)) + floor((yp)/(h))*((N)-1))):(-1)))
+#endif
+
+#define WHICH_ELEMENT4(xp,yp,N,Lx,Ly,hx,hy) \
+    ((int)(((xp)<Lx && (xp)>=0.0 && (yp)<Ly && (yp)>=0.0)?((floor((xp)/(hx)) + floor((yp)/(hy))*((N)-1))):(-1)))
 
 #define ACCUMULATE4(acc_tok,j,tok,i,n,s) \
     j->nodes[__N(j,i,0)].acc_tok += j->s ## 1[i] * j->particles[i].tok; \
@@ -65,7 +70,7 @@
 #define CHECK_ACTIVE(j,i) if (j->active[i] == 0) { continue; }
 
 /*----------------------------------------------------------------------------*/
-job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, double t)
+job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *particles, size_t num_particles, double t)
 {
     int n;
 
@@ -78,7 +83,10 @@ job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, do
     job->frame = 0;
 
     job->N = N;
-    job->h = h;
+    job->hx = hx;
+    job->hy = hy;
+    job->Lx = Lx;
+    job->Ly = Ly;
     job->num_nodes = N*N;
     job->num_particles = num_particles;
 
@@ -124,6 +132,10 @@ job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, do
         job->particles[i].corners[3][1] = 0;
         job->particles[i].color = 0;
     }
+
+    /* hack it in */
+    assert(hx == hy);
+    const double h = hx;
 
     /* Get node coordinates. */
     job->nodes = (node_t *)calloc(job->num_nodes, sizeof(node_t));
@@ -235,7 +247,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, do
 
     for (size_t i = 0; i < job->num_particles; i++) {
         job->in_element[i] = WHICH_ELEMENT(
-            job->particles[i].x, job->particles[i].y, job->N, job->h);
+            job->particles[i].x, job->particles[i].y, job->N, job->Lx, job->Ly, job->hx, job->hy);
         if (job->in_element[i] < 0 || (size_t)job->in_element[i] > job->num_elements) {
             job->active[i] = 0;
         } else {
@@ -258,7 +270,7 @@ job_t *mpm_init(int N, double h, particle_t *particles, size_t num_particles, do
 /*    material_init(job);*/
 
     /* Set default timestep. */
-    job->dt = 0.4 * job->h * sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
+    job->dt = 0.4 * h * sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
 
     /* Don't use cpdi here. */
     job->use_cpdi = 0;
@@ -644,7 +656,7 @@ void create_particle_to_element_map_threaded(threadtask_t *task)
     for (i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
         p = WHICH_ELEMENT(
-            job->particles[i].x, job->particles[i].y, job->N, job->h);
+            job->particles[i].x, job->particles[i].y, job->N, job->Lx, job->Ly, job->hx, job->hy);
 
         if (p != job->in_element[i]) {
             changed = 1;
@@ -733,6 +745,9 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
     double xl;
     double yl;
 
+    /* assert(hx == hy) before this. (hack) */
+    const double h = job->hx;
+
     for (i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
         p = job->in_element[i];
@@ -741,13 +756,13 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
         yn = job->nodes[n].y;
         global_to_local_coords(&xl, &yl,
             job->particles[i].x, job->particles[i].y, 
-            xn, yn, job->h);
+            xn, yn, h);
         tent(&(job->h1[i]), &(job->h2[i]), &(job->h3[i]), &(job->h4[i]),
             xl, yl);
         grad_tent(
             &(job->b11[i]), &(job->b12[i]), &(job->b13[i]), &(job->b14[i]),
             &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
-            xl, yl, job->h);
+            xl, yl, job->hx, job->hy, job->Lx, job->Ly);
         if (xl < 0.0f || xl > 1.0f || yl < 0.0f || yl > 1.0f) {
             fprintf(stderr, "Particle %zu outside of element %zu (%g, %g).\n", i,
                 p, xl, yl);
