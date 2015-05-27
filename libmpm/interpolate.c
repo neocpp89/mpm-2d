@@ -42,8 +42,8 @@ void grad_tent(double * restrict b11, double * restrict b12, double * restrict b
     double * restrict b21, double * restrict b22, double * restrict b23, double * restrict b24,
     double x_local, double y_local, double hx, double hy, double Lx, double Ly)
 {
-    double dxl_dx = (Lx / hx);
-    double dyl_dy = (Ly / hy);
+    double dxl_dx = (1.0 / hx);
+    double dyl_dy = (1.0 / hy);
 
     /*
         d/dx1

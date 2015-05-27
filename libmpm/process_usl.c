@@ -746,7 +746,8 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
     double yl;
 
     /* assert(hx == hy) before this. (hack) */
-    const double h = job->hx;
+    const double hx = job->hx;
+    const double hy = job->hy;
 
     for (i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
@@ -756,7 +757,7 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
         yn = job->nodes[n].y;
         global_to_local_coords(&xl, &yl,
             job->particles[i].x, job->particles[i].y, 
-            xn, yn, h);
+            xn, yn, hx, hy);
         tent(&(job->h1[i]), &(job->h2[i]), &(job->h3[i]), &(job->h4[i]),
             xl, yl);
         grad_tent(

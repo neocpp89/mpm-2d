@@ -152,6 +152,6 @@ typedef struct particle_s {
 */
 void global_to_local_coords(double *x_local, double *y_local, 
     double x, double y, 
-    double x_ref, double y_ref, double h);
+    double x_ref, double y_ref, double hx, double hy);
 #endif
 
