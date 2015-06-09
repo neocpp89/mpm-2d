@@ -848,8 +848,6 @@ void solve_diffusion_part(job_t *job)
 
     cs_spfree(triplets_hat);
     cs_spfree(smat_hat);
-    free(f_hat);
-    free(guess);
 
     for (i = 0; i < slda; i++) {
         // f_old and ng_loc are actually -gloc^1
@@ -857,10 +855,14 @@ void solve_diffusion_part(job_t *job)
         residual[i] = f_hat[i]; // try to just use size of delta g2
     }
 
-    rel_error = dot(residual, residual, slda) / slda;
+    free(f_hat);
+    free(guess);
+
+    const double rtr = dot(residual, residual, slda);
+    rel_error =  rtr / slda;
 
     inner_iterations++;
-    printf("%d: %d %g\n", job->stepcount, inner_iterations, rel_error);
+    printf("%d: %d %g %g\n", job->stepcount, inner_iterations, rtr, rel_error);
     } while ((inner_iterations < max_inner_iterations) && (rel_error > max_rel_error));
 
     /* map nodal g_nonlocal back to particles */
