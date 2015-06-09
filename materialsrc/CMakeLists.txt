@@ -29,7 +29,7 @@ endforeach(matc)
 
 foreach(matc ${NONLOCAL_MATERIALS})
     string(REGEX REPLACE "\\.c$" "" matso ${matc})
-    add_library(${matso} SHARED ${matc})
+    add_library(${matso} SHARED ${matc} cs_cg.c)
     target_link_libraries(${matso} mpm)
     target_link_libraries(${matso} ${CXSPARSE_LIBRARY})
     set_target_properties(${matso} PROPERTIES PREFIX "")
