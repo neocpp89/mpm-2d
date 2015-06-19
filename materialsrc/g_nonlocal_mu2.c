@@ -83,7 +83,7 @@ double calculate_g_local(double tau, double p)
 
 double calculate_xisq(double tau, double p)
 {
-    const double cap = 100 * d;
+    const double cap = 15 * d;
     double xisqc = 0;
     if (p > 0) {
         const double S0 = mu_s * p;
@@ -105,7 +105,8 @@ double calculate_xisq(double tau, double p)
             xisqc = cap;
         }
     }
-    return xisqc;
+    // return xisqc;
+    return 1;
 }
 
 double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double delta_t)
@@ -136,6 +137,7 @@ double calculate_deriv_g_local_from_g(double tau_tr, double p_tr, double g, doub
             dg_localdg = 0;
         }
     }
+    // printf("dglocdg = %g\n", dg_localdg);
     return dg_localdg;
 }
 
@@ -332,6 +334,9 @@ void create_ngf_stiffness_1(cs *triplets, job_t *job, long int *node_map)
                 assert(isfinite(xisq));
                 assert(isfinite(job->particles[i].v));
 
+                assert(job->particles[i].v >= 0);
+                assert(xisq >= 0);
+
                 const double k_component = -job->particles[i].v * (s[ei] * s[ej] + 
                         xisq * (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
 
@@ -419,6 +424,8 @@ void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double
 
                 assert(isfinite(xisq));
                 assert(isfinite(job->particles[i].v));
+                assert(job->particles[i].v >= 0);
+                assert(xisq >= 0);
 
                 const double dglocdg = calculate_deriv_g_local_from_g(tr.tau_tr, tr.p_tr, reconstructed_g, job->dt);
                 const double k_component = -job->particles[i].v * ((1 - dglocdg) * s[ei] * s[ej] + 
@@ -586,7 +593,6 @@ void solve_diffusion_part(job_t *job)
     cs *triplets_hat;
     cs *smat_hat;
 
-    double *gf_nodes;
 
     double *f;
     double *f_old;
@@ -599,9 +605,7 @@ void solve_diffusion_part(job_t *job)
     int *nn;
 
     /* initialize node level fluidity arrays */
-    gf_nodes = (double *)malloc(job->num_nodes * sizeof(double));
     for (i = 0; i < job->num_nodes; i++) {
-        gf_nodes[i] = 0;
         ng[i] = 0;
         ng_loc[i] = 0;
         ntau_tr[i] = 0;
@@ -655,6 +659,7 @@ void solve_diffusion_part(job_t *job)
     }
     nnz += slda;
 
+    double sum_g_local = 0;
     // initial g_loc from local step
     for (size_t i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
@@ -673,6 +678,7 @@ void solve_diffusion_part(job_t *job)
         if (dense) {
             xisq = calculate_xisq(tr.tau_tau, tr.p_tau);
             const double g_loc = calculate_g_local(tr.tau_tau, tr.p_tau);
+            sum_g_local += g_loc;
 
             s[0] = job->h1[i];
             s[1] = job->h2[i];
@@ -692,7 +698,7 @@ void solve_diffusion_part(job_t *job)
 
                 const double ng_loc_component = (job->particles[i].v) * g_loc * s[ei];
                 if (ng_loc_component < 0) {
-                    printf("v: %lg\ng_loc^1: %g\n", job->particles[i].v, ng_loc_component);
+                    printf("v: %g g_loc^1: %g\n", job->particles[i].v, ng_loc_component);
                 }
                 assert(ng_loc_component >= 0);
 
@@ -708,10 +714,18 @@ void solve_diffusion_part(job_t *job)
         }
     }
 
+    if (fabs(sum_g_local) < 1e-12) {
+        for (i = 0; i < job->num_particles; i++) {
+            gf = 0;
+        }
+        printf("Skipping matrix solve.\n");
+    } else {
+        printf("sum(g_local) = %g\n", sum_g_local);
+
     double rel_error = 1;
-    const double max_rel_error = 1e-6;
+    const double max_rel_error = 1e-5;
     int inner_iterations = 0;
-    const int max_inner_iterations = 1000;
+    const int max_inner_iterations = 8;
     do {
     /* slda contains degrees of freedom of new matrix */
     triplets = cs_spalloc(slda, slda, nnz, 1, 1);
@@ -724,7 +738,7 @@ void solve_diffusion_part(job_t *job)
 
     create_ngf_stiffness_1(triplets, job, node_map);
 
-//#define DIRECT_SOLVE
+#define DIRECT_SOLVE
 #ifdef DIRECT_SOLVE
     /* keep matrix from being dengerate when an element is filled with open particles. */
     for (i = 0; i < slda; i++) {
@@ -765,8 +779,10 @@ void solve_diffusion_part(job_t *job)
 
     for (i = 0; i < slda; i++) {
         ng[i] = f[i]; // solution is g1, save it as ng
-        gf_nodes[i] = f[i];
+        ng_loc[i] = 0; // reset ngloc
     }
+
+// goto gparticles;
 
     create_ngf_stiffness_2(triplets_hat, job, node_map, ng);
 
@@ -791,6 +807,7 @@ void solve_diffusion_part(job_t *job)
                 sgi = node_map[gi];
 
                 reconstructed_g += ng[sgi] * s[ei];
+                // reconstructed_g += ng[sgi] * 0.25;
             }
 
             const double gloc_from_g = calculate_g_local_from_g(tr.tau_tr, tr.p_tr, reconstructed_g, job->dt);
@@ -818,6 +835,11 @@ void solve_diffusion_part(job_t *job)
         guess[i] = 0;
     }
 
+    const double S = 1e12;
+    for (i = 0; i < slda; i++) {
+        f_hat[i] *= S;
+    }
+
 #ifdef DIRECT_SOLVE
     /* keep matrix from being dengerate when an element is filled with open particles. */
     for (i = 0; i < slda; i++) {
@@ -830,10 +852,15 @@ void solve_diffusion_part(job_t *job)
 
 #ifndef DIRECT_SOLVE
 //    fprintf(stderr, "%d by %d\n", smat_hat->m, smat_hat->n); // print out matrix for debugging
-    if (!cs_cg(smat_hat, f_hat, guess, 1e-7)) {
-        fprintf(stderr, "cg error!\n");
+    if (!cs_cg(smat_hat, f_hat, guess, 1e-13)) {
+        fprintf(stderr, "cg error 2!\n");
         //cs_print(smat_hat, 0); // print out matrix for debugging
         cs_print_to_file(smat_hat);
+        FILE *ff = fopen("load.cs", "w");
+        for (size_t j = 0; j < slda; j++) {
+            fprintf(ff, "%lg\n", f_hat[j]);
+        }
+        fclose(ff);
         exit(EXIT_ERROR_CS_SOL);
     }
 #else
@@ -850,14 +877,9 @@ void solve_diffusion_part(job_t *job)
 #endif
 
     for (i = 0; i < slda; i++) {
+        f_hat[i] /= S;
         ng[i] += f_hat[i]; // ng now contains g1 + delta g2 = g
     }
-
-    cs_spfree(triplets);
-    cs_spfree(smat);
-
-    cs_spfree(triplets_hat);
-    cs_spfree(smat_hat);
 
     for (i = 0; i < slda; i++) {
         // f_old and ng_loc are actually -gloc^1
@@ -866,15 +888,106 @@ void solve_diffusion_part(job_t *job)
         // fprintf(stderr, "r[%d] = %g\n", i, residual[i]);
     }
 
-    free(f_hat);
-    free(guess);
+    // const double rtr = dot(residual, residual, slda);
+    // rel_error =  rtr / slda;
 
-    const double rtr = dot(residual, residual, slda);
-    rel_error =  rtr / slda;
+
+    // calculate g_loc from g
+    for (size_t i = 0; i < slda; i++) {
+        ng_loc[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        if (dense) {
+            trial_t tr;
+            trial_step(&(job->particles[i]), job->dt, &tr);
+
+            s[0] = job->h1[i];
+            s[1] = job->h2[i];
+            s[2] = job->h3[i];
+            s[3] = job->h4[i];
+
+            p = job->in_element[i];
+            nn = job->elements[p].nodes;
+
+            double reconstructed_g = 0;
+            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                gi = nn[ei];
+                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
+                sgi = node_map[gi];
+
+                reconstructed_g += ng[sgi] * s[ei];
+                // reconstructed_g += ng[sgi] * 0.25;
+            }
+
+            const double gloc_from_g = calculate_g_local_from_g(tr.tau_tr, tr.p_tr, reconstructed_g, job->dt);
+            
+            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                gi = nn[ei];
+                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
+                sgi = node_map[gi];
+
+                const double ng_loc_component = (job->particles[i].v) * gloc_from_g * s[ei];
+                if (ng_loc_component < 0) {
+                    printf("v: %lg\ng_loc^1: %g\n", job->particles[i].v, ng_loc_component);
+                }
+                assert(ng_loc_component >= 0);
+
+                ng_loc[sgi] += (-ng_loc_component);
+            }
+        }
+    }
+
+    for (i = 0; i < slda; i++) {
+        guess[i] = ng[i];
+    }
+
+#define DIRECT_SOLVE
+#ifndef DIRECT_SOLVE
+//    fprintf(stderr, "%d by %d\n", smat_hat->m, smat_hat->n); // print out matrix for debugging
+    if (!cs_cg(smat, ng_loc, guess, 1e-13)) {
+        fprintf(stderr, "cg error!\n");
+        //cs_print(smat_hat, 0); // print out matrix for debugging
+        cs_print_to_file(smat_hat);
+        exit(EXIT_ERROR_CS_SOL);
+    }
+#else
+//    fprintf(stderr, "%d by %d\n", smat_hat->m, smat_hat->n); // print out matrix for debugging
+    if (!cs_lusol(1, smat, ng_loc, 1e-15)) {
+        fprintf(stderr, "lusol error!\n");
+        if (cs_qrsol(1, smat, ng_loc)) {
+            fprintf(stderr, "qrsol error!\n");
+            //cs_print(smat_hat, 0); // print out matrix for debugging
+            cs_print_to_file(smat_hat);
+            exit(EXIT_ERROR_CS_SOL);
+        }
+    }
+#endif
+
+    for (i = 0; i < slda; i++) {
+        ng[i] = ng_loc[i];
+        assert(ng[i] >= 0);
+        guess[i] -= ng[i];
+    }
+
+    const double rtr = dot(guess, guess, slda);
+    rel_error = rtr / slda;
 
     inner_iterations++;
     printf("%d: %d %g %zu %g\n", job->stepcount, inner_iterations, rtr, slda, rel_error);
+
+    cs_spfree(triplets);
+    cs_spfree(smat);
+
+    cs_spfree(triplets_hat);
+    cs_spfree(smat_hat);
+
+    free(f_hat);
+    free(guess);
+
     } while ((inner_iterations < max_inner_iterations) && (rel_error > max_rel_error));
+
+gparticles:
 
     /* map nodal g_nonlocal back to particles */
     for (i = 0; i < job->num_particles; i++) {
@@ -916,7 +1029,7 @@ void solve_diffusion_part(job_t *job)
             assert(gf_nodes[gi] >= 0);
 */
             gf += ng[sgi] * s[ei];
-            // gf += gf_nodes[gi] * 0.25;
+            // gf += ng[sgi] * 0.25;
         }
 
         if (gf < 0) {
@@ -932,10 +1045,10 @@ void solve_diffusion_part(job_t *job)
         assert(gf >= 0);
     }
 
+    }
+
     free(node_map);
     free(inv_node_map);
-
-    free(gf_nodes);
 
     free(f);
     free(f_old);

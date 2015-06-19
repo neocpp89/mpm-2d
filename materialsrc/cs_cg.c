@@ -60,12 +60,22 @@ int cs_cg(const cs *K, double *f, const double *u_0, double tol)
         if (i % residual_recalculation_interval == 0) {
             cs_gaxpy(K, u, r); // r is now K * u_i
             for (size_t j = 0; j < n; j++) {
+                printf("Ku[%d] = %g\n", j, r[j]);
                 r[j] = f[j] - r[j];
+                printf("f[%d] = %g, ", j, f[j]);
+                printf("r[%d] = %g\n", j, r[j]);
             }
         }
 
-        const double rTr = dot(r, r, n);
-        // printf("r.r = %lg\n", rTr);
+        double s = 0;
+        for (size_t j = 0; j < n; j++) {
+            s += r[j] * r[j];
+            printf("s = %g\n", s);
+        }
+
+        // const double rTr = dot(r, r, n);
+        const double rTr = s;
+        printf("r.r = %lg\n", rTr);
         if (rTr <= rsq_tol) {
             converged = 1;
             // printf("\n");
@@ -76,6 +86,10 @@ int cs_cg(const cs *K, double *f, const double *u_0, double tol)
         }
         cs_gaxpy(K, p, Kp); // Kp is now K * p_{i-1}
         const double pTKp = dot(p, Kp, n);
+        if (pTKp == 0) {
+            converged = 0;
+            break;
+        }
         assert(pTKp != 0);
         const double alpha = rTr / pTKp;
         for (size_t j = 0; j < n; j++) {
