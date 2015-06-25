@@ -43,6 +43,9 @@
 void create_ngf_stiffness_1(cs *triplets, job_t *job, long int *node_map);
 void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double *g1);
 
+void create_nodal_volumes(job_t *job, long int *node_map, double *volumes_nodal, size_t slda);
+void create_nodal_stress_components(job_t *job, long int *node_map, double *sxx_nodal, double *sxy_nodal, double *syy_nodal, double *szz_nodal, double *volumes_nodal, size_t slda);
+
 void calculate_stress(job_t *job);
 void solve_diffusion_part(job_t *job);
 void calculate_stress_threaded(threadtask_t *task);
@@ -133,6 +136,8 @@ double calculate_deriv_g_local_from_g(double tau_tr, double p_tr, double g, doub
         if (mu_g < mu_2 && mu_g > mu_s) {
             const double zeta = I_0 / (d * sqrt(rho_s));
             dg_localdg = zeta * sqrt(p_tr) * ((mu_s * (mu_2 - 2*mu_g) + mu_g * mu_g) / ((mu_2 - mu_g) * (mu_2 - mu_g))) * (G * delta_t) / tau_tr;
+        } else if (mu_g < mu_s) {
+            dg_localdg = (mu_g / mu_s) * (delta_t * G * I_0 * mu_s * sqrt(p_tr)) / (d * sqrt(rho_s) * (mu_s - 1) * tau_tr);
         } else {
             dg_localdg = 0;
         }
@@ -441,6 +446,97 @@ void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double
     return;
 }
 
+void create_nodal_volumes(job_t *job, long int *node_map, double *volumes_nodal, size_t slda)
+{
+    // clear existing values
+    for (size_t i = 0; i < slda; i++) {
+        volumes_nodal[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        if (job->active[i] == 0) {
+            continue;
+        }
+
+        double s[4];
+
+        s[0] = job->h1[i];
+        s[1] = job->h2[i];
+        s[2] = job->h3[i];
+        s[3] = job->h4[i];
+
+        const size_t p = job->in_element[i];
+        int *nn = job->elements[p].nodes;
+
+        for (int ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+            size_t gi = nn[ei];
+            gi = (job->node_number_override[NODAL_DOF * gi + 0] - 0) / NODAL_DOF;
+            const size_t sgi = node_map[gi];
+            const double v_contrib = job->particles[i].v * s[ei];
+            volumes_nodal[sgi] += v_contrib;
+        }
+    }
+
+    return;
+}
+
+void create_nodal_stress_components(job_t *job, long int *node_map, double *sxx_nodal, double *sxy_nodal, double *syy_nodal, double *szz_nodal, double *volumes_nodal, size_t slda)
+{
+    for (size_t i = 0; i < slda; i++) {
+        sxx_nodal[i] = 0;
+        sxy_nodal[i] = 0;
+        syy_nodal[i] = 0;
+        szz_nodal[i] = 0;
+        volumes_nodal[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        if (job->active[i] == 0) {
+            continue;
+        }
+        trial_t tr;
+        trial_step(&(job->particles[i]), job->dt, &tr);
+
+        double s[4];
+
+        s[0] = job->h1[i];
+        s[1] = job->h2[i];
+        s[2] = job->h3[i];
+        s[3] = job->h4[i];
+
+        const size_t p = job->in_element[i];
+        int *nn = job->elements[p].nodes;
+
+        for (int ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+            size_t gi = nn[ei];
+            gi = (job->node_number_override[NODAL_DOF * gi + 0] - 0) / NODAL_DOF;
+            const size_t sgi = node_map[gi];
+            const double v_contrib = job->particles[i].v * s[ei];
+            const double sxx_tr = tr.t0xx_tr - tr.p_tr;
+            const double sxy_tr = tr.t0xy_tr;
+            const double syy_tr = tr.t0yy_tr - tr.p_tr;
+            const double szz_tr = tr.t0zz_tr - tr.p_tr;
+            sxx_nodal[sgi] += v_contrib * sxx_tr;
+            sxy_nodal[sgi] += v_contrib * sxy_tr;
+            syy_nodal[sgi] += v_contrib * syy_tr;
+            szz_nodal[sgi] += v_contrib * szz_tr;
+            volumes_nodal[sgi] += v_contrib;
+        }
+    }
+
+    const double volume_tolerance = 0;
+    for (size_t i = 0; i < slda; i++) {
+        if (volumes_nodal[i] > volume_tolerance) {
+            sxx_nodal[i] /= volumes_nodal[i];
+            sxy_nodal[i] /= volumes_nodal[i];
+            syy_nodal[i] /= volumes_nodal[i];
+            szz_nodal[i] /= volumes_nodal[i];
+        }
+    }
+
+    return;
+}
+
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
 {
@@ -577,9 +673,9 @@ void solve_diffusion_part(job_t *job)
 {
     size_t i;
     size_t i_new;
-    size_t ei, ej;
-    size_t gi, gj;
-    long int sgi, sgj;
+    size_t ei;
+    size_t gi;
+    long int sgi;
 
     long int *node_map;
     long int *inv_node_map;
@@ -599,7 +695,6 @@ void solve_diffusion_part(job_t *job)
     double *residual;
 
     double s[4];
-    double grad_s[4][2];
 
     int p;
     int *nn;
@@ -612,11 +707,6 @@ void solve_diffusion_part(job_t *job)
         // clear volumes
         nv[i] = 0;
     }
-
-    /* save xisq from beginning of step so we don't have to recalculate all the time. */
-    double *xisq_particles_initial = calloc(job->num_particles, sizeof(double));
-    double *dglocdg_particles = calloc(job->num_particles, sizeof(double));
-
 
     /* get number of dofs and initialize mapping arrays */
     node_map = malloc(job->num_nodes * sizeof(long int));
@@ -660,6 +750,7 @@ void solve_diffusion_part(job_t *job)
     nnz += slda;
 
     double sum_g_local = 0;
+    double *tau_node_avg = calloc(sizeof(double), slda);
     // initial g_loc from local step
     for (size_t i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
@@ -704,6 +795,7 @@ void solve_diffusion_part(job_t *job)
 
                 ng_loc[sgi] += (-ng_loc_component);
                 nv[sgi] += job->particles[i].v * s[ei];
+                tau_node_avg[sgi] += job->particles[i].v * tr.tau_tau * s[ei];
             }
         } else {
             // set stresses to 0
@@ -711,6 +803,14 @@ void solve_diffusion_part(job_t *job)
             job->particles[i].sxy = 0;
             job->particles[i].syy = 0;
             job->particles[i].state[SZZ_STATE] = 0;
+        }
+    }
+
+    for (size_t i = 0; i < slda; i++) {
+        if (nv[i] > 0) {
+            tau_node_avg[i] /= nv[i];
+        } else {
+            tau_node_avg[i] = 0;
         }
     }
 
@@ -772,7 +872,7 @@ void solve_diffusion_part(job_t *job)
 
     for (i = 0; i < slda; i++) {
         if (ng[i] < 0) {
-            fprintf(stderr, "g1[%d] = %g\n", i, ng[i]);
+            fprintf(stderr, "g1[%zu] = %g\n", i, ng[i]);
         }
         assert(ng[i] >= 0);
     }
@@ -782,7 +882,69 @@ void solve_diffusion_part(job_t *job)
         ng_loc[i] = 0; // reset ngloc
     }
 
-// goto gparticles;
+    double *tau_node_avg_g = calloc(sizeof(double), slda);
+    double *tau_node_diff = calloc(sizeof(double), slda);
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        if (dense) {
+            trial_t tr;
+            trial_step(&(job->particles[i]), job->dt, &tr);
+
+            s[0] = job->h1[i];
+            s[1] = job->h2[i];
+            s[2] = job->h3[i];
+            s[3] = job->h4[i];
+
+            p = job->in_element[i];
+            nn = job->elements[p].nodes;
+
+            double reconstructed_g = 0;
+            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                gi = nn[ei];
+                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
+                sgi = node_map[gi];
+
+                reconstructed_g += ng[sgi] * s[ei];
+            }
+
+            double tau_tau_g = tr.tau_tr * tr.p_tr / (tr.p_tr + reconstructed_g * G * job->dt);
+            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                gi = nn[ei];
+                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
+                sgi = node_map[gi];
+
+                tau_node_avg_g[sgi] += job->particles[i].v * tau_tau_g * s[ei];
+            }
+        }
+    }
+
+    for (size_t i = 0; i < slda; i++) {
+        if (nv[i] > 0) {
+            tau_node_avg_g[i] /= nv[i];
+        } else {
+            tau_node_avg_g[i] = 0;
+        }
+    }
+
+    for (size_t i = 0; i < slda; i++) {
+        tau_node_diff[i] = tau_node_avg[i] - tau_node_avg_g[i];
+    }
+    const double rnew = sqrt(dot(tau_node_avg_g, tau_node_avg_g, slda));
+    const double rtau = sqrt(dot(tau_node_diff, tau_node_diff, slda));
+    const double rtau_rel = rtau / rnew;
+
+    printf("rtau = %lg\n", rtau);
+    printf("rtau_rel = %lg\n", rtau / rnew);
+
+    free(tau_node_avg_g);
+    free(tau_node_diff);
+
+    if (rtau_rel < 1e-2) {
+        printf("%d *\n", job->stepcount);
+        cs_spfree(triplets);
+        cs_spfree(triplets_hat);
+        break;
+    }
 
     create_ngf_stiffness_2(triplets_hat, job, node_map, ng);
 
@@ -834,6 +996,9 @@ void solve_diffusion_part(job_t *job)
         f_hat[i] = ng_loc[i] - f_old[i]; // - g_loc_hat(g_1) + g_loc^1
         guess[i] = 0;
     }
+
+    double rgloc2 = sqrt(dot(f_hat, f_hat, slda));
+    double rglochat = sqrt(dot(ng_loc, ng_loc, slda));
 
     const double S = 1e12;
     for (i = 0; i < slda; i++) {
@@ -973,8 +1138,10 @@ void solve_diffusion_part(job_t *job)
     const double rtr = dot(guess, guess, slda);
     rel_error = rtr / slda;
 
+    rgloc2 /= rglochat;
+
     inner_iterations++;
-    printf("%d: %d %g %zu %g\n", job->stepcount, inner_iterations, rtr, slda, rel_error);
+    printf("%d: %d %g %zu %g %lg\n", job->stepcount, inner_iterations, rtr, slda, rel_error, rgloc2);
 
     cs_spfree(triplets);
     cs_spfree(smat);
@@ -986,8 +1153,6 @@ void solve_diffusion_part(job_t *job)
     free(guess);
 
     } while ((inner_iterations < max_inner_iterations) && (rel_error > max_rel_error));
-
-gparticles:
 
     /* map nodal g_nonlocal back to particles */
     for (i = 0; i < job->num_particles; i++) {
@@ -1047,6 +1212,7 @@ gparticles:
 
     }
 
+    free(tau_node_avg);
     free(node_map);
     free(inv_node_map);
 
