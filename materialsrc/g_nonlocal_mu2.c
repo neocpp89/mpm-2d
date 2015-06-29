@@ -44,7 +44,7 @@
 size_t global_node_numbering(job_t *job, size_t physical_nn);
 
 void create_ngf_stiffness_1(cs *triplets, job_t *job, long int *node_map);
-void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double *g1);
+void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double *ng_loc, double *g1);
 
 void create_nodal_volumes(job_t *job, long int *node_map, double *volumes_nodal, size_t slda);
 void create_nodal_stress_components(job_t *job, long int *node_map, double *sxx_nodal, double *sxy_nodal, double *syy_nodal, double *szz_nodal, double *volumes_nodal, size_t slda);
@@ -55,11 +55,6 @@ void calculate_stress_threaded(threadtask_t *task);
 
 static double E, nu, G, K, lambda;
 static double mu_s, mu_2, I_0, rho_s, rho_c, d, A;
-static double *Kp; //vector which is a solution of the matrix-vector product.
-static double *ng_loc; //nodal values of g_local
-static double *ng; //nodal values of g
-static double *nv; //nodal volumes (nodal mass already computed)
-static double *ntau_tr; // nodal values of tau_tr
 
 double calculate_g_local(double tau, double p);
 double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double delta_t);
@@ -362,7 +357,7 @@ void create_ngf_stiffness_1(cs *triplets, job_t *job, long int *node_map)
     return;
 }
 
-void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double *g1)
+void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double *ng_loc, double *g1)
 {
     double *ng = g1;
 
@@ -592,17 +587,6 @@ void material_init(job_t *job)
             __FILE__, __func__, E, nu, G, K, mu_s, mu_2, I_0, rho_s, rho_c, d, A);
     }
 
-    Kp = calloc(job->num_nodes, sizeof(double));
-    printf("%s:%s: Done allocating storage for matrix-vector multiply.\n",
-        __FILE__, __func__);
-    ng = calloc(job->num_nodes, sizeof(double));
-    ng_loc = calloc(job->num_nodes, sizeof(double));
-    ntau_tr = calloc(job->num_nodes, sizeof(double));
-    printf("%s:%s: Done allocating storage for nodal values of g.\n",
-        __FILE__, __func__);
-    nv = calloc(job->num_nodes, sizeof(double));
-    printf("%s:%s: Done allocating storage for nodal values of v.\n",
-        __FILE__, __func__);
     printf("%s:%s: (material version %s) done initializing material.\n",
         __FILE__,  __func__, MAT_VERSION_STRING);
     return;
@@ -678,25 +662,13 @@ void calculate_stress(job_t *job)
 /*----------------------------------------------------------------------------*/
 void solve_diffusion_part(job_t *job)
 {
-    size_t ei;
-    size_t gi;
-    long int sgi;
-
-    long int *node_map;
-    long int *inv_node_map;
-
-    size_t slda;
-    size_t nnz;
-
-    cs *triplets;
-    cs *triplets_hat;
-
-    double *f;
-    double *f_old;
-    double *residual;
-
     int p;
     int *nn;
+
+    double *ng_loc = calloc(job->num_nodes, sizeof(double));
+    double *ng = calloc(job->num_nodes, sizeof(double));
+    double *ntau_tr = calloc(job->num_nodes, sizeof(double));
+    double *nv = calloc(job->num_nodes, sizeof(double));
 
     /* initialize node level fluidity arrays */
     for (size_t i = 0; i < job->num_nodes; i++) {
@@ -708,9 +680,9 @@ void solve_diffusion_part(job_t *job)
     }
 
     /* get number of dofs and initialize mapping arrays */
-    node_map = malloc(job->num_nodes * sizeof(long int));
-    inv_node_map = malloc(job->num_nodes * sizeof(long int));
-    slda = 0;
+    long int *node_map = malloc(job->num_nodes * sizeof(long int));
+    long int *inv_node_map = malloc(job->num_nodes * sizeof(long int));
+    size_t slda = 0;
     for (size_t i = 0; i < job->num_nodes; i++) {
         node_map[i] = -1;
         inv_node_map[i] = -1;
@@ -735,12 +707,11 @@ void solve_diffusion_part(job_t *job)
         exit(-1);
     }
 
-    f = calloc(sizeof(double), slda);
-    f_old = calloc(sizeof(double), slda);
-    residual = calloc(sizeof(double), slda);
+    double *f = calloc(sizeof(double), slda);
+    double *f_old = calloc(sizeof(double), slda);
 
     /*  calculate number of nonzero elements (before summing duplicates). */
-    nnz = 0;
+    size_t nnz = 0;
     for (size_t i = 0; i < job->num_particles; i++) {
         if (dense) {
             nnz += (NODES_PER_ELEMENT * NODES_PER_ELEMENT) * 1;
@@ -778,10 +749,9 @@ void solve_diffusion_part(job_t *job)
             assert(isfinite(gf_local));
             assert(isfinite(xisq));
             
-            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                gi = nn[ei];
-                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
-                sgi = node_map[gi];
+            for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                const size_t gi = global_node_numbering(job, nn[ei]);
+                const size_t sgi = node_map[gi];
 
                 const double v_contrib = job->particles[i].v * s[ei];
                 const double ng_loc_component = g_loc * v_contrib;
@@ -825,8 +795,8 @@ void solve_diffusion_part(job_t *job)
     const int max_inner_iterations = 8;
     do {
     /* slda contains degrees of freedom of new matrix */
-    triplets = cs_spalloc(slda, slda, nnz, 1, 1);
-    triplets_hat = cs_spalloc(slda, slda, nnz, 1, 1); 
+    cs *triplets = cs_spalloc(slda, slda, nnz, 1, 1);
+    cs *triplets_hat = cs_spalloc(slda, slda, nnz, 1, 1); 
 
     for (size_t i = 0; i < slda; i++) {
         f[i] = ng_loc[i]; // copy load for solution
@@ -863,19 +833,17 @@ void solve_diffusion_part(job_t *job)
             nn = job->elements[p].nodes;
 
             double reconstructed_g = 0;
-            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                gi = nn[ei];
-                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
-                sgi = node_map[gi];
+            for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                const size_t gi = global_node_numbering(job, nn[ei]);
+                const size_t sgi = node_map[gi];
 
                 reconstructed_g += ng[sgi] * s[ei];
             }
 
             double tau_tau_g = tr.tau_tr * tr.p_tr / (tr.p_tr + reconstructed_g * G * job->dt);
-            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                gi = nn[ei];
-                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
-                sgi = node_map[gi];
+            for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                const size_t gi = global_node_numbering(job, nn[ei]);
+                const size_t sgi = node_map[gi];
 
                 tau_node_avg_g[sgi] += job->particles[i].v * tau_tau_g * s[ei];
             }
@@ -910,7 +878,7 @@ void solve_diffusion_part(job_t *job)
         break;
     }
 
-    create_ngf_stiffness_2(triplets_hat, job, node_map, ng);
+    create_ngf_stiffness_2(triplets_hat, job, node_map, ng_loc, ng);
 
     // calculate g_loc from g
     for (size_t i = 0; i < job->num_particles; i++) {
@@ -924,10 +892,9 @@ void solve_diffusion_part(job_t *job)
             nn = job->elements[p].nodes;
 
             double reconstructed_g = 0;
-            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                gi = nn[ei];
-                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
-                sgi = node_map[gi];
+            for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                const size_t gi = global_node_numbering(job, nn[ei]);
+                const size_t sgi = node_map[gi];
 
                 reconstructed_g += ng[sgi] * s[ei];
                 // reconstructed_g += ng[sgi] * 0.25;
@@ -935,10 +902,9 @@ void solve_diffusion_part(job_t *job)
 
             const double gloc_from_g = calculate_g_local_from_g(tr.tau_tr, tr.p_tr, reconstructed_g, job->dt);
             
-            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                gi = nn[ei];
-                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
-                sgi = node_map[gi];
+            for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                const size_t gi = global_node_numbering(job, nn[ei]);
+                const size_t sgi = node_map[gi];
 
                 const double ng_loc_component = (job->particles[i].v) * gloc_from_g * s[ei];
                 if (ng_loc_component < 0) {
@@ -970,7 +936,7 @@ void solve_diffusion_part(job_t *job)
     for (size_t i = 0; i < slda; i++) {
         // f_old and ng_loc are actually -gloc^1
         // residual[i] = ng_loc[i] - f_old[i];
-        residual[i] = f_hat[i]; // try to just use size of delta g2
+        // residual[i] = f_hat[i]; // try to just use size of delta g2
         // fprintf(stderr, "r[%d] = %g\n", i, residual[i]);
     }
 
@@ -994,10 +960,9 @@ void solve_diffusion_part(job_t *job)
             nn = job->elements[p].nodes;
 
             double reconstructed_g = 0;
-            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                gi = nn[ei];
-                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
-                sgi = node_map[gi];
+            for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                const size_t gi = global_node_numbering(job, nn[ei]);
+                const size_t sgi = node_map[gi];
 
                 reconstructed_g += ng[sgi] * s[ei];
                 // reconstructed_g += ng[sgi] * 0.25;
@@ -1005,10 +970,9 @@ void solve_diffusion_part(job_t *job)
 
             const double gloc_from_g = calculate_g_local_from_g(tr.tau_tr, tr.p_tr, reconstructed_g, job->dt);
             
-            for (ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                gi = nn[ei];
-                gi = (job->node_number_override[NODAL_DOF * gi + 0 ] - 0) / NODAL_DOF;
-                sgi = node_map[gi];
+            for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                const size_t gi = global_node_numbering(job, nn[ei]);
+                const size_t sgi = node_map[gi];
 
                 const double ng_loc_component = (job->particles[i].v) * gloc_from_g * s[ei];
                 if (ng_loc_component < 0) {
@@ -1059,7 +1023,11 @@ void solve_diffusion_part(job_t *job)
 
     free(f);
     free(f_old);
-    free(residual);
+
+    free(ng);
+    free(ng_loc);
+    free(ntau_tr);
+    free(nv);
 
     return;
 }
@@ -1100,7 +1068,7 @@ void map_g_to_particles(job_t *job, const long int *node_map, const double *g, s
             // cs_print_to_file(smat);
             FILE *ff = fopen("load.cs", "w");
             for (size_t j = 0; j < slda; j++) {
-                fprintf(ff, "%lg\n", ng[j]);
+                fprintf(ff, "%lg\n", g[j]);
             }
             fclose(ff);
             gf = 0;
