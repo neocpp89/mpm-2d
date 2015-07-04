@@ -61,6 +61,8 @@ double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double del
 void map_g_to_particles(job_t *job, const long int *node_map, const double *g, size_t slda);
 void cs_solve(cs *triplets, double *load, double *guess, size_t lda);
 
+size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map);
+
 size_t global_node_numbering(job_t *job, size_t physical_nn)
 {
     return (job->node_number_override[NODAL_DOF * physical_nn + 0] - 0) / NODAL_DOF;
@@ -669,32 +671,42 @@ void solve_diffusion_part(job_t *job)
         nv[i] = 0;
     }
 
+    /* setup density flag */
+    for (size_t i = 0; i < job->num_particles; i++) {
+        if (job->active[i] == 0) {
+            dense = 0;
+            continue; 
+        }
+        int p = job->in_element[i];
+        if (p == -1) {
+            dense = 0;
+            continue;
+        }
+        const int *nn = job->elements[p].nodes;
+        int flag = 0;
+        trial_t tr;
+        local_step(&(job->particles[i]), job->dt, &tr, &flag);
+        dense = flag;
+    }
+
     /* get number of dofs and initialize mapping arrays */
     long int *node_map = malloc(job->num_nodes * sizeof(long int));
     long int *inv_node_map = malloc(job->num_nodes * sizeof(long int));
-    size_t slda = 0;
-    for (size_t i = 0; i < job->num_nodes; i++) {
-        node_map[i] = -1;
-        inv_node_map[i] = -1;
-    }
-    for (size_t i = 0; i < job->num_nodes; i++) {
-        const size_t i_new = global_node_numbering(job, i);
-
-        if (node_map[i_new] != -1) {
-            continue;
-        }
-
-        if (job->nodes[i_new].m > 0) {
-            node_map[i_new] = slda;
-            inv_node_map[slda] = i_new;
-            slda++;
-        }
-    }
+    const size_t slda = count_valid_dofs(job, node_map, inv_node_map);
 
     if (slda == 0) {
+        /*
         fprintf(stderr, "%s:%s: Invalid size, slda = %zu.\n",
             __FILE__, __func__, slda);
         exit(-1);
+        */
+        free(ng_loc);
+        free(ng);
+        free(ntau_tr);
+        free(nv);
+        free(node_map);
+        free(inv_node_map);
+        return;
     }
 
     double *f = calloc(sizeof(double), slda);
@@ -710,7 +722,6 @@ void solve_diffusion_part(job_t *job)
     nnz += slda;
 
     double sum_g_local = 0;
-    double *tau_node_avg = calloc(sizeof(double), slda);
     // initial g_loc from local step
     for (size_t i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
@@ -750,7 +761,6 @@ void solve_diffusion_part(job_t *job)
 
                 ng_loc[sgi] += (-ng_loc_component);
                 nv[sgi] += v_contrib;
-                tau_node_avg[sgi] += v_contrib * tr.tau_tau;
             }
         } else {
             // set stresses to 0
@@ -758,14 +768,6 @@ void solve_diffusion_part(job_t *job)
             job->particles[i].sxy = 0;
             job->particles[i].syy = 0;
             job->particles[i].state[SZZ_STATE] = 0;
-        }
-    }
-
-    for (size_t i = 0; i < slda; i++) {
-        if (nv[i] > 0) {
-            tau_node_avg[i] /= nv[i];
-        } else {
-            tau_node_avg[i] = 0;
         }
     }
 
@@ -807,9 +809,6 @@ void solve_diffusion_part(job_t *job)
         ng_loc[i] = 0; // reset ngloc
     }
 
-    double *tau_node_avg_g = calloc(sizeof(double), slda);
-    double *tau_node_diff = calloc(sizeof(double), slda);
-
     for (size_t i = 0; i < job->num_particles; i++) {
         if (dense) {
             trial_t tr;
@@ -833,37 +832,8 @@ void solve_diffusion_part(job_t *job)
                 const size_t gi = global_node_numbering(job, nn[ei]);
                 const size_t sgi = node_map[gi];
 
-                tau_node_avg_g[sgi] += job->particles[i].v * tau_tau_g * s[ei];
             }
         }
-    }
-
-    for (size_t i = 0; i < slda; i++) {
-        if (nv[i] > 0) {
-            tau_node_avg_g[i] /= nv[i];
-        } else {
-            tau_node_avg_g[i] = 0;
-        }
-    }
-
-    for (size_t i = 0; i < slda; i++) {
-        tau_node_diff[i] = tau_node_avg[i] - tau_node_avg_g[i];
-    }
-    const double rnew = sqrt(dot(tau_node_avg_g, tau_node_avg_g, slda));
-    const double rtau = sqrt(dot(tau_node_diff, tau_node_diff, slda));
-    const double rtau_rel = rtau / rnew;
-
-    printf("rtau = %lg\n", rtau);
-    printf("rtau_rel = %lg\n", rtau / rnew);
-
-    free(tau_node_avg_g);
-    free(tau_node_diff);
-
-    if (rtau_rel < 1e-2) {
-        printf("%d *\n", job->stepcount);
-        cs_spfree(triplets);
-        cs_spfree(triplets_hat);
-        break;
     }
 
     create_ngf_stiffness_2(triplets_hat, job, node_map, ng_loc, ng);
@@ -1016,7 +986,6 @@ void solve_diffusion_part(job_t *job)
 
     }
 
-    free(tau_node_avg);
     free(node_map);
     free(inv_node_map);
 
@@ -1120,4 +1089,63 @@ void cs_solve(cs *triplets, double *load, double *guess, size_t lda)
 
     cs_spfree(A);
     return;
+}
+
+size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map)
+{
+    int *num_dense_particles_near_node = calloc(job->num_nodes, sizeof(int));
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        if (job->active[i] == 0) {
+            continue;
+        }
+        if (dense == 0) {
+            continue;
+        }
+
+        const int p = job->in_element[i];
+        if (p == -1) {
+            continue;
+        }
+
+        const int *nn = job->elements[p].nodes;
+
+
+        for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+            num_dense_particles_near_node[nn[j]]++;
+        }
+    }
+
+    size_t slda = 0;
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        node_map[i] = -1;
+        inv_node_map[i] = -1;
+    }
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        const size_t i_new = global_node_numbering(job, i);
+
+        if (node_map[i_new] != -1) {
+            continue;
+        }
+
+        if (num_dense_particles_near_node[i] > 0) {
+            node_map[i_new] = slda;
+            inv_node_map[slda] = i_new;
+            slda++;
+        }
+
+        /*
+        if (job->nodes[i_new].m > 0) {
+            node_map[i_new] = slda;
+            inv_node_map[slda] = i_new;
+            slda++;
+        }
+        */
+    }
+
+    free(num_dense_particles_near_node);
+
+    printf("dofs = %zu\n", slda);
+
+    return slda;
 }
