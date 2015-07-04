@@ -29,6 +29,7 @@ int cs_cg(const cs *K, double *f, const double *u_0, double tol)
         return converged; //nonsquare matrix
     }
     const size_t n = K->n;
+    printf("n = %zu\n", n);
 
     double * restrict u = malloc(sizeof(double) * n);
     double * restrict r = malloc(sizeof(double) * n);
@@ -40,13 +41,11 @@ int cs_cg(const cs *K, double *f, const double *u_0, double tol)
         for (size_t j = 0; j < n; j++) {
             r[j] = 0;
         }
-        // Taken care of once we start the iteration.
-        /* 
+
         cs_gaxpy(K, u, r); // r is now K * u_0
         for (size_t j = 0; j < n; j++) {
             r[j] = f[j] - r[j];
         }
-        */
     } else {
         for (size_t j = 0; j < n; j++) {
             u[j] = 0;
@@ -55,37 +54,47 @@ int cs_cg(const cs *K, double *f, const double *u_0, double tol)
     }
     memcpy(p, r, sizeof(double) * n);
 
+    /*
+    for (size_t j = 0; j < n; j++) {
+        printf("p[%zu] = %g\n", j, p[j]);
+    }
+    */
+
     double * restrict Kp = malloc(sizeof(double) * n);
-    for (size_t i = 0; i < n; i++) {
+    for (size_t i = 0; i < n*n*n; i++) {
         if (i % residual_recalculation_interval == 0) {
             for (size_t j = 0; j < n; j++) {
                 r[j] = 0;
             }
             cs_gaxpy(K, u, r); // r is now K * u_i
             for (size_t j = 0; j < n; j++) {
-                printf("Ku[%zu] = %g\n", j, r[j]);
+                // printf("Ku[%zu] = %g\n", j, r[j]);
                 r[j] = f[j] - r[j];
-                printf("f[%zu] = %g, ", j, f[j]);
-                printf("r[%zu] = %g\n", j, r[j]);
+                // printf("f[%zu] = %g, ", j, f[j]);
+                // printf("r[%zu] = %g\n", j, r[j]);
             }
         }
 
         const double rTr = dot(r, r, n);
-        printf("r.r = %lg\n", rTr);
+        // printf("r.r = %lg\n", rTr);
+
         if (rTr <= rsq_tol) {
             converged = 1;
             // printf("\n");
             break;
         }
+
         for (size_t j = 0; j < n; j++) {
             Kp[j] = 0;
         }
         cs_gaxpy(K, p, Kp); // Kp is now K * p_{i-1}
         const double pTKp = dot(p, Kp, n);
+        /*
         if (pTKp == 0) {
             converged = (rTr == 0);
             break;
         }
+        */
         assert(pTKp != 0);
         const double alpha = rTr / pTKp;
         for (size_t j = 0; j < n; j++) {
@@ -93,6 +102,7 @@ int cs_cg(const cs *K, double *f, const double *u_0, double tol)
             r[j] = r[j] - alpha * Kp[j];
         }
         const double rTr_new = dot(r, r, n);
+
         const double beta = rTr_new / rTr;
         for (size_t j = 0; j < n; j++) {
             p[j] = r[j] + beta * p[j];

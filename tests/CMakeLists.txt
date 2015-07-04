@@ -2,6 +2,12 @@ add_executable(particle_movement particle_movement.c)
 target_link_libraries(particle_movement mpm)
 add_test(test_particle_movement particle_movement)
 
+add_executable(cgsolver cgsolver.c ../materialsrc/cs_cg.c)
+include_directories(../materialsrc/)
+target_link_libraries(cgsolver mpm)
+target_link_libraries(cgsolver ${CXSPARSE_LIBRARY})
+add_test(test_cgsolver cgsolver)
+
 # A bit of hack since we need to sync with the material directory
 set(LOCAL_MATERIALS
     dp_rd.c
