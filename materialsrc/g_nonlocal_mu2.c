@@ -348,12 +348,8 @@ void create_ngf_stiffness_1(cs *triplets, job_t *job, long int *node_map)
                 assert(job->particles[i].v >= 0);
                 assert(xisq >= 0);
 
-                /* const double k_component = -job->particles[i].v * (s[ei] * s[ej] + 
-                        xisq * (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1])); */
-                double k_component = -job->particles[i].v * (xisq * (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
-                if (ei == ej) { 
-                    k_component += (-job->particles[i].v * s[ej]);
-                }
+                const double k_component = -job->particles[i].v * (s[ei] * s[ej] + 
+                        xisq * (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
 
                 assert(isfinite(k_component));
                 
@@ -438,13 +434,9 @@ void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double
                 assert(xisq >= 0);
 
                 const double dglocdg = calculate_deriv_g_local_from_g(tr.tau_tr, tr.p_tr, reconstructed_g, job->dt);
-                /* const double k_component = -job->particles[i].v * ((1 - dglocdg) * s[ei] * s[ej] + 
-                        xisq * (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1])); */
+                const double k_component = -job->particles[i].v * ((1 - dglocdg) * s[ei] * s[ej] + 
+                        xisq * (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
 
-                double k_component = -job->particles[i].v * (xisq * (grad_s[ei][0]*grad_s[ej][0] + grad_s[ei][1]*grad_s[ej][1]));
-                if (ei == ej) { 
-                    k_component += (-job->particles[i].v * (1 - dglocdg) * s[ej]);
-                }
                 assert(isfinite(k_component));
                 
                 cs_entry(triplets, sgi, sgj, k_component);
@@ -779,15 +771,18 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
             cs_solve(triplets, f, ng_loc, slda);
 
             for (size_t i = 0; i < slda; i++) {
-                if (ng[i] < 0) {
-                    fprintf(stderr, "g1[%zu] = %g\n", i, ng[i]);
-                }
-                assert(ng[i] >= 0);
+                ng[i] = f[i]; // solution is g1, save it as ng
+                ng_loc[i] = 0; // reset ngloc
             }
 
             for (size_t i = 0; i < slda; i++) {
-                ng[i] = f[i]; // solution is g1, save it as ng
-                ng_loc[i] = 0; // reset ngloc
+                if (ng[i] < 0) {
+                    fprintf(stderr, "g1[%zu] = %g\n", i, ng[i]);
+                    for (size_t j = 0; j < slda; j++) {
+                        fprintf(stderr, "f[%zu] = %g\n", j, f_old[j]);
+                    }
+                }
+                assert(ng[i] >= 0);
             }
 
             create_ngf_stiffness_2(triplets_hat, job, node_map, ng_loc, ng);
