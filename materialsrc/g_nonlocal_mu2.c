@@ -766,20 +766,29 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                 f_old[i] = ng_loc[i]; // copy load for later
             }
 
+            printf("II=%d\n", inner_iterations);
+            for (size_t i = 0; i < slda; i++) {
+                assert(f[i] <= 0);
+            }
+
             create_ngf_stiffness_1(triplets, job, node_map);
 
             cs_solve(triplets, f, ng_loc, slda);
 
+            const double neg_g_tol = -1e-10;
             for (size_t i = 0; i < slda; i++) {
                 ng[i] = f[i]; // solution is g1, save it as ng
-                ng_loc[i] = 0; // reset ngloc
+                if (f[i] < 0 && f[i] > neg_g_tol) {
+                    ng[i] = 0;
+                }
+                // ng_loc[i] = 0; // reset ngloc
             }
 
             for (size_t i = 0; i < slda; i++) {
                 if (ng[i] < 0) {
                     fprintf(stderr, "g1[%zu] = %g\n", i, ng[i]);
                     for (size_t j = 0; j < slda; j++) {
-                        fprintf(stderr, "f[%zu] = %g\n", j, f_old[j]);
+                        fprintf(stderr, "f[%zu] = %g\n", j, ng_loc[j]);
                     }
                 }
                 assert(ng[i] >= 0);
@@ -904,11 +913,47 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                 guess[i] -= ng[i];
             }
 
+            for (size_t i = 0; i < slda; i++) {
+                ng_loc[i] = 0;
+            }
+
+            for (size_t i = 0; i < job->num_particles; i++) {
+                if (dense) {
+                    const double s[4] = { job->h1[i], job->h2[i], job->h3[i], job->h4[i] };
+                    int p = job->in_element[i];
+                    const int *nn = job->elements[p].nodes;
+
+                    double reconstructed_g = 0;
+                    for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                        const size_t gi = global_node_numbering(job, nn[ei]);
+                        const size_t sgi = node_map[gi];
+
+                        reconstructed_g += ng[sgi] * s[ei];
+                        // reconstructed_g += ng[sgi] * 0.25;
+                    }
+
+                    const double gloc_from_g = calculate_g_local_from_g(trial_values[i].tau_tr, trial_values[i].p_tr, reconstructed_g, job->dt);
+                    
+                    for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                        const size_t gi = global_node_numbering(job, nn[ei]);
+                        const size_t sgi = node_map[gi];
+
+                        const double ng_loc_component = (job->particles[i].v) * gloc_from_g * s[ei];
+                        if (ng_loc_component < 0) {
+                            printf("v: %lg\ng_loc^1: %g\n", job->particles[i].v, ng_loc_component);
+                        }
+                        assert(ng_loc_component >= 0);
+
+                        ng_loc[sgi] += (-ng_loc_component);
+                    }
+                }
+            }
+
             double *Dg = calloc(slda, sizeof(double));
             cs *A = cs_compress(triplets);
             cs_dupl(A);
-            cs_gaxpy(A, guess, Dg);
-            const double rtr = dot(Dg, Dg, slda);
+            cs_gaxpy(A, ng, Dg);
+            const double rtr = -dot(ng, Dg, slda);
             cs_spfree(A);
             free(Dg);
 
@@ -1022,7 +1067,7 @@ void cs_solve(cs *triplets, double *load, double *guess, size_t lda)
     }
 #else
 //    fprintf(stderr, "%d by %d\n", smat_hat->m, smat_hat->n); // print out matrix for debugging
-    if (!cs_lusol(1, A, load, 1e-15)) {
+    if (!cs_lusol(1, A, load, 1e-16)) {
         fprintf(stderr, "lusol error!\n");
         if (cs_qrsol(1, A, load)) {
             fprintf(stderr, "qrsol error!\n");
