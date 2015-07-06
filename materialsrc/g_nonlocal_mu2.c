@@ -790,6 +790,15 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                     for (size_t j = 0; j < slda; j++) {
                         fprintf(stderr, "f[%zu] = %g\n", j, ng_loc[j]);
                     }
+                    cs *A = cs_compress(triplets);
+                    cs_dupl(A);
+                    cs_print_to_file(A);
+                    FILE *ff = fopen("load.cs", "w");
+                    for (size_t j = 0; j < slda; j++) {
+                        fprintf(ff, "%lg\n", ng_loc[j]);
+                    }
+                    fclose(ff);
+                    cs_spfree(A);
                 }
                 assert(ng[i] >= 0);
             }
@@ -1039,19 +1048,11 @@ void map_g_to_particles(job_t *job, const long int *node_map, const double *g, s
 
 void cs_solve(cs *triplets, double *load, double *guess, size_t lda)
 {
-#define DIRECT_SOLVE
-#ifdef DIRECT_SOLVE
-    /* keep matrix from being dengerate when an element is filled with open particles. */
-    /*
-    for (size_t i = 0; i < lda; i++) {
-        cs_entry(triplets, i, i, -1e-10);
-    }
-    */
-#endif
     /* create compressed sparse matrix */
     cs *A = cs_compress(triplets);
     cs_dupl(A);
 
+#define DIRECT_SOLVE
 #ifndef DIRECT_SOLVE
 //    fprintf(stderr, "%d by %d\n", smat_hat->m, smat_hat->n); // print out matrix for debugging
     if (!cs_bicgstab(A, load, guess, 1e-13)) {
