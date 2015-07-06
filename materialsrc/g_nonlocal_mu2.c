@@ -41,6 +41,23 @@
 
 #define MAT_VERSION_STRING "1.0 " __DATE__ " " __TIME__
 
+typedef struct p_trial_s {
+    double tau_tr;
+    double p_tr;
+
+    double t0xx_tr;
+    double t0xy_tr;
+    double t0yy_tr;
+    double t0zz_tr;
+
+    double tau_tau;
+    double p_tau;
+
+    double s; // scaling factor
+} trial_t;
+
+void calculate_local_values(job_t *job, trial_t *trial_values);
+
 size_t global_node_numbering(job_t *job, size_t physical_nn);
 
 void create_ngf_stiffness_1(cs *triplets, job_t *job, long int *node_map);
@@ -50,7 +67,7 @@ void create_nodal_volumes(job_t *job, long int *node_map, double *volumes_nodal,
 void create_nodal_stress_components(job_t *job, long int *node_map, double *sxx_nodal, double *sxy_nodal, double *syy_nodal, double *szz_nodal, double *volumes_nodal, size_t slda);
 
 void calculate_stress(job_t *job);
-void solve_diffusion_part(job_t *job);
+void solve_diffusion_part(job_t *job, trial_t *trial_values);
 void calculate_stress_threaded(threadtask_t *task);
 
 static double E, nu, G, K, lambda;
@@ -172,20 +189,6 @@ double calculate_load_from_g(double tau_tr, double p_tr, double g, double delta_
     return load;
 }
 
-typedef struct p_trial_s {
-    double tau_tr;
-    double p_tr;
-
-    double t0xx_tr;
-    double t0xy_tr;
-    double t0yy_tr;
-    double t0zz_tr;
-
-    double tau_tau;
-    double p_tau;
-
-    double s; // scaling factor
-} trial_t;
 
 void trial_step(const particle_t *p, const double dt, trial_t *trial)
 {
@@ -604,26 +607,29 @@ void calculate_stress_threaded(threadtask_t *task)
 /*----------------------------------------------------------------------------*/
 void calculate_stress(job_t *job)
 {
+    trial_t *trial_values = calloc(job->num_particles, sizeof(trial_t));
+
+    // populates the trial structure with the local values
+    // density flag in the actual particle is set appropriately.
+    calculate_local_values(job, trial_values);
+
     /* g_local is calculated when we create the stiffness matrix. */
     /* build FEM diffusion array/load vector and solve for g_nonlocal */
-    solve_diffusion_part(job);
+    solve_diffusion_part(job, trial_values);
 
     for (size_t i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
             continue;
         }
 
+        const double p_tr = trial_values[i].p_tr;
+        const double t0xx_tr = trial_values[i].t0xx_tr;
+        const double t0xy_tr = trial_values[i].t0xy_tr;
+        const double t0yy_tr = trial_values[i].t0yy_tr;
+        const double t0zz_tr = trial_values[i].t0zz_tr;
+        const double tau_tr = trial_values[i].tau_tr;
+
         double nup_tau = 0;
-        trial_t tr;
-        trial_step(&(job->particles[i]), job->dt, &tr);
-
-        const double p_tr = tr.p_tr;
-        const double t0xx_tr = tr.t0xx_tr;
-        const double t0xy_tr = tr.t0xy_tr;
-        const double t0yy_tr = tr.t0yy_tr;
-        const double t0zz_tr = tr.t0zz_tr;
-        const double tau_tr = tr.tau_tr;
-
         if (dense) {
             const double scale_factor = p_tr / (G * job->dt * gf + p_tr);
             const double tau_tau = tau_tr * scale_factor;
@@ -636,13 +642,11 @@ void calculate_stress(job_t *job)
             job->particles[i].state[SZZ_STATE] = scale_factor * t0zz_tr - p_tr;
         } else {
             // local step should already take care of this.
-            /* 
             nup_tau = (tau_tr / G) / job->dt;
             job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
             job->particles[i].syy = 0;
             job->particles[i].state[SZZ_STATE] = 0;
-            */
         }
 
         /* use strain rate to calculate stress increment */
@@ -650,12 +654,14 @@ void calculate_stress(job_t *job)
         gammadotp = nup_tau;
     }
 
+    free(trial_values);
+
     return;
 }
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-void solve_diffusion_part(job_t *job)
+void solve_diffusion_part(job_t *job, trial_t *trial_values)
 {
     double *ng_loc = calloc(job->num_nodes, sizeof(double));
     double *ng = calloc(job->num_nodes, sizeof(double));
@@ -669,24 +675,6 @@ void solve_diffusion_part(job_t *job)
         ntau_tr[i] = 0;
         // clear volumes
         nv[i] = 0;
-    }
-
-    /* setup density flag */
-    for (size_t i = 0; i < job->num_particles; i++) {
-        if (job->active[i] == 0) {
-            dense = 0;
-            continue; 
-        }
-        int p = job->in_element[i];
-        if (p == -1) {
-            dense = 0;
-            continue;
-        }
-        const int *nn = job->elements[p].nodes;
-        int flag = 0;
-        trial_t tr;
-        local_step(&(job->particles[i]), job->dt, &tr, &flag);
-        dense = flag;
     }
 
     /* get number of dofs and initialize mapping arrays */
@@ -1052,9 +1040,11 @@ void cs_solve(cs *triplets, double *load, double *guess, size_t lda)
 #define DIRECT_SOLVE
 #ifdef DIRECT_SOLVE
     /* keep matrix from being dengerate when an element is filled with open particles. */
+    /*
     for (size_t i = 0; i < lda; i++) {
         cs_entry(triplets, i, i, -1e-10);
     }
+    */
 #endif
     /* create compressed sparse matrix */
     cs *A = cs_compress(triplets);
@@ -1099,6 +1089,7 @@ size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map)
         if (job->active[i] == 0) {
             continue;
         }
+
         if (dense == 0) {
             continue;
         }
@@ -1110,7 +1101,6 @@ size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map)
 
         const int *nn = job->elements[p].nodes;
 
-
         for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
             num_dense_particles_near_node[nn[j]]++;
         }
@@ -1121,6 +1111,7 @@ size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map)
         node_map[i] = -1;
         inv_node_map[i] = -1;
     }
+
     for (size_t i = 0; i < job->num_nodes; i++) {
         const size_t i_new = global_node_numbering(job, i);
 
@@ -1134,18 +1125,22 @@ size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map)
             slda++;
         }
 
-        /*
-        if (job->nodes[i_new].m > 0) {
-            node_map[i_new] = slda;
-            inv_node_map[slda] = i_new;
-            slda++;
-        }
-        */
     }
 
     free(num_dense_particles_near_node);
-
-    printf("dofs = %zu\n", slda);
+    // printf("dofs = %zu\n", slda);
 
     return slda;
+}
+
+void calculate_local_values(job_t *job, trial_t *trial_values)
+{
+    for (size_t i = 0; i < job->num_particles; i++) {
+        // trial_step(&(job->particles[i]), job->dt, &(trial_values[i]));
+        int flag = 0;
+        local_step(&(job->particles[i]), job->dt, &(trial_values[i]), &flag);
+        dense = flag;
+    }
+
+    return;
 }
