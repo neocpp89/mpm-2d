@@ -106,6 +106,7 @@ LIST(APPEND CXSPARSE_CHECK_LIBRARY_DIRS
   /usr/local/lib
   /usr/local/homebrew/lib # Mac OS X.
   /opt/local/lib
+  /usr/lib/x86_64-linux-gnu
   /usr/lib)
 
 # Search supplied hint directories first if supplied.

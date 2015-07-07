@@ -31,6 +31,8 @@
 #include "reader.h"
 #include "writer.h"
 
+#include "GitSHA1.h"
+
 //#define dispg(x) printf(#x " = %g\n", x)
 //#define dispd(x) printf(#x " = %d\n", x)
 
@@ -163,6 +165,9 @@ void usage(char *program_name)
 /*----------------------------------------------------------------------------*/
 int main(int argc, char **argv)
 {
+    /* Output version information (git hash). */
+    printf("%s Git Hash: %s\n", argv[0], g_GIT_SHA1);
+
     /* Configuration file used by libconfuse. */
     const char *cfgfile = default_cfgfile;
     /* libconfuse config parsing variables */
@@ -713,6 +718,11 @@ int main(int argc, char **argv)
     job->output.log_fd = fopen(job->output.log_filename_fullpath, "w");
         JUMP_IF_NULL(job->output.particle_fd, _close_files,
             "Can't open log file for output.\n");
+
+    /*
+        Write git version which generated this output.
+    */
+    fprintf(job->output.info_fd, "%s Git Hash: %s\n", argv[0], g_GIT_SHA1);
 
     /* sampling rate */
     job->output.sample_rate_hz = cfg_getfloat(cfg_output, "sample-rate");

@@ -5,6 +5,10 @@ SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC -march=native -std=gnu99 -O3 -Wall -We
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -march=native -std=c++11 -O3 -Wall -Wextra")
 # SET(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 
+# generate string containing git hash.
+include(GetGitRevisionDescription)
+get_git_head_revision(GIT_REFSPEC GIT_SHA1)
+
 # for all binaries:
 # SET(CMAKE_INSTALL_RPATH "$ORIGIN/../mpm/material/:$ORIGIN/../mpm/bc/:$ORIGIN/")
 
