@@ -65,7 +65,6 @@
 
 void calculate_bulk_granular_fluidity(job_t *job);
 void solve_diffusion_part(job_t *job);
-void BiCGSTAB(double *x, cs *Amat, double *b, double tol, int lenx);
 
 /*----------------------------------------------------------------------------*/
 void material_init(job_t *job)
@@ -573,7 +572,8 @@ void solve_diffusion_part(job_t *job)
             gi = (job->node_number_override[NODAL_DOF * gi + 0] - 0) / NODAL_DOF;
             sgi = node_map[gi];
 
-            gf += gf_nodes[gi] * s[ei];
+            // gf += gf_nodes[gi] * s[ei];
+            gf += 0.25 * gf_nodes[gi];
         }
     }
 
@@ -588,24 +588,6 @@ void solve_diffusion_part(job_t *job)
     free(m_total_nodes);
     free(f);
 
-    return;
-}
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-void BiCGSTAB(double *x, cs *Amat, double *b, double tol, int lenx)
-{
-    int i;
-    double *r;
-    double rho;
-
-    r = (double *)malloc(sizeof(double) * lenx);
-    for (i = 0; i < lenx; i++) {
-        r[i] = -b[i];
-    }
-    rho = 1.0;
-    cs_gaxpy(Amat, x, r);
-    free(r);
     return;
 }
 /*----------------------------------------------------------------------------*/
