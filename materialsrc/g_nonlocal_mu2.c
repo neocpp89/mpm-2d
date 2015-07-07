@@ -888,13 +888,13 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
 
             create_gloc_load_from_g(job, node_map, ng_loc, ng);            
 
-            double *Dg = calloc(slda, sizeof(double));
+            double *Ang = calloc(slda, sizeof(double));
             cs *A = cs_compress(triplets);
             cs_dupl(A);
-            cs_gaxpy(A, ng, Dg);
-            const double rtr = dot(ng, Dg, slda);
+            cs_gaxpy(A, ng, Ang);
+            const double rtr = dot(ng, Ang, slda);
             cs_spfree(A);
-            free(Dg);
+            free(Ang);
 
             rel_error = rtr / slda;
 
