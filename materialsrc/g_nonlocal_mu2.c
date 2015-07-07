@@ -61,6 +61,7 @@ size_t global_node_numbering(job_t *job, size_t physical_nn);
 
 void create_ngf_stiffness_1(cs *triplets, job_t *job, long int *node_map);
 void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double *ng_loc, double *g1);
+void create_gloc_load_from_g(job_t *job, long int *node_map, double *ng_loc, double *ng);
 
 void create_nodal_volumes(job_t *job, long int *node_map, double *volumes_nodal, size_t slda);
 void create_nodal_stress_components(job_t *job, long int *node_map, double *sxx_nodal, double *sxy_nodal, double *syy_nodal, double *szz_nodal, double *volumes_nodal, size_t slda);
@@ -447,6 +448,49 @@ void create_ngf_stiffness_2(cs *triplets, job_t *job, long int *node_map, double
     return;
 }
 
+void create_gloc_load_from_g(job_t *job, long int *node_map, double *ng_loc, double *ng)
+{
+    for (size_t i = 0; i < job->num_particles; i++) {
+        // collapsed other conditionals into the dense flag
+        if (dense == 0) {
+            continue;
+        }
+        trial_t tr;
+        trial_step(&(job->particles[i]), job->dt, &tr);
+
+        const double s[4] = { job->h1[i], job->h2[i], job->h3[i], job->h4[i] };
+        const size_t p = job->in_element[i];
+        int *nn = job->elements[p].nodes;
+
+        double reconstructed_g = 0;
+        for (int ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+            const size_t gi = global_node_numbering(job, nn[ei]);
+            const size_t sgi = node_map[gi];
+
+            reconstructed_g += ng[sgi] * s[ei];
+        }
+
+        const double gloc_from_g = calculate_g_local_from_g(tr.tau_tr, tr.p_tr, reconstructed_g, job->dt);
+        
+        for (int ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+            const size_t gi = global_node_numbering(job, nn[ei]);
+            const size_t sgi = node_map[gi];
+
+            const double ng_loc_component = (job->particles[i].v) * gloc_from_g * s[ei];
+            if (ng_loc_component < 0) {
+                printf("v: %lg\ng_loc^1: %g\n", job->particles[i].v, ng_loc_component);
+                printf("reconstructed_g: %g\n", reconstructed_g);
+                printf("g_loc_from_g: %g\n", gloc_from_g);
+            }
+            assert(ng_loc_component >= 0);
+
+            ng_loc[sgi] += ng_loc_component;
+        }
+    }
+
+    return;
+}
+
 void create_nodal_volumes(job_t *job, long int *node_map, double *volumes_nodal, size_t slda)
 {
     // clear existing values
@@ -804,6 +848,7 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
             for (size_t i = 0; i < slda; i++) {
                 ng_loc[i] = 0; // reset ngloc
             }
+            create_gloc_load_from_g(job, node_map, ng_loc, ng);
 
             create_ngf_stiffness_2(triplets_hat, job, node_map, ng_loc, ng);
 
@@ -825,38 +870,7 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
             for (size_t i = 0; i < slda; i++) {
                 ng_loc[i] = 0;
             }
-
-            for (size_t i = 0; i < job->num_particles; i++) {
-                if (dense) {
-                    const double s[4] = { job->h1[i], job->h2[i], job->h3[i], job->h4[i] };
-                    int p = job->in_element[i];
-                    const int *nn = job->elements[p].nodes;
-
-                    double reconstructed_g = 0;
-                    for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                        const size_t gi = global_node_numbering(job, nn[ei]);
-                        const size_t sgi = node_map[gi];
-
-                        reconstructed_g += ng[sgi] * s[ei];
-                        // reconstructed_g += ng[sgi] * 0.25;
-                    }
-
-                    const double gloc_from_g = calculate_g_local_from_g(trial_values[i].tau_tr, trial_values[i].p_tr, reconstructed_g, job->dt);
-                    
-                    for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                        const size_t gi = global_node_numbering(job, nn[ei]);
-                        const size_t sgi = node_map[gi];
-
-                        const double ng_loc_component = (job->particles[i].v) * gloc_from_g * s[ei];
-                        if (ng_loc_component < 0) {
-                            printf("v: %lg\ng_loc^1: %g\n", job->particles[i].v, ng_loc_component);
-                        }
-                        assert(ng_loc_component >= 0);
-
-                        ng_loc[sgi] += ng_loc_component;
-                    }
-                }
-            }
+            create_gloc_load_from_g(job, node_map, ng_loc, ng);
 
             cs_solve(triplets, ng_loc, ng_loc, slda);
 
@@ -865,50 +879,20 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                 if (ng[i] < 0) {
                     printf("ng[%zu] = %g\n", i, ng[i]);
                 }
-                // assert(ng[i] >= 0);
+                assert(ng[i] >= 0);
             }
 
             for (size_t i = 0; i < slda; i++) {
                 ng_loc[i] = 0;
             }
 
-            for (size_t i = 0; i < job->num_particles; i++) {
-                if (dense) {
-                    const double s[4] = { job->h1[i], job->h2[i], job->h3[i], job->h4[i] };
-                    int p = job->in_element[i];
-                    const int *nn = job->elements[p].nodes;
-
-                    double reconstructed_g = 0;
-                    for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                        const size_t gi = global_node_numbering(job, nn[ei]);
-                        const size_t sgi = node_map[gi];
-
-                        reconstructed_g += ng[sgi] * s[ei];
-                        // reconstructed_g += ng[sgi] * 0.25;
-                    }
-
-                    const double gloc_from_g = calculate_g_local_from_g(trial_values[i].tau_tr, trial_values[i].p_tr, reconstructed_g, job->dt);
-                    
-                    for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
-                        const size_t gi = global_node_numbering(job, nn[ei]);
-                        const size_t sgi = node_map[gi];
-
-                        const double ng_loc_component = (job->particles[i].v) * gloc_from_g * s[ei];
-                        if (ng_loc_component < 0) {
-                            printf("v: %lg\ng_loc^1: %g\n", job->particles[i].v, ng_loc_component);
-                        }
-                        assert(ng_loc_component >= 0);
-
-                        ng_loc[sgi] += ng_loc_component;
-                    }
-                }
-            }
+            create_gloc_load_from_g(job, node_map, ng_loc, ng);            
 
             double *Dg = calloc(slda, sizeof(double));
             cs *A = cs_compress(triplets);
             cs_dupl(A);
             cs_gaxpy(A, ng, Dg);
-            const double rtr = -dot(ng, Dg, slda);
+            const double rtr = dot(ng, Dg, slda);
             cs_spfree(A);
             free(Dg);
 
