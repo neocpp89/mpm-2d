@@ -78,7 +78,7 @@ double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double del
 void map_g_to_particles(job_t *job, const long int *node_map, const double *g, size_t slda);
 void cs_solve(cs *triplets, double *load, double *guess, size_t lda);
 
-size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map);
+size_t count_valid_dofs(job_t *job, long int *node_map);
 
 size_t global_node_numbering(job_t *job, size_t physical_nn)
 {
@@ -142,10 +142,12 @@ double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double del
     const double s = g * G * delta_t + p_tr;
     const double tau_s = mu_s * s;
     const double tau_2 = mu_2 * s;
-    if (g >= 0 && tau_tr > tau_s && tau_tr < tau_2 && p_tr > 0) {
-        const double zeta = I_0 / (d * sqrt(rho_s));
-        g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - tau_s) / (tau_2 - tau_tr);
-
+    if (g >= 0 && p_tr > 0) {
+        if (tau_tr > tau_s && tau_tr < tau_2) {
+            const double zeta = I_0 / (d * sqrt(rho_s));
+            g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - tau_s) / (tau_2 - tau_tr);
+        }
+        assert(tau_tr <= tau_2);
     }
     return g_local;
 }
@@ -169,26 +171,6 @@ double calculate_deriv_g_local_from_g(double tau_tr, double p_tr, double g, doub
     // printf("dglocdg = %g\n", dg_localdg);
     return dg_localdg;
 }
-
-double calculate_load_from_g(double tau_tr, double p_tr, double g, double delta_t, double v);
-double calculate_load_from_g(double tau_tr, double p_tr, double g, double delta_t, double v)
-{
-    double load = 0;
-    if (g >= 0 && tau_tr > 0 && p_tr > 0) {
-        const double zeta = I_0 / (d * sqrt(rho_s));
-        const double s = g * G * delta_t + p_tr;
-        if ((tau_tr / s) < mu_s) {
-            load = 0;
-        } else if ((tau_tr / s) < mu_2) {
-            const double g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - mu_s * s) / (mu_2 * s - tau_tr);
-            load = v * g_local; 
-        } else {
-            load = 1;
-        }
-    }
-    return load;
-}
-
 
 void trial_step(const particle_t *p, const double dt, trial_t *trial)
 {
@@ -710,8 +692,7 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
 
     /* get number of dofs and initialize mapping arrays */
     long int *node_map = malloc(job->num_nodes * sizeof(long int));
-    long int *inv_node_map = malloc(job->num_nodes * sizeof(long int));
-    const size_t slda = count_valid_dofs(job, node_map, inv_node_map);
+    const size_t slda = count_valid_dofs(job, node_map);
 
     if (slda == 0) {
         /*
@@ -723,7 +704,6 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
         free(ng);
         free(nv);
         free(node_map);
-        free(inv_node_map);
         return;
     }
 
@@ -916,7 +896,6 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
     map_g_to_particles(job, node_map, ng, slda);
 
     free(node_map);
-    free(inv_node_map);
 
     free(f);
 
@@ -1012,7 +991,7 @@ void cs_solve(cs *triplets, double *load, double *guess, size_t lda)
     return;
 }
 
-size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map)
+size_t count_valid_dofs(job_t *job, long int *node_map)
 {
     int *num_dense_particles_near_node = calloc(job->num_nodes, sizeof(int));
 
@@ -1040,7 +1019,6 @@ size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map)
     size_t slda = 0;
     for (size_t i = 0; i < job->num_nodes; i++) {
         node_map[i] = -1;
-        inv_node_map[i] = -1;
     }
 
     for (size_t i = 0; i < job->num_nodes; i++) {
@@ -1052,7 +1030,6 @@ size_t count_valid_dofs(job_t *job, long int *node_map, long int *inv_node_map)
 
         if (num_dense_particles_near_node[i] > 0) {
             node_map[i_new] = slda;
-            inv_node_map[slda] = i_new;
             slda++;
         }
 
