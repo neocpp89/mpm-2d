@@ -40,6 +40,13 @@
 
 #define MAT_VERSION_STRING "1.0 " __DATE__ " " __TIME__
 
+typedef struct {
+    double _sxx;
+    double _sxy;
+    double _syy;
+    double _szz;
+} plane_stress_t;
+
 typedef struct p_trial_s {
     double tau_tr;
     double p_tr;
@@ -83,6 +90,16 @@ size_t count_valid_dofs(job_t *job, long int *node_map);
 size_t global_node_numbering(job_t *job, size_t physical_nn)
 {
     return (job->node_number_override[NODAL_DOF * physical_nn + 0] - 0) / NODAL_DOF;
+}
+
+double sum(double *data, size_t n);
+double sum(double *data, size_t n)
+{
+    double s = 0;
+    for (size_t i = 0; i < n; i++) {
+        s += data[i];
+    }
+    return s;
 }
 
 double calculate_g_local(double tau, double p)
@@ -147,7 +164,32 @@ double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double del
             const double zeta = I_0 / (d * sqrt(rho_s));
             g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - tau_s) / (tau_2 - tau_tr);
         }
-        assert(tau_tr <= tau_2);
+        assert(tau_tr < tau_2);
+    }
+    return g_local;
+}
+
+double calculate_g_local_from_g1dg2(double tau_tr, double p_tr, double g1, double dg2, double delta_t);
+double calculate_g_local_from_g1dg2(double tau_tr, double p_tr, double g1, double dg2, double delta_t)
+{
+    double g_local = 0;
+    const double g = g1 + dg2;
+    const double s = g * G * delta_t + p_tr;
+    const double tau_s = mu_s * s;
+    const double tau_2 = mu_2 * s;
+    const double g_min = ((tau_tr / mu_2) - p_tr) / (G * delta_t);
+    if (g >= 0 && p_tr > 0) {
+        if (tau_tr > tau_s && tau_tr < tau_2) {
+            const double zeta = I_0 / (d * sqrt(rho_s));
+            g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - tau_s) / (tau_2 - tau_tr);
+        }
+        assert(g1 >= g_min);
+        if (g < g_min) {
+            const double delta_g = 0.5 * (g1 - g_min);
+            const double s_h = (g_min + delta_g) * G * delta_t + p_tr;
+            const double zeta = I_0 / (d * sqrt(rho_s));
+            g_local = (sqrt(p_tr) / tau_tr) * zeta * s_h * (tau_tr - tau_s) / (tau_2 - tau_tr);
+        }
     }
     return g_local;
 }
@@ -168,7 +210,6 @@ double calculate_deriv_g_local_from_g(double tau_tr, double p_tr, double g, doub
             dg_localdg = 0;
         }
     }
-    // printf("dglocdg = %g\n", dg_localdg);
     return dg_localdg;
 }
 
@@ -473,6 +514,52 @@ void create_gloc_load_from_g(job_t *job, long int *node_map, double *ng_loc, dou
     return;
 }
 
+void create_gloc_load_from_g1dg2(job_t *job, long int *node_map, double *ng_loc, double *ng1, double *ndg2)
+{
+    for (size_t i = 0; i < job->num_particles; i++) {
+        // collapsed other conditionals into the dense flag
+        if (dense == 0) {
+            continue;
+        }
+        trial_t tr;
+        trial_step(&(job->particles[i]), job->dt, &tr);
+
+        const double s[4] = { job->h1[i], job->h2[i], job->h3[i], job->h4[i] };
+        const size_t p = job->in_element[i];
+        int *nn = job->elements[p].nodes;
+
+        double reconstructed_g1 = 0;
+        double reconstructed_dg2 = 0;
+        for (int ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+            const size_t gi = global_node_numbering(job, nn[ei]);
+            const size_t sgi = node_map[gi];
+
+            reconstructed_g1 += ng1[sgi] * s[ei];
+            reconstructed_dg2 += ndg2[sgi] * s[ei];
+        }
+
+        const double gloc_from_g = calculate_g_local_from_g1dg2(tr.tau_tr, tr.p_tr, reconstructed_g1, reconstructed_dg2, job->dt);
+        
+        for (int ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+            const size_t gi = global_node_numbering(job, nn[ei]);
+            const size_t sgi = node_map[gi];
+
+            const double ng_loc_component = (job->particles[i].v) * gloc_from_g * s[ei];
+            if (ng_loc_component < 0) {
+                printf("v: %lg\ng_loc^1: %g\n", job->particles[i].v, ng_loc_component);
+                printf("reconstructed_g1: %g\n", reconstructed_g1);
+                printf("reconstructed_dg2: %g\n", reconstructed_dg2);
+                printf("g_loc_from_g: %g\n", gloc_from_g);
+            }
+            assert(ng_loc_component >= 0);
+
+            ng_loc[sgi] += ng_loc_component;
+        }
+    }
+
+    return;
+}
+
 void create_nodal_volumes(job_t *job, long int *node_map, double *volumes_nodal, size_t slda)
 {
     // clear existing values
@@ -675,57 +762,16 @@ void calculate_stress(job_t *job)
 }
 /*----------------------------------------------------------------------------*/
 
-/*----------------------------------------------------------------------------*/
-void solve_diffusion_part(job_t *job, trial_t *trial_values)
+void initialize_g_loc_from_local(job_t *job, long int *node_map, trial_t *trial_values, double *nodal_g_loc, double *nodal_volume);
+void initialize_g_loc_from_local(job_t *job, long int *node_map, trial_t *trial_values, double *nodal_g_loc, double *nodal_volume)
 {
-    double *ng_loc = calloc(job->num_nodes, sizeof(double));
-    double *ng = calloc(job->num_nodes, sizeof(double));
-    double *nv = calloc(job->num_nodes, sizeof(double));
-
-    /* initialize node level fluidity arrays */
-    for (size_t i = 0; i < job->num_nodes; i++) {
-        ng[i] = 0;
-        ng_loc[i] = 0;
-        // clear volumes
-        nv[i] = 0;
-    }
-
-    /* get number of dofs and initialize mapping arrays */
-    long int *node_map = malloc(job->num_nodes * sizeof(long int));
-    const size_t slda = count_valid_dofs(job, node_map);
-
-    if (slda == 0) {
-        /*
-        fprintf(stderr, "%s:%s: Invalid size, slda = %zu.\n",
-            __FILE__, __func__, slda);
-        exit(-1);
-        */
-        free(ng_loc);
-        free(ng);
-        free(nv);
-        free(node_map);
-        return;
-    }
-
-    double *f = calloc(sizeof(double), slda);
-
-    /*  calculate number of nonzero elements (before summing duplicates). */
-    size_t nnz = 0;
-    for (size_t i = 0; i < job->num_particles; i++) {
-        if (dense) {
-            nnz += (NODES_PER_ELEMENT * NODES_PER_ELEMENT) * 1;
-        }
-    }
-    nnz += slda;
-
-    double sum_g_local = 0;
     // initial g_loc from local step
     for (size_t i = 0; i < job->num_particles; i++) {
         if (job->active[i] == 0) {
             dense = 0;
             continue; 
         }
-        int p = job->in_element[i];
+        const int p = job->in_element[i];
         if (p == -1) {
             dense = 0;
             continue;
@@ -734,8 +780,6 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
         if (dense) {
             xisq = calculate_xisq(trial_values[i].tau_tau, trial_values[i].p_tau);
             const double g_loc = calculate_g_local(trial_values[i].tau_tau, trial_values[i].p_tau);
-            sum_g_local += g_loc;
-
             const double s[4] = { job->h1[i], job->h2[i], job->h3[i], job->h4[i] };
 
             assert(isfinite(gf_local));
@@ -752,8 +796,8 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                 }
                 assert(ng_loc_component >= 0);
 
-                ng_loc[sgi] += ng_loc_component;
-                nv[sgi] += v_contrib;
+                nodal_g_loc[sgi] += ng_loc_component;
+                nodal_volume[sgi] += v_contrib;
             }
         } else {
             // set stresses to 0
@@ -763,8 +807,59 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
             job->particles[i].state[SZZ_STATE] = 0;
         }
     }
+}
 
-    if (fabs(sum_g_local) < 1e-12) {
+/*----------------------------------------------------------------------------*/
+void solve_diffusion_part(job_t *job, trial_t *trial_values)
+{
+    double *ng_loc = calloc(job->num_nodes, sizeof(double));
+    double *ng = calloc(job->num_nodes, sizeof(double));
+    double *nv = calloc(job->num_nodes, sizeof(double));
+
+    plane_stress_t *elastic_stresses = calloc(job->num_particles, sizeof(plane_stress_t));
+    double *current_tau_values = calloc(job->num_particles, sizeof(double));
+    double *minimum_tau_values = calloc(job->num_particles, sizeof(double));
+    double *maximum_tau_values = calloc(job->num_particles, sizeof(double));
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        minimum_tau_values[i] = 0;
+        maximum_tau_values[i] = trial_values[i].p_tr * mu_2;
+        current_tau_values[i] = trial_values[i].tau_tau;
+        // printf("TAU[%zu]: [%g, %g, %g]\n", i, minimum_tau_values[i], maximum_tau_values[i], current_tau_values[i]);
+    }
+
+    /* initialize node level fluidity arrays */
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        ng[i] = 0;
+        ng_loc[i] = 0;
+        // clear volumes
+        nv[i] = 0;
+    }
+
+    /* get number of dofs and initialize mapping arrays */
+    long int *node_map = malloc(job->num_nodes * sizeof(long int));
+    const size_t slda = count_valid_dofs(job, node_map);
+
+    if (slda == 0) {
+        goto diffusion_dealloc;
+    }
+
+    double *f = calloc(sizeof(double), slda);
+
+    /*  calculate number of nonzero elements (before summing duplicates). */
+    size_t nnz = 0;
+    for (size_t i = 0; i < job->num_particles; i++) {
+        if (dense) {
+            nnz += (NODES_PER_ELEMENT * NODES_PER_ELEMENT) * 1;
+        }
+    }
+    nnz += slda;
+
+    // use local algorithm to calculate initial guesses
+    initialize_g_loc_from_local(job, node_map, trial_values, ng_loc, nv);
+
+    const double sum_g_local = sum(ng_loc, slda);
+    if (sum_g_local < 1e-12) {
         for (size_t i = 0; i < job->num_particles; i++) {
             gf = 0;
         }
@@ -828,8 +923,8 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
             for (size_t i = 0; i < slda; i++) {
                 ng_loc[i] = 0; // reset ngloc
             }
-            create_gloc_load_from_g(job, node_map, ng_loc, ng);
 
+            create_gloc_load_from_g(job, node_map, ng_loc, ng);
             create_ngf_stiffness_2(triplets_hat, job, node_map, ng_loc, ng);
 
             double *f_hat = calloc(slda, sizeof(double));
@@ -850,7 +945,7 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
             for (size_t i = 0; i < slda; i++) {
                 ng_loc[i] = 0;
             }
-            create_gloc_load_from_g(job, node_map, ng_loc, ng);
+            create_gloc_load_from_g1dg2(job, node_map, ng_loc, ng, f_hat);
 
             cs_solve(triplets, ng_loc, ng_loc, slda);
 
@@ -894,14 +989,17 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
     }
 
     map_g_to_particles(job, node_map, ng, slda);
-
-    free(node_map);
-
     free(f);
 
+diffusion_dealloc:
+    free(node_map);
     free(ng);
     free(ng_loc);
     free(nv);
+    free(elastic_stresses);
+    free(current_tau_values);
+    free(minimum_tau_values);
+    free(maximum_tau_values);
 
     return;
 }
