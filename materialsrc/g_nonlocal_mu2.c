@@ -733,7 +733,8 @@ void calculate_stress(job_t *job)
 
         double nup_tau = 0;
         if (dense) {
-            const double scale_factor = p_tr / (G * job->dt * gf + p_tr);
+            // const double scale_factor = p_tr / (G * job->dt * gf + p_tr);
+            const double scale_factor = trial_values[i].tau_tau / trial_values[i].tau_tr;
             const double tau_tau = tau_tr * scale_factor;
 
             nup_tau = ((tau_tr - tau_tau) / G) / job->dt;
@@ -816,7 +817,6 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
     double *ng = calloc(job->num_nodes, sizeof(double));
     double *nv = calloc(job->num_nodes, sizeof(double));
 
-    plane_stress_t *elastic_stresses = calloc(job->num_particles, sizeof(plane_stress_t));
     double *current_tau_values = calloc(job->num_particles, sizeof(double));
     double *minimum_tau_values = calloc(job->num_particles, sizeof(double));
     double *maximum_tau_values = calloc(job->num_particles, sizeof(double));
@@ -859,14 +859,13 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
     initialize_g_loc_from_local(job, node_map, trial_values, ng_loc, nv);
 
     const double sum_g_local = sum(ng_loc, slda);
+    printf("sum(g_local) = %g\n", sum_g_local);
     if (sum_g_local < 1e-12) {
         for (size_t i = 0; i < job->num_particles; i++) {
             gf = 0;
         }
-        printf("Skipping matrix solve.\n");
+        printf("%zu: Skipping matrix solve.\n", job->stepcount);
     } else {
-        printf("sum(g_local) = %g\n", sum_g_local);
-
         double rel_error = 1;
         const double max_rel_error = 1e-5;
         int inner_iterations = 0;
@@ -890,12 +889,12 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
             }
 
             create_ngf_stiffness_1(triplets, job, node_map);
-
             cs_solve(triplets, f, ng_loc, slda);
 
             const double neg_g_tol = -1e-10;
             for (size_t i = 0; i < slda; i++) {
                 ng[i] = f[i]; // solution is g1, save it as ng
+                assert(f[i] >= neg_g_tol);
                 if (f[i] < 0 && f[i] > neg_g_tol) {
                     ng[i] = 0;
                 }
@@ -920,69 +919,49 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                 assert(ng[i] >= 0);
             }
 
-            for (size_t i = 0; i < slda; i++) {
-                ng_loc[i] = 0; // reset ngloc
-            }
+            // gf state variable of each particle is projection of g field
+            map_g_to_particles(job, node_map, ng, slda);
 
-            create_gloc_load_from_g(job, node_map, ng_loc, ng);
-            create_ngf_stiffness_2(triplets_hat, job, node_map, ng_loc, ng);
-
-            double *f_hat = calloc(slda, sizeof(double));
-            for (size_t i = 0; i < slda; i++) {
-                f_hat[i] = gloc1[i] - ng_loc[i]; 
-            }
-
-            const double rgloc2 = sqrt(dot(f_hat, f_hat, slda));
-            const double rglochat = sqrt(dot(ng_loc, ng_loc, slda));
-
-            cs_solve(triplets_hat, f_hat, ng_loc, slda);
-
-            for (size_t i = 0; i < slda; i++) {
-                ng[i] += f_hat[i]; // ng now contains g1 + delta g2 = g
-            }
-
-            // calculate g_loc from g
-            for (size_t i = 0; i < slda; i++) {
-                ng_loc[i] = 0;
-            }
-            create_gloc_load_from_g1dg2(job, node_map, ng_loc, ng, f_hat);
-
-            cs_solve(triplets, ng_loc, ng_loc, slda);
-
-            for (size_t i = 0; i < slda; i++) {
-                ng[i] = ng_loc[i];
-                if (ng[i] < 0) {
-                    printf("ng[%zu] = %g\n", i, ng[i]);
+            double rtr = 0;
+            FILE *fout = fopen("delta_tau.csv", "w");
+            FILE *fout2 = fopen("gammadotp.csv", "w");
+            for (size_t i = 0; i < job->num_particles; i++) {
+                if (dense == 0) {
+                    continue;
                 }
-                assert(ng[i] >= 0);
+
+                const double reconstructed_g = gf;
+                const double tau_elastic = current_tau_values[i];
+                const double gammadotbarp = (trial_values[i].tau_tr - tau_elastic) / (G * job->dt);
+                const double tau_plastic = trial_values[i].p_tau * (trial_values[i].tau_tr - tau_elastic) / (G * job->dt * reconstructed_g);
+
+                const double max_step_fraction = 0.05;
+                const double delta_tau = tau_plastic - tau_elastic;
+
+                fprintf(fout, "%g %g %g %g %g\n", job->particles[i].x, job->particles[i].y, delta_tau, delta_tau / tau_elastic, gammadotbarp);
+
+                rtr += delta_tau * delta_tau / (tau_elastic * tau_elastic);
+                if (delta_tau > 0) {
+                    // plastic stress larger than elastic; decrease D^p (increase current tau)
+                    const double max_delta_tau_neg = current_tau_values[i];
+                } else {
+                    // elastic stress larger than plastic; increase D^p (decrease current tau)
+                }
+                // printf("[%zu]: %g\n", i, tau_plastic);
             }
+            fclose(fout);
+            fclose(fout2);
 
-            for (size_t i = 0; i < slda; i++) {
-                ng_loc[i] = 0;
-            }
-
-            create_gloc_load_from_g(job, node_map, ng_loc, ng);            
-
-            double *Ang = calloc(slda, sizeof(double));
-            cs *A = cs_compress(triplets);
-            cs_dupl(A);
-            cs_gaxpy(A, ng, Ang);
-            const double rtr = dot(ng, Ang, slda);
-            cs_spfree(A);
-            free(Ang);
-
-            rel_error = rtr / slda;
-
-            const double rel_rgloc2 = rgloc2 / rglochat;
+            const double rel_error = sqrt(rtr / job->num_particles);
+            const double rgloc2 = 1;
 
             inner_iterations++;
-            printf("%d: %d %g %zu %g %lg\n", job->stepcount, inner_iterations, rtr, slda, rel_error, rel_rgloc2);
+            printf("%d: %d %g %zu %g\n", job->stepcount, inner_iterations, rtr, slda, rel_error);
 
             cs_spfree(triplets);
             cs_spfree(triplets_hat);
 
             free(gloc1);
-            free(f_hat);
 
         } while ((inner_iterations < max_inner_iterations) && (rel_error > max_rel_error));
 
@@ -996,7 +975,6 @@ diffusion_dealloc:
     free(ng);
     free(ng_loc);
     free(nv);
-    free(elastic_stresses);
     free(current_tau_values);
     free(minimum_tau_values);
     free(maximum_tau_values);
@@ -1134,7 +1112,6 @@ size_t count_valid_dofs(job_t *job, long int *node_map)
     }
 
     free(num_dense_particles_near_node);
-    // printf("dofs = %zu\n", slda);
 
     return slda;
 }
