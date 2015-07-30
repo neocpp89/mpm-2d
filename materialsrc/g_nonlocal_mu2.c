@@ -37,6 +37,7 @@
 #define xisq jp(state[7])
 #define gammap jp(state[9])
 #define gammadotp jp(state[10])
+#define TAU_STATE 8
 
 #define MAT_VERSION_STRING "1.0 " __DATE__ " " __TIME__
 
@@ -633,6 +634,7 @@ void material_init(job_t *job)
         gf_local = 0;
         xisq = 0;
         szz = 0.5 * (job->particles[i].sxx + job->particles[i].syy); // ugly hack
+        job->particles[i].state[TAU_STATE] = 0;
     }
 
     if (job->material.num_fp64_props < 9) {
@@ -841,7 +843,7 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
         double rel_error = 1;
         const double max_rel_error = 1e-5;
         int inner_iterations = 0;
-        const int max_inner_iterations = 1000;
+        const int max_inner_iterations = 10000;
 
         do {
             /* slda contains degrees of freedom of new matrix */
@@ -945,12 +947,13 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                 const double gammadotbarp = (trial_values[i].tau_tr - tau_elastic) / (G * job->dt);
                 const double tau_plastic = trial_values[i].p_tau * (trial_values[i].tau_tr - tau_elastic) / (G * job->dt * reconstructed_g);
 
-                const double max_step_fraction = 0.005;
+                const double max_step_fraction = 0.00005;
                 const double delta_tau = tau_plastic - tau_elastic;
+                // const double max_step_fraction = 0.05 * MIN(fabs(delta_tau), 1.0);
 
                 // fprintf(fout, "%g %g %g %g %g\n", job->particles[i].x, job->particles[i].y, delta_tau, delta_tau / tau_elastic, gammadotbarp);
 
-                rtr += delta_tau * delta_tau / (tau_elastic * tau_elastic);
+                rtr += delta_tau * delta_tau / (7500*7500);
                 if (delta_tau > 0) {
                     // plastic stress larger than elastic; decrease D^p (increase current tau)
                     const double max_delta_tau_pos = max_step_fraction * (maximum_tau_values[i] - current_tau_values[i]);
