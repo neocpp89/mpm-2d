@@ -40,12 +40,9 @@
 
 #define MAT_VERSION_STRING "1.0 " __DATE__ " " __TIME__
 
-typedef struct {
-    double _sxx;
-    double _sxy;
-    double _syy;
-    double _szz;
-} plane_stress_t;
+
+#define MAX(A,B) (((A) > (B))?(A):(B))
+#define MIN(A,B) (((A) > (B))?(B):(A))
 
 typedef struct p_trial_s {
     double tau_tr;
@@ -165,31 +162,6 @@ double calculate_g_local_from_g(double tau_tr, double p_tr, double g, double del
             g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - tau_s) / (tau_2 - tau_tr);
         }
         assert(tau_tr < tau_2);
-    }
-    return g_local;
-}
-
-double calculate_g_local_from_g1dg2(double tau_tr, double p_tr, double g1, double dg2, double delta_t);
-double calculate_g_local_from_g1dg2(double tau_tr, double p_tr, double g1, double dg2, double delta_t)
-{
-    double g_local = 0;
-    const double g = g1 + dg2;
-    const double s = g * G * delta_t + p_tr;
-    const double tau_s = mu_s * s;
-    const double tau_2 = mu_2 * s;
-    const double g_min = ((tau_tr / mu_2) - p_tr) / (G * delta_t);
-    if (g >= 0 && p_tr > 0) {
-        if (tau_tr > tau_s && tau_tr < tau_2) {
-            const double zeta = I_0 / (d * sqrt(rho_s));
-            g_local = (sqrt(p_tr) / tau_tr) * zeta * s * (tau_tr - tau_s) / (tau_2 - tau_tr);
-        }
-        assert(g1 >= g_min);
-        if (g < g_min) {
-            const double delta_g = 0.5 * (g1 - g_min);
-            const double s_h = (g_min + delta_g) * G * delta_t + p_tr;
-            const double zeta = I_0 / (d * sqrt(rho_s));
-            g_local = (sqrt(p_tr) / tau_tr) * zeta * s_h * (tau_tr - tau_s) / (tau_2 - tau_tr);
-        }
     }
     return g_local;
 }
@@ -869,13 +841,52 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
         double rel_error = 1;
         const double max_rel_error = 1e-5;
         int inner_iterations = 0;
-        const int max_inner_iterations = 8;
+        const int max_inner_iterations = 1000;
 
         do {
             /* slda contains degrees of freedom of new matrix */
             cs *triplets = cs_spalloc(slda, slda, nnz, 1, 1);
             cs *triplets_hat = cs_spalloc(slda, slda, nnz, 1, 1); 
 
+            for (size_t i = 0;i < slda; i++) {
+                ng_loc[i] = 0;
+            }
+
+            // initial g_loc from local step
+            for (size_t i = 0; i < job->num_particles; i++) {
+                if (job->active[i] == 0) {
+                    dense = 0;
+                    continue; 
+                }
+                const int p = job->in_element[i];
+                if (p == -1) {
+                    dense = 0;
+                    continue;
+                }
+                const int *nn = job->elements[p].nodes;
+                if (dense) {
+                    xisq = calculate_xisq(current_tau_values[i], trial_values[i].p_tau);
+                    const double g_loc = calculate_g_local(current_tau_values[i], trial_values[i].p_tau);
+                    const double s[4] = { job->h1[i], job->h2[i], job->h3[i], job->h4[i] };
+
+                    assert(isfinite(gf_local));
+                    assert(isfinite(xisq));
+                    
+                    for (size_t ei = 0; ei < NODES_PER_ELEMENT; ei++) {
+                        const size_t gi = global_node_numbering(job, nn[ei]);
+                        const size_t sgi = node_map[gi];
+
+                        const double v_contrib = job->particles[i].v * s[ei];
+                        const double ng_loc_component = g_loc * v_contrib;
+                        if (ng_loc_component < 0) {
+                            printf("v: %g g_loc^1: %g\n", job->particles[i].v, ng_loc_component);
+                        }
+                        assert(ng_loc_component >= 0);
+
+                        ng_loc[sgi] += ng_loc_component;
+                    }
+                }
+            }
             double *gloc1 = calloc(slda, sizeof(double));
 
             for (size_t i = 0; i < slda; i++) {
@@ -923,8 +934,7 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
             map_g_to_particles(job, node_map, ng, slda);
 
             double rtr = 0;
-            FILE *fout = fopen("delta_tau.csv", "w");
-            FILE *fout2 = fopen("gammadotp.csv", "w");
+            // FILE *fout = fopen("delta_tau.csv", "w");
             for (size_t i = 0; i < job->num_particles; i++) {
                 if (dense == 0) {
                     continue;
@@ -935,22 +945,26 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                 const double gammadotbarp = (trial_values[i].tau_tr - tau_elastic) / (G * job->dt);
                 const double tau_plastic = trial_values[i].p_tau * (trial_values[i].tau_tr - tau_elastic) / (G * job->dt * reconstructed_g);
 
-                const double max_step_fraction = 0.05;
+                const double max_step_fraction = 0.005;
                 const double delta_tau = tau_plastic - tau_elastic;
 
-                fprintf(fout, "%g %g %g %g %g\n", job->particles[i].x, job->particles[i].y, delta_tau, delta_tau / tau_elastic, gammadotbarp);
+                // fprintf(fout, "%g %g %g %g %g\n", job->particles[i].x, job->particles[i].y, delta_tau, delta_tau / tau_elastic, gammadotbarp);
 
                 rtr += delta_tau * delta_tau / (tau_elastic * tau_elastic);
                 if (delta_tau > 0) {
                     // plastic stress larger than elastic; decrease D^p (increase current tau)
-                    const double max_delta_tau_neg = current_tau_values[i];
+                    const double max_delta_tau_pos = max_step_fraction * (maximum_tau_values[i] - current_tau_values[i]);
+                    const double new_tau_elastic = tau_elastic + MIN(max_delta_tau_pos, delta_tau);
+                    current_tau_values[i] = new_tau_elastic;
                 } else {
                     // elastic stress larger than plastic; increase D^p (decrease current tau)
+                    const double max_delta_tau_neg = max_step_fraction * (current_tau_values[i] - minimum_tau_values[i]);
+                    const double new_tau_elastic = tau_elastic - MIN(max_delta_tau_neg, -delta_tau);
+                    current_tau_values[i] = new_tau_elastic;
                 }
                 // printf("[%zu]: %g\n", i, tau_plastic);
             }
-            fclose(fout);
-            fclose(fout2);
+            // fclose(fout);
 
             const double rel_error = sqrt(rtr / job->num_particles);
             const double rgloc2 = 1;
