@@ -660,6 +660,9 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
 
             const double neg_g_tol = -1e-10;
             for (size_t i = 0; i < slda; i++) {
+                if (f[i] < 0) {
+                    f[i] = 0;
+                } 
                 ng[i] = f[i]; // solution is g1, save it as ng
                 if (f[i] < 0 && f[i] > neg_g_tol) {
                     ng[i] = 0;
@@ -667,7 +670,7 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                 if (f[i] < 0) {
                     printf("f[%zu]: %g\n", i, f[i]);
                 }
-                assert(f[i] >= neg_g_tol);
+                // assert(f[i] >= neg_g_tol);
             }
 
             for (size_t i = 0; i < slda; i++) {
