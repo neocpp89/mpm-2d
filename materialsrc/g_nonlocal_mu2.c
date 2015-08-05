@@ -544,17 +544,15 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
     for (size_t i = 0; i < job->num_particles; i++) {
         minimum_tau_values[i] = 0;
         maximum_tau_values[i] = trial_values[i].p_tr * mu_2;
-        /*
         const double current_tau = job->particles[i].state[TAU_STATE];
         if (gf > 0) {
             current_tau_values[i] = trial_values[i].tau_tr * trial_values[i].p_tr / (trial_values[i].p_tr + gf * G * job->dt);
         }
-        */
-        // if ((current_tau > maximum_tau_values[i]) || (current_tau < minimum_tau_values[i])) {
+        if ((current_tau > maximum_tau_values[i]) || (current_tau < minimum_tau_values[i])) {
             current_tau_values[i] = trial_values[i].tau_tau;
-        // } else {
-        //     current_tau_values[i] = current_tau;
-        // }
+        } else {
+            current_tau_values[i] = current_tau;
+        }
         // printf("TAU[%zu]: [%g, %g, %g]\n", i, minimum_tau_values[i], maximum_tau_values[i], current_tau_values[i]);
     }
 
@@ -600,6 +598,7 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
         const double max_rel_error = 1e-2;
         int inner_iterations = 0;
         const int max_inner_iterations = 10000;
+        double max_step_fraction = 5e-3;
 
         do {
             /* slda contains degrees of freedom of new matrix */
@@ -708,7 +707,6 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                 const double tau_plastic = trial_values[i].p_tau * gammadotbarp / reconstructed_g;
                 // printf("TAU_PLASTIC[%zu]: %g, %g, %g, %g\n", i, gammadotbarp, reconstructed_g, tau_elastic, tau_plastic);
 
-                const double max_step_fraction = 0.00005;
                 const double delta_tau = tau_plastic - tau_elastic;
                 // const double max_step_fraction = 0.05 * MIN(fabs(delta_tau), 1.0);
 
@@ -719,18 +717,29 @@ void solve_diffusion_part(job_t *job, trial_t *trial_values)
                     // plastic stress larger than elastic; decrease D^p (increase current tau)
                     const double max_delta_tau_pos = max_step_fraction * (maximum_tau_values[i] - current_tau_values[i]);
                     const double new_tau_elastic = tau_elastic + MIN(max_delta_tau_pos, delta_tau);
-                    current_tau_values[i] = new_tau_elastic;
+                    job->particles[i].state[TAU_STATE] = new_tau_elastic;
+                    // current_tau_values[i] = new_tau_elastic;
                 } else {
                     // elastic stress larger than plastic; increase D^p (decrease current tau)
                     const double max_delta_tau_neg = max_step_fraction * (current_tau_values[i] - minimum_tau_values[i]);
                     const double new_tau_elastic = tau_elastic - MIN(max_delta_tau_neg, -delta_tau);
-                    current_tau_values[i] = new_tau_elastic;
+                    job->particles[i].state[TAU_STATE] = new_tau_elastic;
+                    // current_tau_values[i] = new_tau_elastic;
                 }
                 // printf("[%zu]: %g\n", i, tau_plastic);
             }
             // fclose(fout);
 
+            const double old_rel_error = rel_error;
             rel_error = sqrt(rtr / job->num_particles);
+            // if ((inner_iterations == 0) || (rel_error < old_rel_error)) {
+                for (size_t i = 0; i < job->num_particles; i++) {
+                    current_tau_values[i] = job->particles[i].state[TAU_STATE];
+                }
+            // } else {
+            //    max_step_fraction *= 0.7;
+            //    printf("MAX_STEP_FRACTION = %g\n", max_step_fraction);
+            // }
 
             inner_iterations++;
             printf("%d: %d %g %zu %g\n", job->stepcount, inner_iterations, rtr, slda, rel_error);
