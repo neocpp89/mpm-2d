@@ -10,11 +10,14 @@ import numpy as np
 velmag = 3
 rho_intruder = 9000.0
 
+Lx = 1
+Ly = Lx
+
 # linear material points per pixel (linear, so 2 -> 4 points in 1 pixel)
-lmpp = 2
+lmpp = 1
 rho = 1500.0
 # cell spacing for material point
-cs = 1.0 / lmpp
+cs = Lx / lmpp
 s = map(lambda k: (0.5 + k) * cs, range(0, lmpp))
 xy_s = [(x,y) for x in s for y in s]
 
@@ -31,8 +34,8 @@ im = imgfile.convert("1")
 print "File", sys.argv[-2], "has size", im.size, "pixels."
 
 # pixel spacing
-dx = float(1) / im.size[0]
-dy = float(1) / im.size[1]
+dx = float(Lx) / im.size[0]
+dy = float(Ly) / im.size[1]
 
 ij_array = [(i, j) for i in xrange(0, im.size[0]) for j in xrange(0, im.size[1])]
 pixel_array = map(im.getpixel, ij_array)
@@ -47,7 +50,7 @@ filled_array = [ij_array[idx] for idx, pixel in enumerate(pixel_array) if pixel 
 # xy nodes now has a tuple containing the coordinates of the bottom left node
 # of the filled element
 xy_nodes = map(lambda ij:
-                ((float(ij[0])/im.size[0]),(1.0-(float(ij[1])+1)/im.size[1])),
+                (Lx*(float(ij[0])/im.size[0]), Ly*(1.0-(float(ij[1])+1)/im.size[1])),
                 filled_array)
 
 xy_material_points = [(n[0]+dx*sp[0], n[1]+dy*sp[1]) for n in xy_nodes for sp in xy_s]
