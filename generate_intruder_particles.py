@@ -30,7 +30,8 @@ else:
 # linear material points per pixel (linear, so 2 -> 4 points in 1 pixel)
 lmpp = 1
 Ne = 200
-rho_bulk = 1500.0
+rho_bulk = 1280.0 * 0.8
+g = 9.81
 
 # cell spacing for material point
 cs = Lx / lmpp
@@ -52,10 +53,12 @@ ij_array = [(i, j) for i in xrange(0, Ne) for j in xrange(0, Ne)]
 # mpm_2d measures from bottom left, so convert coordinates.
 # xy nodes now has a tuple containing the coordinates of the bottom left node
 # of the filled element
-xy_nodes = map(lambda ij:
-                (Lx*(float(ij[0])/Ne), Ly*(1.0-(float(ij[1])+1)/Ne)),
-                ij_array)
 
+# xy_nodes = map(lambda ij:
+#                 (Lx*(float(ij[0])/Ne), Ly*(1.0-(float(ij[1])+1)/Ne)),
+#                 ij_array)
+
+xy_nodes = map(lambda ij: (Lx*float(ij[0])/Ne, Ly*float(ij[1])/Ne), ij_array)
 xy_material_point_candidates = [(n[0]+dx*sp[0], n[1]+dy*sp[1]) for n in xy_nodes for sp in xy_s]
 
 def intruder_intersection(x, y):
@@ -84,6 +87,10 @@ for i, point in enumerate(material_points):
     if point['y'] > 0.5*Lx:
         material_points[i]['y_t'] = -velmag
         material_points[i]['m'] = (rho_intruder / rho_bulk) * material_points[i]['m']
+    else:
+        p = rho_bulk * g * (0.5*Lx - point['y'])
+        material_points[i]['sxx'] = -p
+        material_points[i]['syy'] = -p
 
 print "Have", len(material_points), "material points."
 print "Writing to file", particle_filename

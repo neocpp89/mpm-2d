@@ -124,7 +124,6 @@ void material_init(job_t *job)
 
     for (i = 0; i < job->num_particles; i++) {
         mu_y = 0;
-        szz = 0;
         sxx_e = 0;
         sxy_e = 0;
         syy_e = 0;
@@ -133,6 +132,9 @@ void material_init(job_t *job)
         gammap = 0;
         gammadotp = 0;
         gf = 0;
+
+        const double p = -0.5*(job->particles[i].sxx + job->particles[i].syy);
+        szz = -p;
 
         if (job->particles[i].y > 0.5) {
             material_type = 0;
