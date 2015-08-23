@@ -136,7 +136,7 @@ void material_init(job_t *job)
         const double p = -0.5*(job->particles[i].sxx + job->particles[i].syy);
         szz = -p;
 
-        if (job->particles[i].y > 0.5) {
+        if (job->particles[i].y > 0.5*(job->N-1)*job->hy) {
             material_type = 0;
             // this is the intruder, so set the y-velocity
             job->particles[i].y_t = intruder_y_velocity;
