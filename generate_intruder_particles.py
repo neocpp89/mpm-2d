@@ -58,12 +58,20 @@ xy_nodes = map(lambda ij:
 
 xy_material_point_candidates = [(n[0]+dx*sp[0], n[1]+dy*sp[1]) for n in xy_nodes for sp in xy_s]
 
+def intruder_intersection(x, y):
+    return (   (y > 0) and
+    (y < (h_added + h_tip)) and
+    ((y - slope*x) > 0) and
+    (x < 0.5 * w_intruder)  )
+
+def bulk_intersection(x, y):
+    return (y < 0)
+
+def global_xform(xy):
+    return (abs(xy[0] - 0.5*Lx), xy[1] - 0.5*Ly)
+
 xy_material_points = filter(lambda xy:
-                        (xy[1] < 0) or
-                        (   (xy[1] > 0) and
-                            (xy[1] < (h_added + h_tip)) and
-                            ((xy[1] - slope*xy[0]) > 0) and
-                            (xy[0] < 0.5 * w_intruder)   ),
+                        intruder_intersection(*global_xform(xy)) or bulk_intersection(*global_xform(xy)),
                         xy_material_point_candidates)
 
 material_points = map(lambda xy: {
