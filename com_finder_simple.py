@@ -12,9 +12,9 @@ filename = sys.argv[1]
 with open(filename) as f:
     r = csv.reader(f)
     header = next(r)
-    midx = 5
-    xidx = 1
-    yidx = 2
+    midx = header.index('m')
+    xidx = header.index('x')
+    yidx = header.index('y')
     data = map(lambda row:map(float, row), r)
     total_mass = sum([drow[midx] for drow in data])
     average_mass = total_mass / len(data)
