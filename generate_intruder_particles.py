@@ -27,14 +27,19 @@ if (A_tip > const_area):
 else:
     h_added = (const_area - A_tip) / w_intruder
 
+grain_depth = 0.75*Ly
+
+if (grain_depth + h_tip + h_added) > Ly:
+    print 'Warning, particles don\'t fit in domain.'
+
 # linear material points per pixel (linear, so 2 -> 4 points in 1 pixel)
-lmpp = 2
-Ne = 100
+lmpp = 1
+Ne = 200
 rho_bulk = 1280.0 * 0.8
 g = 9.81
 
 # cell spacing for material point
-cs = Lx / lmpp
+cs = 1.0 / lmpp
 s = map(lambda k: (0.5 + k) * cs, range(0, lmpp))
 
 # material point positions inside cell
@@ -61,16 +66,16 @@ ij_array = [(i, j) for i in xrange(0, Ne) for j in xrange(0, Ne)]
 xy_nodes = map(lambda ij: (Lx*float(ij[0])/Ne, Ly*float(ij[1])/Ne), ij_array)
 xy_material_point_candidates = [(n[0]+dx*sp[0], n[1]+dy*sp[1]) for n in xy_nodes for sp in xy_s]
 
+int_tol = 1e-6
 def intruder_intersection(x, y):
     return (   (y > 0) and
     (y < (h_added + h_tip)) and
-    ((y - slope*x) > 0) and
-    (x < 0.5 * w_intruder)  )
+    (((y - slope*x) > 0) or abs(y - slope*x) < int_tol) and
+    (x < (0.5 * w_intruder) or abs(x - (0.5 * w_intruder)) < int_tol)  )
 
 def bulk_intersection(x, y):
     return (y < 0)
 
-grain_depth = 0.6*Ly
 
 def global_xform(xy):
     return (abs(xy[0] - 0.5*Lx), xy[1] - grain_depth)
