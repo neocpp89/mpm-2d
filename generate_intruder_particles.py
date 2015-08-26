@@ -28,8 +28,8 @@ else:
     h_added = (const_area - A_tip) / w_intruder
 
 # linear material points per pixel (linear, so 2 -> 4 points in 1 pixel)
-lmpp = 1
-Ne = 200
+lmpp = 2
+Ne = 100
 rho_bulk = 1280.0 * 0.8
 g = 9.81
 
@@ -70,8 +70,10 @@ def intruder_intersection(x, y):
 def bulk_intersection(x, y):
     return (y < 0)
 
+grain_depth = 0.6*Ly
+
 def global_xform(xy):
-    return (abs(xy[0] - 0.5*Lx), xy[1] - 0.5*Ly)
+    return (abs(xy[0] - 0.5*Lx), xy[1] - grain_depth)
 
 xy_material_points = filter(lambda xy:
                         intruder_intersection(*global_xform(xy)) or bulk_intersection(*global_xform(xy)),
@@ -84,11 +86,11 @@ material_points = map(lambda xy: {
                         'sxx':0, 'sxy':0, 'syy':0}, xy_material_points)
 
 for i, point in enumerate(material_points):
-    if point['y'] > 0.5*Lx:
+    if point['y'] > grain_depth:
         material_points[i]['y_t'] = -velmag
         material_points[i]['m'] = (rho_intruder / rho_bulk) * material_points[i]['m']
     else:
-        p = rho_bulk * g * (0.5*Lx - point['y'])
+        p = rho_bulk * g * (grain_depth - point['y'])
         material_points[i]['sxx'] = -p
         material_points[i]['syy'] = -p
 
