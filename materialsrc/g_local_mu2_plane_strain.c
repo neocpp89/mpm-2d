@@ -24,14 +24,12 @@
 #undef G
 #undef K
 
-/* from Dave + Ken's paper */
-#define MU_S 0.3819
-#define GRAINS_RHO 1200
+/* Estimated (see Kamrin and Koval 2014 paper) */
+#define MU_S 0.30
+#define GRAINS_RHO 1280
 #define RHO_CRITICAL (GRAINS_RHO*0.7)
-
-/* from Jop (modified I_0) */
-#define MU_2 0.6435
-#define I_0 (0.278 / 1.0)
+#define MU_2 (I_0+MU_S)
+#define I_0 0.278
 
 #define mu_y jp(state[0])
 #define szz jp(state[1])
@@ -122,6 +120,13 @@ void material_init(job_t *job)
         printf("%s:%s intruder y-velocity = %g\n", __FILE__, __func__, intruder_y_velocity);
     }
 
+    double total_particle_mass = 0;
+    for (i = 0; i < job->num_particles; i++) {
+        total_particle_mass += job->particles[i].m;
+    }
+
+    const double average_particle_mass = total_particle_mass / job->num_particles;
+
     for (i = 0; i < job->num_particles; i++) {
         mu_y = 0;
         sxx_e = 0;
@@ -136,7 +141,7 @@ void material_init(job_t *job)
         const double p = -0.5*(job->particles[i].sxx + job->particles[i].syy);
         szz = -p;
 
-        if (job->particles[i].y > 0.5*(job->N-1)*job->hy) {
+        if (job->particles[i].m > average_particle_mass) {
             material_type = 0;
             // this is the intruder, so set the y-velocity
             job->particles[i].y_t = intruder_y_velocity;
