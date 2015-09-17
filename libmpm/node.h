@@ -51,6 +51,9 @@ typedef struct node_s {
 
     /* marker for displacment/velocity update */
     int velocity_update_flag;
+
+    double sum_sqrt_m_neighbors;
+    double max_m_neighbors;
 } node_t;
 
 #endif

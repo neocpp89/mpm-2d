@@ -27,7 +27,7 @@
 /* Estimated (see Kamrin and Koval 2014 paper) */
 #define MU_S 0.30
 #define GRAINS_RHO 1280
-#define RHO_CRITICAL (GRAINS_RHO*0.7)
+#define RHO_CRITICAL (GRAINS_RHO*0.79)
 #define MU_2 (I_0+MU_S)
 #define I_0 0.278
 

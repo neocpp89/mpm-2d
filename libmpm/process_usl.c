@@ -561,6 +561,143 @@ void explicit_mpm_step_usl_threaded(void *_task)
     /* Map particle state to grid quantites. */
     map_to_grid_explicit_split(job, task->id);
 
+/* start DCA algorithm */
+    rc = pthread_barrier_wait(job->serialize_barrier);
+    for (size_t i = n_start; i < n_stop; i++) {
+        job->nodes[i].sum_sqrt_m_neighbors = sqrt(job->nodes[i].m);
+        job->nodes[i].max_m_neighbors = 0;
+        const size_t r = i / job->N;
+        const size_t c = i % job->N;
+        size_t nidx = 0;
+        if (r != job->N) {
+            nidx = ijton(r+1, c, job->N);
+            job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m); 
+            if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
+                job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
+            }
+            if (c != job->N) {
+                nidx = ijton(r+1, c+1, job->N);
+                job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m);
+                if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
+                    job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
+                }
+            }
+            if (c != 0) {
+                nidx = ijton(r+1, c-1, job->N);
+                job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m);
+                if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
+                    job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
+                }
+            }
+        }
+
+        if (r != 0) {
+            nidx = ijton(r-1, c, job->N);
+            job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m); 
+            if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
+                job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
+            }
+            if (c != job->N) {
+                nidx = ijton(r-1, c+1, job->N);
+                job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m);
+                if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
+                    job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
+                }
+            }
+            if (c != 0) {
+                nidx = ijton(r-1, c-1, job->N);
+                job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m);
+                if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
+                    job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
+                }
+            }
+        }
+
+        if (c != job->N) {
+            nidx = ijton(r, c+1, job->N);
+            job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m); 
+            if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
+                job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
+            }
+        }
+
+        if (c != 0) {
+            nidx = ijton(r, c-1, job->N);
+            job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m); 
+            if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
+                job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
+            }
+        }
+    }
+    rc = pthread_barrier_wait(job->serialize_barrier);
+    if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
+        for (size_t i = 0; i < job->num_nodes; i++) {
+            if ((job->nodes[i].m == 0) || (job->nodes[i].m > 0.04*job->nodes[i].max_m_neighbors)) {
+                continue;
+            }
+            const double denom = job->nodes[i].sum_sqrt_m_neighbors;
+            const size_t r = i / job->N;
+            const size_t c = i % job->N;
+            size_t nidx = i;
+            double f = 0;
+            if (r != job->N) {
+                nidx = ijton(r+1, c, job->N);
+                f = sqrt(job->nodes[nidx].m) / denom;
+                job->nodes[nidx].fx += f * job->nodes[i].fx;
+                job->nodes[nidx].fy += f * job->nodes[i].fy;
+                if (c != job->N) {
+                    nidx = ijton(r+1, c+1, job->N);
+                    f = sqrt(job->nodes[nidx].m) / denom;
+                    job->nodes[nidx].fx += f * job->nodes[i].fx;
+                    job->nodes[nidx].fy += f * job->nodes[i].fy;
+                }
+                if (c != 0) {
+                    nidx = ijton(r+1, c-1, job->N);
+                    f = sqrt(job->nodes[nidx].m) / denom;
+                    job->nodes[nidx].fx += f * job->nodes[i].fx;
+                    job->nodes[nidx].fy += f * job->nodes[i].fy;
+                }
+            }
+
+            if (r != 0) {
+                nidx = ijton(r-1, c, job->N);
+                f = sqrt(job->nodes[nidx].m) / denom;
+                job->nodes[nidx].fx += f * job->nodes[i].fx;
+                job->nodes[nidx].fy += f * job->nodes[i].fy;
+                if (c != job->N) {
+                    nidx = ijton(r-1, c+1, job->N);
+                    f = sqrt(job->nodes[nidx].m) / denom;
+                    job->nodes[nidx].fx += f * job->nodes[i].fx;
+                    job->nodes[nidx].fy += f * job->nodes[i].fy;
+                }
+                if (c != 0) {
+                    nidx = ijton(r-1, c-1, job->N);
+                    f = sqrt(job->nodes[nidx].m) / denom;
+                    job->nodes[nidx].fx += f * job->nodes[i].fx;
+                    job->nodes[nidx].fy += f * job->nodes[i].fy;
+                }
+            }
+
+            if (c != job->N) {
+                nidx = ijton(r, c+1, job->N);
+                f = sqrt(job->nodes[nidx].m) / denom;
+                job->nodes[nidx].fx += f * job->nodes[i].fx;
+                job->nodes[nidx].fy += f * job->nodes[i].fy;
+            }
+
+            if (c != 0) {
+                nidx = ijton(r, c-1, job->N);
+                f = sqrt(job->nodes[nidx].m) / denom;
+                job->nodes[nidx].fx += f * job->nodes[i].fx;
+                job->nodes[nidx].fy += f * job->nodes[i].fy;
+            }
+            f = sqrt(job->nodes[i].m) / denom;
+            job->nodes[i].fx *= f;
+            job->nodes[i].fy *= f;
+        }
+    }
+/* end DCA algorithm*/
+
     rc = pthread_barrier_wait(job->serialize_barrier);
     if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
         /* Zero perpendicular momentum at edge nodes. */
