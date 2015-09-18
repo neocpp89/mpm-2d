@@ -797,19 +797,23 @@ void create_particle_to_element_map_threaded(threadtask_t *task)
 
         if (p != job->in_element[i]) {
             changed = 1;
+            /*
             fprintf(job->output.log_fd, 
                 "[%g] Particle %zu @(%g, %g) left element %d, now in element %d.\n",
                 job->t, i, job->particles[i].x, job->particles[i].y,
                 job->in_element[i], p);
+            */
         }
 
         /* Update particle element. */
         job->in_element[i] = p;
 
         if (p == -1) {
+            /*
             fprintf(job->output.log_fd,
                 "[%g] Particle %zu outside of grid (%g, %g), marking as inactive.\n",
                 job->t, i, job->particles[i].x, job->particles[i].y);
+            */
             job->active[i] = 0;
             continue;
         }
