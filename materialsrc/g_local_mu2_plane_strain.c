@@ -18,6 +18,8 @@
 
 #define jp(x) job->particles[i].x
 
+#define MIN(x,y) (((x)<(y))?((x)):((y)))
+
 #undef EMOD
 #undef NUMOD
 
@@ -25,7 +27,7 @@
 #undef K
 
 /* Estimated (see Kamrin and Koval 2014 paper) */
-#define MU_S 0.30
+#define MU_S 0.40
 #define GRAINS_RHO 1280
 #define RHO_CRITICAL (GRAINS_RHO*0.79)
 #define MU_2 (I_0+MU_S)
@@ -33,15 +35,15 @@
 
 #define mu_y jp(state[0])
 #define szz jp(state[1])
+#define SZZ_STATE 1
 #define material_type jp(state[2])
 #define gf jp(state[3])
 #define eta jp(state[4])
 #define beta jp(state[5])
 #define gammap jp(state[9])
 #define gammadotp jp(state[10])
-#define sxx_e jp(state[6])
-#define sxy_e jp(state[7])
-#define syy_e jp(state[8])
+#define PRESSURE_ELASTIC_STATE 6
+#define PREVIOUS_E_VOLDOT_STATE 7
 
 #define MAT_VERSION_STRING "1.0 " __DATE__ " " __TIME__
 
@@ -129,9 +131,6 @@ void material_init(job_t *job)
 
     for (i = 0; i < job->num_particles; i++) {
         mu_y = 0;
-        sxx_e = 0;
-        sxy_e = 0;
-        syy_e = 0;
         eta = 0;
         beta = 0;
         gammap = 0;
@@ -140,6 +139,9 @@ void material_init(job_t *job)
 
         const double p = -0.5*(job->particles[i].sxx + job->particles[i].syy);
         szz = -p;
+
+        job->particles[i].state[PRESSURE_ELASTIC_STATE] = p;
+        job->particles[i].state[PREVIOUS_E_VOLDOT_STATE] = 0;
 
         if (job->particles[i].m > average_particle_mass) {
             material_type = 0;
@@ -218,17 +220,32 @@ void calculate_stress_threaded(threadtask_t *task)
         dsjxx += 2 * job->particles[i].wxy_t * job->particles[i].sxy;
         dsjxy -= job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
         dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
+        double dsjzz = lambda * trD;
+
+        const double damping_factor = 0.06*150000;
+        const double dot_e_vol_previous = job->particles[i].state[PREVIOUS_E_VOLDOT_STATE];
+        const double dot_e_vol = 0.5 * (job->particles[i].exx_t + job->particles[i].eyy_t);
+        job->particles[i].state[PREVIOUS_E_VOLDOT_STATE] = dot_e_vol;
+        const double ddot_e_vol = -(dot_e_vol - dot_e_vol_previous) / job->dt; 
+        const double damping = -damping_factor*MIN(0, ddot_e_vol);
+        //job->particles[i].sxx += K*damping;
+        //job->particles[i].syy += K*damping;
+        //job->particles[i].state[SZZ_STATE] += K*damping;
+        dsjxx += damping;
+        dsjyy += damping;
+        dsjzz += damping;
 
         sxx_tr = job->particles[i].sxx + job->dt * dsjxx;
         sxy_tr = job->particles[i].sxy + job->dt * dsjxy;
         syy_tr = job->particles[i].syy + job->dt * dsjyy;
-        szz_tr = szz + job->dt * lambda * trD;
+        szz_tr = szz + job->dt * dsjzz;
 
         if (material_type == 0) {
             job->particles[i].sxx = sxx_tr;
             job->particles[i].sxy = sxy_tr;
             job->particles[i].syy = syy_tr;
             szz = szz_tr;
+
             continue;
         }
 
@@ -284,6 +301,7 @@ void calculate_stress_threaded(threadtask_t *task)
         /* use strain rate to calculate stress increment */
         gammap += nup_tau * job->dt;
         gammadotp = nup_tau;
+
     }
 
     return;
