@@ -569,13 +569,14 @@ void explicit_mpm_step_usl_threaded(void *_task)
         const size_t r = i / job->N;
         const size_t c = i % job->N;
         size_t nidx = 0;
-        if (r != job->N) {
+        const size_t max_N_idx = job->N - 1;
+        if (r != max_N_idx) {
             nidx = ijton(r+1, c, job->N);
             job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m); 
             if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
                 job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
             }
-            if (c != job->N) {
+            if (c != max_N_idx) {
                 nidx = ijton(r+1, c+1, job->N);
                 job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m);
                 if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
@@ -597,7 +598,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
             if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
                 job->nodes[i].max_m_neighbors = job->nodes[nidx].m;
             }
-            if (c != job->N) {
+            if (c != max_N_idx) {
                 nidx = ijton(r-1, c+1, job->N);
                 job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m);
                 if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
@@ -613,7 +614,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
             }
         }
 
-        if (c != job->N) {
+        if (c != max_N_idx) {
             nidx = ijton(r, c+1, job->N);
             job->nodes[i].sum_sqrt_m_neighbors += sqrt(job->nodes[nidx].m); 
             if (job->nodes[nidx].m > job->nodes[i].max_m_neighbors) {
@@ -640,12 +641,13 @@ void explicit_mpm_step_usl_threaded(void *_task)
             const size_t c = i % job->N;
             size_t nidx = i;
             double f = 0;
-            if (r != job->N) {
+            const size_t max_N_idx = job->N - 1;
+            if (r != max_N_idx) {
                 nidx = ijton(r+1, c, job->N);
                 f = sqrt(job->nodes[nidx].m) / denom;
                 job->nodes[nidx].fx += f * job->nodes[i].fx;
                 job->nodes[nidx].fy += f * job->nodes[i].fy;
-                if (c != job->N) {
+                if (c != max_N_idx) {
                     nidx = ijton(r+1, c+1, job->N);
                     f = sqrt(job->nodes[nidx].m) / denom;
                     job->nodes[nidx].fx += f * job->nodes[i].fx;
@@ -664,7 +666,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
                 f = sqrt(job->nodes[nidx].m) / denom;
                 job->nodes[nidx].fx += f * job->nodes[i].fx;
                 job->nodes[nidx].fy += f * job->nodes[i].fy;
-                if (c != job->N) {
+                if (c != max_N_idx) {
                     nidx = ijton(r-1, c+1, job->N);
                     f = sqrt(job->nodes[nidx].m) / denom;
                     job->nodes[nidx].fx += f * job->nodes[i].fx;
@@ -678,7 +680,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
                 }
             }
 
-            if (c != job->N) {
+            if (c != max_N_idx) {
                 nidx = ijton(r, c+1, job->N);
                 f = sqrt(job->nodes[nidx].m) / denom;
                 job->nodes[nidx].fx += f * job->nodes[i].fx;

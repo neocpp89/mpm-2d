@@ -31,19 +31,18 @@
 #define GRAINS_RHO 1280
 #define RHO_CRITICAL (GRAINS_RHO*0.79)
 #define MU_2 (I_0+MU_S)
+// #define MU_2 0.45
 #define I_0 0.278
 
 #define mu_y jp(state[0])
 #define szz jp(state[1])
 #define SZZ_STATE 1
 #define material_type jp(state[2])
-#define gf jp(state[3])
-#define eta jp(state[4])
-#define beta jp(state[5])
 #define gammap jp(state[9])
 #define gammadotp jp(state[10])
 #define PRESSURE_ELASTIC_STATE 6
 #define PREVIOUS_E_VOLDOT_STATE 7
+#define PRESSURE_DAMPER_STATE 8
 
 #define MAT_VERSION_STRING "1.0 " __DATE__ " " __TIME__
 
@@ -131,17 +130,15 @@ void material_init(job_t *job)
 
     for (i = 0; i < job->num_particles; i++) {
         mu_y = 0;
-        eta = 0;
-        beta = 0;
         gammap = 0;
         gammadotp = 0;
-        gf = 0;
 
         const double p = -0.5*(job->particles[i].sxx + job->particles[i].syy);
         szz = -p;
 
         job->particles[i].state[PRESSURE_ELASTIC_STATE] = p;
         job->particles[i].state[PREVIOUS_E_VOLDOT_STATE] = 0;
+        job->particles[i].state[PRESSURE_DAMPER_STATE] = 0;
 
         if (job->particles[i].m > average_particle_mass) {
             material_type = 0;
@@ -149,6 +146,12 @@ void material_init(job_t *job)
             job->particles[i].y_t = intruder_y_velocity;
         } else { 
             material_type = 1;
+
+            // correct hydrostatic density in bulk 
+            if (p > 0 && p < K) {
+                const double scale = K / (K - p);
+                job->particles[i].m = scale * RHO_CRITICAL * job->particles[i].v;
+            }
         }
     }
 
@@ -212,6 +215,12 @@ void calculate_stress_threaded(threadtask_t *task)
             continue;
         }
 
+        /* remove previous damping */
+        const double previous_linear_damping = job->particles[i].state[PRESSURE_DAMPER_STATE];
+        job->particles[i].sxx -= previous_linear_damping;
+        job->particles[i].syy -= previous_linear_damping;
+        job->particles[i].state[SZZ_STATE] -= previous_linear_damping;
+
         /* Calculate tau and p trial values. */
         trD = job->particles[i].exx_t + job->particles[i].eyy_t;
         dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
@@ -222,18 +231,23 @@ void calculate_stress_threaded(threadtask_t *task)
         dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
         double dsjzz = lambda * trD;
 
-        const double damping_factor = 0.06*150000;
+        const double damping_factor = 1e-2*1.25e6;
         const double dot_e_vol_previous = job->particles[i].state[PREVIOUS_E_VOLDOT_STATE];
         const double dot_e_vol = 0.5 * (job->particles[i].exx_t + job->particles[i].eyy_t);
         job->particles[i].state[PREVIOUS_E_VOLDOT_STATE] = dot_e_vol;
-        const double ddot_e_vol = -(dot_e_vol - dot_e_vol_previous) / job->dt; 
-        const double damping = -damping_factor*MIN(0, ddot_e_vol);
+        const double ddot_e_vol = (dot_e_vol - dot_e_vol_previous) / job->dt; 
+        double damping = damping_factor*ddot_e_vol;
+        if (dot_e_vol >= 0) {
+            damping = 0;
+        }
         //job->particles[i].sxx += K*damping;
         //job->particles[i].syy += K*damping;
         //job->particles[i].state[SZZ_STATE] += K*damping;
+        #if 0
         dsjxx += damping;
         dsjyy += damping;
         dsjzz += damping;
+        #endif
 
         sxx_tr = job->particles[i].sxx + job->dt * dsjxx;
         sxy_tr = job->particles[i].sxy + job->dt * dsjxy;
@@ -265,7 +279,7 @@ void calculate_stress_threaded(threadtask_t *task)
 
         if (density_flag || p_tr <= c) {
             nup_tau = (tau_tr) / (G * job->dt);
-            beta = -p_tr / (K * job->dt);
+            // beta = -p_tr / (K * job->dt);
 
             job->particles[i].sxx = 0;
             job->particles[i].sxy = 0;
@@ -286,7 +300,7 @@ void calculate_stress_threaded(threadtask_t *task)
             }
 
             nup_tau = ((tau_tr - tau_tau) / G) / job->dt;
-            beta = 0;
+            // beta = 0;
 
             job->particles[i].sxx = scale_factor * t0xx_tr - p_tr;
             job->particles[i].sxy = scale_factor * t0xy_tr;
@@ -301,6 +315,13 @@ void calculate_stress_threaded(threadtask_t *task)
         /* use strain rate to calculate stress increment */
         gammap += nup_tau * job->dt;
         gammadotp = nup_tau;
+
+        /* add simple damping */
+        const double linear_damping = job->dt*damping_factor*ddot_e_vol;
+        job->particles[i].state[PRESSURE_DAMPER_STATE] = linear_damping;
+        job->particles[i].sxx += linear_damping;
+        job->particles[i].syy += linear_damping;
+        job->particles[i].state[SZZ_STATE] += linear_damping;
 
     }
 
