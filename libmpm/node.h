@@ -8,7 +8,7 @@
 #ifndef __NODE_H__
 #define __NODE_H__
 
-typedef struct node_s {
+typedef struct node_s  {
     /* Filled element neighbors. */
     /* int element_neighbors[4];
     int filled_element_neighbors[4]; */
@@ -38,10 +38,6 @@ typedef struct node_s {
     double mx_t;
     double my_t;
 
-    /* "pseudoforce" */
-    double mx_tt;
-    double my_tt;
-
     /* Force */
     double fx;
     double fy;
@@ -54,7 +50,7 @@ typedef struct node_s {
 
     double sum_sqrt_m_neighbors;
     double max_m_neighbors;
-} node_t;
+} __attribute__((__packed__)) node_t;
 
 #endif
 

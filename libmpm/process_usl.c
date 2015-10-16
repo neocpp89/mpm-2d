@@ -18,7 +18,6 @@
 #include "process_usl.h"
 #include "material.h"
 #include "exitcodes.h"
-#include "map.h"
 #include <suitesparse/cs.h>
 
 #include <assert.h>
@@ -311,8 +310,6 @@ void explicit_mpm_step_usl_threaded(void *_task)
         job->nodes[i].m = 0;
         job->nodes[i].mx_t = 0;
         job->nodes[i].my_t = 0;
-        job->nodes[i].mx_tt = 0;
-        job->nodes[i].my_tt = 0;
         job->nodes[i].x_t = 0;
         job->nodes[i].y_t = 0;
         job->nodes[i].x_tt = 0;
@@ -817,28 +814,6 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
     double s[NODES_PER_ELEMENT];
     double ds[NODES_PER_ELEMENT];
 
-    /* Kinda a hack, but used this because C doesn't have reflection. */
-    const int pdata_len = 7;
-    size_t node_field_offsets[pdata_len];
-    double pdata[pdata_len];
-
-    /* also accumulate stress using gradients of shapefunctions. */
-    const int stress_len = 3;
-    size_t node_d_offsets[stress_len];
-    double stressdata[stress_len];
-
-    /* Be sure to replicate this order in the particle data array! */
-    node_field_offsets[0] = offsetof(node_t, m);
-    node_field_offsets[1] = offsetof(node_t, mx_t);
-    node_field_offsets[2] = offsetof(node_t, my_t);
-    node_field_offsets[3] = offsetof(node_t, mx_tt);
-    node_field_offsets[4] = offsetof(node_t, my_tt);
-    node_field_offsets[5] = offsetof(node_t, fx);
-    node_field_offsets[6] = offsetof(node_t, fy);
-
-    node_d_offsets[0] = offsetof(node_t, fx);
-    node_d_offsets[1] = offsetof(node_t, fy);
-
     for (size_t c = 0; c < job->num_colors; c++) {
         const size_t tc_idx = thread_id * job->num_colors + c;
         for (size_t i = 0; i < job->particle_by_element_color_lengths[tc_idx]; i++) {
@@ -850,53 +825,55 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
             */
 
             const int p = job->in_element[p_idx];
+            const int *nn = job->elements[p].nodes;
 
             s[0] = job->h1[p_idx];
             s[1] = job->h2[p_idx];
             s[2] = job->h3[p_idx];
             s[3] = job->h4[p_idx];
 
-            /* Mass. */
-            pdata[0] = job->particles[p_idx].m;
+            const double mass = job->particles[p_idx].m;
+            const double x_momentum = job->particles[p_idx].x_t * mass;
+            const double y_momentum = job->particles[p_idx].y_t * mass;
+            const double x_body_force = job->particles[p_idx].bx * mass;
+            const double y_body_force = job->particles[p_idx].by * mass;
 
-            /* Momentum. */
-            pdata[1] = job->particles[p_idx].x_t * job->particles[p_idx].m;
-            pdata[2] = job->particles[p_idx].y_t * job->particles[p_idx].m;
-
-            /* Inertia. */
-            pdata[3] = job->particles[p_idx].x_tt * job->particles[p_idx].m;
-            pdata[4] = job->particles[p_idx].y_tt * job->particles[p_idx].m;
-
-            /* Body forces. */
-            pdata[5] = job->particles[p_idx].bx * job->particles[p_idx].m;
-            pdata[6] = job->particles[p_idx].by * job->particles[p_idx].m;
-
-            /* Stress. */
-            stressdata[0] = -job->particles[p_idx].sxx * job->particles[p_idx].v;
-            stressdata[1] = -job->particles[p_idx].sxy * job->particles[p_idx].v;
-            stressdata[2] = -job->particles[p_idx].syy * job->particles[p_idx].v;
-
-            accumulate_p_to_n_ds_list47(job->nodes,
-                node_field_offsets, job->elements[p].nodes, s, 
-                pdata);
+            for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
+                job->nodes[nn[n]].m += s[n] * mass;
+                job->nodes[nn[n]].mx_t += s[n] * x_momentum;
+                job->nodes[nn[n]].my_t += s[n] * y_momentum;
+                job->nodes[nn[n]].fx += s[n] * x_body_force;
+                job->nodes[nn[n]].fy += s[n] * y_body_force;
+            }
 
             ds[0] = job->b11[p_idx];
             ds[1] = job->b12[p_idx];
             ds[2] = job->b13[p_idx];
             ds[3] = job->b14[p_idx];
 
-            accumulate_p_to_n_ds_list42(job->nodes,
-                node_d_offsets, job->elements[p].nodes, ds, 
-                &(stressdata[0]));
+            const double volume = job->particles[p_idx].v;
+            const double sxx = job->particles[p_idx].sxx;
+            const double sxy = job->particles[p_idx].sxy;
+            const double syy = job->particles[p_idx].syy;
+
+            const double xx_fi = -volume * sxx;
+            const double xy_fi = -volume * sxy;
+            const double yy_fi = -volume * syy;
+
+            for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
+                job->nodes[nn[n]].fx += ds[n] * xx_fi;
+                job->nodes[nn[n]].fy += ds[n] * xy_fi;
+            }
 
             ds[0] = job->b21[p_idx];
             ds[1] = job->b22[p_idx];
             ds[2] = job->b23[p_idx];
             ds[3] = job->b24[p_idx];
 
-            accumulate_p_to_n_ds_list42(job->nodes,
-                node_d_offsets, job->elements[p].nodes, ds, 
-                &(stressdata[1]));
+            for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
+                job->nodes[nn[n]].fx += ds[n] * xy_fi;
+                job->nodes[nn[n]].fy += ds[n] * yy_fi;
+            }
         }
 
         /*
