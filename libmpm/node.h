@@ -50,7 +50,7 @@ typedef struct node_s  {
 
     double sum_sqrt_m_neighbors;
     double max_m_neighbors;
-} __attribute__((__packed__)) node_t;
+} node_t;
 
 #endif
 
