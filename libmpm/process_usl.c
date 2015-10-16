@@ -40,11 +40,6 @@
 #define __NE(j,e,n) j->elements[e].nodes[n]
 
 /* XXX: ugly, fix soon */
-#if 0
-#define WHICH_ELEMENT4(xp,yp,N,h) \
-    ((int)(((xp)<1.0 && (xp)>=0.0 && (yp)<1.0 && (yp)>=0.0)?((floor((xp)/(h)) + floor((yp)/(h))*((N)-1))):(-1)))
-#endif
-
 #define WHICH_ELEMENT4(xp,yp,N,Lx,Ly,hx,hy) \
     ((int)(((xp)<Lx && (xp)>=0.0 && (yp)<Ly && (yp)>=0.0)?((floor((xp)/(hx)) + floor((yp)/(hy))*((N)-1))):(-1)))
 
@@ -180,9 +175,9 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
             job->elements[i].neighbors[j] = -1;
         }
 
-        if (r != Ne) {
+        if (r != (Ne - 1)) {
             job->elements[i].neighbors[2] = ijton(r+1, c, Ne);
-            if (c != Ne) {
+            if (c != (Ne - 1)) {
                 job->elements[i].neighbors[1] = ijton(r+1, c+1, Ne);
             }
             if (c != 0) {
@@ -192,7 +187,7 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
 
         if (r != 0) {
             job->elements[i].neighbors[6] = ijton(r-1, c, Ne);
-            if (c != Ne) {
+            if (c != (Ne - 1)) {
                 job->elements[i].neighbors[7] = ijton(r-1, c+1, Ne);
             }
             if (c != 0) {
@@ -200,7 +195,7 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
             }
         }
 
-        if (c != Ne) {
+        if (c != (Ne - 1)) {
             job->elements[i].neighbors[0] = ijton(r, c+1, Ne);
         }
 
@@ -248,7 +243,7 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
     for (size_t i = 0; i < job->num_particles; i++) {
         job->in_element[i] = WHICH_ELEMENT(
             job->particles[i].x, job->particles[i].y, job->N, job->Lx, job->Ly, job->hx, job->hy);
-        if (job->in_element[i] < 0 || (size_t)job->in_element[i] > job->num_elements) {
+        if (job->in_element[i] < 0 || (size_t)job->in_element[i] >= job->num_elements) {
             job->active[i] = 0;
         } else {
             job->active[i] = 1;
@@ -292,187 +287,6 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
 }
 /*----------------------------------------------------------------------------*/
 
-/*----------------------------------------------------------------------------*/
-void explicit_mpm_step_musl_threaded(void *_task)
-{
-    threadtask_t *task = (threadtask_t *)_task;
-    job_t *job = task->job;
-    int rc;
-    size_t i;
-
-    size_t p_start = task->offset;
-    size_t p_stop = task->offset + task->blocksize;
-
-    size_t n_start = task->n_offset;
-    size_t n_stop = task->n_offset + task->n_blocksize;
-
-    size_t e_start = task->e_offset;
-    size_t e_stop = task->e_offset + task->e_blocksize;
-
-    pthread_barrier_wait(job->serialize_barrier);
-
-    /* Clear grid quantites. */
-    for (i = n_start; i < n_stop; i++) {
-        job->nodes[i].m = 0;
-        job->nodes[i].mx_t = 0;
-        job->nodes[i].my_t = 0;
-        job->nodes[i].mx_tt = 0;
-        job->nodes[i].my_tt = 0;
-        job->nodes[i].x_t = 0;
-        job->nodes[i].y_t = 0;
-        job->nodes[i].x_tt = 0;
-        job->nodes[i].y_tt = 0;
-        job->nodes[i].fx = 0;
-        job->nodes[i].fy = 0;
-        job->nodes[i].ux = 0;
-        job->nodes[i].uy = 0;
-    }
-
-    for (i = e_start; i < e_stop; i++) {
-        job->elements[i].filled = 0;
-        job->elements[i].n = 0;
-        job->elements[i].m = 0;
-    }
-
-    /* Figure out which element each material point is in. */
-/*    create_particle_to_element_map_split(job, p_start, p_stop);*/
-    create_particle_to_element_map_threaded(task);
-
-    /*
-        XXX Normally we find which elements are filled here, but we defer
-        because we don't need it until later and want to keep the serial
-        sections together after one barrier call.
-    */
-
-    /* Calculate shape and gradient of shape functions. */
-    calculate_shapefunctions_split(job, p_start, p_stop);
-
-    rc = pthread_barrier_wait(job->serialize_barrier);
-    if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
-        /* Increment time. (We do this first to avoid more barrier calls.) */
-        job->t += job->dt;
-
-/*    }*/
-/*    pthread_barrier_wait(job->serialize_barrier);*/
-
-    /* XXX: most of this is serialized in testing!! */
-/*    rc = pthread_barrier_wait(job->serialize_barrier);*/
-/*    if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {*/
-
-        /* Update corner coordinates. NOTE: Not needed unless using cpdi. */
-        /* update_corner_domains(job); */
-
-        /* find which elements are filled */
-        job->update_elementlists_flag = 0;
-        for (i = 0; i < job->num_threads; i++) {
-            job->update_elementlists_flag += job->update_elementlists[i];
-        }
-
-        if (job->update_elementlists_flag != 0) {
-            find_filled_elements(job);
-        }
-
-        /* Create dirichlet and periodic boundary conditions. */
-        (*(job->boundary.bc_time_varying))(job);
-    }
-
-    pthread_barrier_wait(job->serialize_barrier);
-    /* Map particle state to grid quantites. */
-    map_to_grid_explicit_split(job, task->id);
-
-    rc = pthread_barrier_wait(job->serialize_barrier);
-    if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
-        /* Zero perpendicular momentum at edge nodes. */
-        (*(job->boundary.bc_momentum))(job);
-
-        /*
-            This is poorly named -- it actually calculates diverence of stress to
-            get nodal force.
-        */
-        /* XXX: moved to map_to_grid_explicit_split. */
-/*        update_stress(job);*/
-
-        /* Zero perpendicular forces at edge nodes. */
-        (*(job->boundary.bc_force))(job);
-
-    }
-
-    pthread_barrier_wait(job->serialize_barrier);
-
-    /*
-        Update momentum and velocity at nodes.
-        Wait for all threads to finish updating nodes before calculating
-        strainrates.
-    */
-    move_grid_split(job, n_start, n_stop); 
-    pthread_barrier_wait(job->serialize_barrier);
-
-    /* Update particle position and velocity. */
-    move_particles_explicit_usl_split(job, p_start, p_stop);
-   
-    /* recalculate nodal velocity by projecting from particles again. */ 
-  
-    /* 
-    for (i = n_start; i < n_stop; i++) {
-        if (job->nodes[i].m > TOL)
-            printf("before %zu: %g, %g\n", i, job->nodes[i].x_t, job->nodes[i].y_t);
-    }
-    */
-
-    pthread_barrier_wait(job->serialize_barrier);
-    for (i = n_start; i < n_stop; i++) {
-        job->nodes[i].m = 0;
-        job->nodes[i].mx_t = 0;
-        job->nodes[i].my_t = 0;
-        job->nodes[i].mx_tt = 0;
-        job->nodes[i].my_tt = 0;
-        job->nodes[i].x_t = 0;
-        job->nodes[i].y_t = 0;
-        job->nodes[i].x_tt = 0;
-        job->nodes[i].y_tt = 0;
-        job->nodes[i].fx = 0;
-        job->nodes[i].fy = 0;
-        job->nodes[i].ux = 0;
-        job->nodes[i].uy = 0;
-    }
-    pthread_barrier_wait(job->serialize_barrier);
-    map_to_grid_explicit_split(job, task->id);
-    pthread_barrier_wait(job->serialize_barrier);
-    for (i = n_start; i < n_stop; i++) {
-        if(job->nodes[i].m > TOL) {
-            job->nodes[i].x_t = job->nodes[i].mx_t / job->nodes[i].m;
-            job->nodes[i].y_t = job->nodes[i].my_t / job->nodes[i].m;
-        } else {
-            job->nodes[i].x_t = 0;
-            job->nodes[i].y_t = 0;
-        }
-    }
-    rc = pthread_barrier_wait(job->serialize_barrier);
-    if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
-        /* Zero perpendicular momentum at edge nodes. */
-        (*(job->boundary.bc_momentum))(job);
-    }
-    pthread_barrier_wait(job->serialize_barrier);
-
-    /*
-    for (i = n_start; i < n_stop; i++) {
-        if (job->nodes[i].m > TOL)
-            printf("after %zu: %g, %g\n", i, job->nodes[i].x_t, job->nodes[i].y_t);
-    }
-    */
-
-    /* Calculate strain rate. */
-    calculate_strainrate_split(job, p_start, p_stop);
-
-    /* update volume */
-    update_particle_densities_split(job, p_start, p_stop);
-
-    /* Calculate stress. */
-    (*(job->material.calculate_stress_threaded))(task);
-
-    return;
-}
-/*----------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------*/
 void explicit_mpm_step_usl_threaded(void *_task)
 {
@@ -562,6 +376,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
     map_to_grid_explicit_split(job, task->id);
 
 /* start DCA algorithm */
+    #if 0
     rc = pthread_barrier_wait(job->serialize_barrier);
     for (size_t i = n_start; i < n_stop; i++) {
         job->nodes[i].sum_sqrt_m_neighbors = sqrt(job->nodes[i].m);
@@ -698,6 +513,7 @@ void explicit_mpm_step_usl_threaded(void *_task)
             job->nodes[i].fy *= f;
         }
     }
+    #endif
 /* end DCA algorithm*/
 
     rc = pthread_barrier_wait(job->serialize_barrier);
@@ -746,11 +562,8 @@ void explicit_mpm_step_usl_threaded(void *_task)
 /*----------------------------------------------------------------------------*/
 void move_grid_split(job_t *job, size_t n_start, size_t n_stop)
 {
-    double m;
-    size_t i;
-
-    for (i = n_start; i < n_stop; i++) {
-        m = job->nodes[i].m;
+    for (size_t i = n_start; i < n_stop; i++) {
+        const double m = job->nodes[i].m;
 
         if (m > TOL) {
             job->nodes[i].x_tt = job->nodes[i].fx / m;
@@ -767,8 +580,12 @@ void move_grid_split(job_t *job, size_t n_start, size_t n_stop)
         } else {
             job->nodes[i].x_tt = 0;
             job->nodes[i].y_tt = 0;
+            // job->nodes[i].mx_t = 0;
+            // job->nodes[i].my_t = 0;
             job->nodes[i].x_t = 0;
             job->nodes[i].y_t = 0;
+            job->nodes[i].ux = 0;
+            job->nodes[i].uy = 0;
         }
     }
 
@@ -922,10 +739,6 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
 /*----------------------------------------------------------------------------*/
 void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
 {
-    int ce, nn[4];
-    double dx_tdy;
-    double dy_tdx;
-
     for (size_t i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
         job->particles[i].exx_t = 0;
@@ -936,14 +749,14 @@ void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
         if (job->use_cpdi) {
             /* loop over corners */
             for (size_t j = 0; j < 4; j++) {
-                ce = job->particles[i].corner_elements[j];
+                const int ce = job->particles[i].corner_elements[j];
                 /* corner is outside of particle domain. should probably deal with this better... */
                 if (ce == -1) {
                     continue;
                 }
-                for (size_t k = 0; k < 4; k++) {
-                    nn[k] = job->elements[ce].nodes[k];
 
+                const int *nn = job->elements[ce].nodes;
+                for (size_t k = 0; k < 4; k++) {
                     /* actual volume of particle here (not averaging volume) */
                     job->particles[i].exx_t += job->nodes[nn[k]].x_t * job->particles[i].grad_sc[j][k][S_XIDX];
                     job->particles[i].exy_t += 0.5 * (job->nodes[nn[k]].x_t * job->particles[i].grad_sc[j][k][S_YIDX] + job->nodes[nn[k]].y_t * job->particles[i].grad_sc[j][k][S_XIDX]);
@@ -952,12 +765,43 @@ void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
                 }
             }
         } else {
-            job->particles[i].exx_t = DX_N_TO_P(job, x_t, 1.0, i);
-            job->particles[i].eyy_t = DY_N_TO_P(job, y_t, 1.0, i);
+            /*
+                Original MPM strainrate update.
+            */
+            const int pe = job->in_element[i];
+            if (pe == -1) {
+                job->active[i] = 0;
+                continue;
+            }
+            const int *nn = job->elements[pe].nodes;
 
-            dx_tdy = DY_N_TO_P(job, x_t, 1.0, i);
-            dy_tdx = DX_N_TO_P(job, y_t, 1.0, i);
+            double dx_tdx = 0;
+            double dx_tdy = 0;
+            double dy_tdx = 0;
+            double dy_tdy = 0;
 
+            dx_tdx = job->nodes[nn[0]].x_t * job->b11[i];
+            dx_tdx += job->nodes[nn[1]].x_t * job->b12[i];
+            dx_tdx += job->nodes[nn[2]].x_t * job->b13[i];
+            dx_tdx += job->nodes[nn[3]].x_t * job->b14[i];
+
+            dy_tdx = job->nodes[nn[0]].y_t * job->b11[i];
+            dy_tdx += job->nodes[nn[1]].y_t * job->b12[i];
+            dy_tdx += job->nodes[nn[2]].y_t * job->b13[i];
+            dy_tdx += job->nodes[nn[3]].y_t * job->b14[i];
+
+            dx_tdy = job->nodes[nn[0]].x_t * job->b21[i];
+            dx_tdy += job->nodes[nn[1]].x_t * job->b22[i];
+            dx_tdy += job->nodes[nn[2]].x_t * job->b23[i];
+            dx_tdy += job->nodes[nn[3]].x_t * job->b24[i];
+
+            dy_tdy = job->nodes[nn[0]].y_t * job->b21[i];
+            dy_tdy += job->nodes[nn[1]].y_t * job->b22[i];
+            dy_tdy += job->nodes[nn[2]].y_t * job->b23[i];
+            dy_tdy += job->nodes[nn[3]].y_t * job->b24[i];
+
+            job->particles[i].exx_t = dx_tdx;
+            job->particles[i].eyy_t = dy_tdy;
             job->particles[i].exy_t = 0.5 * (dx_tdy + dy_tdx);
             job->particles[i].wxy_t = 0.5 * (dx_tdy - dy_tdx);
         }
@@ -970,7 +814,6 @@ void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
 /*----------------------------------------------------------------------------*/
 void map_to_grid_explicit_split(job_t *job, size_t thread_id)
 {
-    size_t c, i, p_idx, tc_idx;
     double s[NODES_PER_ELEMENT];
     double ds[NODES_PER_ELEMENT];
 
@@ -984,8 +827,6 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
     size_t node_d_offsets[stress_len];
     double stressdata[stress_len];
 
-    int p;
-
     /* Be sure to replicate this order in the particle data array! */
     node_field_offsets[0] = offsetof(node_t, m);
     node_field_offsets[1] = offsetof(node_t, mx_t);
@@ -998,17 +839,17 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
     node_d_offsets[0] = offsetof(node_t, fx);
     node_d_offsets[1] = offsetof(node_t, fy);
 
-    for (c = 0; c < job->num_colors; c++) {
-        tc_idx = thread_id * job->num_colors + c;
-        for (i = 0; i < job->particle_by_element_color_lengths[tc_idx]; i++) {
-            p_idx = job->particle_by_element_color_lists[tc_idx][i];
+    for (size_t c = 0; c < job->num_colors; c++) {
+        const size_t tc_idx = thread_id * job->num_colors + c;
+        for (size_t i = 0; i < job->particle_by_element_color_lengths[tc_idx]; i++) {
+            const size_t p_idx = job->particle_by_element_color_lists[tc_idx][i];
 
             /*
                 Note: We don't need to check if the particle is active since
                 the list assembly already checks for this condition.
             */
 
-            p = job->in_element[p_idx];
+            const int p = job->in_element[p_idx];
 
             s[0] = job->h1[p_idx];
             s[1] = job->h2[p_idx];
@@ -1081,12 +922,12 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
         s[2] = job->h3[i];
         s[3] = job->h4[i];
 
-        size_t el = job->in_element[i];
+        const size_t el = job->in_element[i];
         job->particles[i].x_tt = 0;
         job->particles[i].y_tt = 0;
         for (size_t j = 0; j < 4; j++) {
-            size_t n = job->elements[el].nodes[j];
-            double m = job->nodes[n].m;
+            const size_t n = job->elements[el].nodes[j];
+            const double m = job->nodes[n].m;
             if (m < TOL) { continue; }
             job->particles[i].x_tt += ((s[j] * job->nodes[n].fx) / m);
             job->particles[i].y_tt += ((s[j] * job->nodes[n].fy) / m);
@@ -1098,8 +939,8 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
         double dux = 0;
         double duy = 0;
         for (size_t j = 0; j < 4; j++) {
-            size_t n = job->elements[el].nodes[j];
-            double m = job->nodes[n].m;
+            const size_t n = job->elements[el].nodes[j];
+            const double m = job->nodes[n].m;
             if (m < TOL) { continue; }
             dux += ((s[j] * job->nodes[n].mx_t) / m);
             duy += ((s[j] * job->nodes[n].my_t) / m);
@@ -1121,8 +962,8 @@ void update_particle_densities_split(job_t *job, size_t p_start, size_t p_stop)
 {
     for (size_t i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
-        job->particles[i].v = job->particles[i].v *
-            exp(job->dt * (job->particles[i].exx_t + job->particles[i].eyy_t));
+        const double trD = (job->particles[i].exx_t + job->particles[i].eyy_t);
+        job->particles[i].v *= exp(job->dt * trD);
     }
 
     return;
