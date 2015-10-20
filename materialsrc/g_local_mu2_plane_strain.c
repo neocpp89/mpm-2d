@@ -27,7 +27,7 @@
 #undef K
 
 /* Estimated (see Kamrin and Koval 2014 paper) */
-#define MU_S 0.40
+#define MU_S 0.577
 #define GRAINS_RHO 1280
 #define RHO_CRITICAL (GRAINS_RHO*0.79)
 #define MU_2 (I_0+MU_S)
@@ -201,7 +201,6 @@ void calculate_stress_threaded(threadtask_t *task)
     
     size_t i;
 
-    double trD;
     const double lambda = K - 2.0 * G / 3.0;
 
     double S0, S2;
@@ -222,7 +221,7 @@ void calculate_stress_threaded(threadtask_t *task)
         job->particles[i].state[SZZ_STATE] -= previous_linear_damping;
 
         /* Calculate tau and p trial values. */
-        trD = job->particles[i].exx_t + job->particles[i].eyy_t;
+        const double trD = job->particles[i].exx_t + job->particles[i].eyy_t;
         dsjxx = lambda * trD + 2.0 * G * job->particles[i].exx_t;
         dsjxy = 2.0 * G * job->particles[i].exy_t;
         dsjyy = lambda * trD + 2.0 * G * job->particles[i].eyy_t;
@@ -231,15 +230,17 @@ void calculate_stress_threaded(threadtask_t *task)
         dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
         double dsjzz = lambda * trD;
 
-        const double damping_factor = 1e-2*1.25e6;
+        const double damping_factor = 0; //1e-6*1.25e6;
+        const double dot_e_vol = trD;
+        #if 0
         const double dot_e_vol_previous = job->particles[i].state[PREVIOUS_E_VOLDOT_STATE];
-        const double dot_e_vol = 0.5 * (job->particles[i].exx_t + job->particles[i].eyy_t);
         job->particles[i].state[PREVIOUS_E_VOLDOT_STATE] = dot_e_vol;
         const double ddot_e_vol = (dot_e_vol - dot_e_vol_previous) / job->dt; 
         double damping = damping_factor*ddot_e_vol;
         if (dot_e_vol >= 0) {
             damping = 0;
         }
+        #endif
         //job->particles[i].sxx += K*damping;
         //job->particles[i].syy += K*damping;
         //job->particles[i].state[SZZ_STATE] += K*damping;
@@ -255,10 +256,34 @@ void calculate_stress_threaded(threadtask_t *task)
         szz_tr = szz + job->dt * dsjzz;
 
         if (material_type == 0) {
+            const double scaling = 1;
+            const double lambda_block = scaling * lambda;
+            const double G_block = scaling * G;
+            const double trD = job->particles[i].exx_t + job->particles[i].eyy_t;
+            dsjxx = lambda_block * trD + 2.0 * G_block * job->particles[i].exx_t;
+            dsjxy = 2.0 * G_block * job->particles[i].exy_t;
+            dsjyy = lambda_block * trD + 2.0 * G_block * job->particles[i].eyy_t;
+            dsjxx += 2 * job->particles[i].wxy_t * job->particles[i].sxy;
+            dsjxy -= job->particles[i].wxy_t * (job->particles[i].sxx - job->particles[i].syy);
+            dsjyy -= 2 * job->particles[i].wxy_t * job->particles[i].sxy;
+            double dsjzz = lambda_block * trD;
+
+            sxx_tr = job->particles[i].sxx + job->dt * dsjxx;
+            sxy_tr = job->particles[i].sxy + job->dt * dsjxy;
+            syy_tr = job->particles[i].syy + job->dt * dsjyy;
+            szz_tr = szz + job->dt * dsjzz;
             job->particles[i].sxx = sxx_tr;
             job->particles[i].sxy = sxy_tr;
             job->particles[i].syy = syy_tr;
             szz = szz_tr;
+
+            /* add simple damping */
+            const double linear_damping = damping_factor*dot_e_vol;
+            // const double linear_damping = 0;
+            job->particles[i].state[PRESSURE_DAMPER_STATE] = linear_damping;
+            job->particles[i].sxx += linear_damping;
+            job->particles[i].syy += linear_damping;
+            job->particles[i].state[SZZ_STATE] += linear_damping;
 
             continue;
         }
@@ -317,7 +342,8 @@ void calculate_stress_threaded(threadtask_t *task)
         gammadotp = nup_tau;
 
         /* add simple damping */
-        const double linear_damping = job->dt*damping_factor*ddot_e_vol;
+        // const double linear_damping = damping_factor*dot_e_vol;
+        const double linear_damping = 0;
         job->particles[i].state[PRESSURE_DAMPER_STATE] = linear_damping;
         job->particles[i].sxx += linear_damping;
         job->particles[i].syy += linear_damping;
