@@ -164,7 +164,7 @@ job_t *read_state(FILE *fd)
         r = fscanf(fd, "%lg %lg", &(job->particles[i].x), &(job->particles[i].y));
 
         /* Local Coordinates */
-        r += fscanf(fd, "%lg %lg", &(job->particles[i].xl), &(job->particles[i].yl));
+        // r += fscanf(fd, "%lg %lg", &(job->particles[i].xl), &(job->particles[i].yl));
 
         /* Velocity */
         r += fscanf(fd, "%lg %lg", &(job->particles[i].x_t), &(job->particles[i].y_t));

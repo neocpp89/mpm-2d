@@ -695,38 +695,40 @@ void find_filled_elements(job_t *job)
 /*----------------------------------------------------------------------------*/
 void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
 {
-    size_t i, p, n;
-
-    double xn;
-    double yn;
-    double xl;
-    double yl;
-
     /* assert(hx == hy) before this. (hack) */
     const double hx = job->hx;
     const double hy = job->hy;
 
-    for (i = p_start; i < p_stop; i++) {
+    for (size_t i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
-        p = job->in_element[i];
-        n = job->elements[p].nodes[0];
-        xn = job->nodes[n].x;
-        yn = job->nodes[n].y;
-        global_to_local_coords(&xl, &yl,
-            job->particles[i].x, job->particles[i].y, 
-            xn, yn, hx, hy);
+        int p = job->in_element[i];
+        const int *nn = job->elements[p].nodes;
+        const double x1 = job->nodes[nn[0]].x;
+        const double y1 = job->nodes[nn[0]].y;
+        const double x2 = job->nodes[nn[1]].x;
+        const double y2 = job->nodes[nn[1]].y;
+        const double x3 = job->nodes[nn[2]].x;
+        const double y3 = job->nodes[nn[2]].y;
+        const double x4 = job->nodes[nn[3]].x;
+        const double y4 = job->nodes[nn[3]].y;
+        const double xp = job->particles[i].x;
+        const double yp = job->particles[i].y;
         tent(&(job->h1[i]), &(job->h2[i]), &(job->h3[i]), &(job->h4[i]),
-            xl, yl);
+            x1, y1,
+            x2, y2,
+            x3, y3,
+            x4, y4,
+            hx, hy,
+            xp, yp);
         grad_tent(
             &(job->b11[i]), &(job->b12[i]), &(job->b13[i]), &(job->b14[i]),
             &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
-            xl, yl, job->hx, job->hy, job->Lx, job->Ly);
-        if (xl < 0.0f || xl > 1.0f || yl < 0.0f || yl > 1.0f) {
-            fprintf(stderr, "Particle %zu outside of element %zu (%g, %g).\n", i,
-                p, xl, yl);
-        }
-        job->particles[i].xl = xl;
-        job->particles[i].yl = yl;
+            x1, y1,
+            x2, y2,
+            x3, y3,
+            x4, y4,
+            hx, hy,
+            xp, yp);
     }
 
     return;
@@ -905,7 +907,7 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
         for (size_t j = 0; j < 4; j++) {
             const size_t n = job->elements[el].nodes[j];
             const double m = job->nodes[n].m;
-            if (m < TOL) { continue; }
+            // if (m < TOL) { continue; }
             job->particles[i].x_tt += ((s[j] * job->nodes[n].fx) / m);
             job->particles[i].y_tt += ((s[j] * job->nodes[n].fy) / m);
         }
@@ -918,7 +920,7 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
         for (size_t j = 0; j < 4; j++) {
             const size_t n = job->elements[el].nodes[j];
             const double m = job->nodes[n].m;
-            if (m < TOL) { continue; }
+            // if (m < TOL) { continue; }
             dux += ((s[j] * job->nodes[n].mx_t) / m);
             duy += ((s[j] * job->nodes[n].my_t) / m);
         }

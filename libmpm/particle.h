@@ -36,10 +36,6 @@ typedef struct particle_s {
     double x;
     double y;
 
-    /* Local Coordinates */
-    double xl;
-    double yl;
-
     /* Volume */
     double v;
 

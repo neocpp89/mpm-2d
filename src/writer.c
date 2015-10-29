@@ -274,7 +274,7 @@ void write_state(FILE *fd, job_t *job)
         fprintf(fd, "%lg %lg\n", job->particles[i].x, job->particles[i].y);
 
         /* Local Coordinates */
-        fprintf(fd, "%lg %lg\n", job->particles[i].xl, job->particles[i].yl);
+        // fprintf(fd, "%lg %lg\n", job->particles[i].xl, job->particles[i].yl);
 
         /* Velocity */
         fprintf(fd, "%lg %lg\n", job->particles[i].x_t, job->particles[i].y_t);
