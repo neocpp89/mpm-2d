@@ -823,6 +823,7 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
 /*----------------------------------------------------------------------------*/
 void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
 {
+#if 1
     for (size_t i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
         job->particles[i].exx_t = 0;
@@ -892,6 +893,7 @@ void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
     }
 
     return;
+#endif
 }
 /*----------------------------------------------------------------------------*/
 
@@ -1072,6 +1074,71 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
 /*----------------------------------------------------------------------------*/
 void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop)
 {
+    if (p_start != 0) {
+        return;
+    }
+
+    double *pvec = calloc(job->num_particles, sizeof(double));
+    double *nvec = calloc(job->num_nodes, sizeof(double));
+
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        if (job->nodes[i].m != 0) {
+            nvec[i] = job->dt * job->nodes[i].mx_t / job->nodes[i].m;
+        } else {
+            nvec[i] = 0;
+        }
+    }
+    spmd_gaxpy(job->phi, nvec, pvec);
+    for (size_t i = 0; i < job->num_particles; i++) {
+        job->particles[i].x += pvec[i];
+        job->particles[i].ux += pvec[i];
+        pvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        if (job->nodes[i].m != 0) {
+            nvec[i] = job->dt * job->nodes[i].my_t / job->nodes[i].m;
+        } else {
+            nvec[i] = 0;
+        }
+    }
+    spmd_gaxpy(job->phi, nvec, pvec);
+    for (size_t i = 0; i < job->num_particles; i++) {
+        job->particles[i].y += pvec[i];
+        job->particles[i].uy += pvec[i];
+        pvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        if (job->nodes[i].m != 0) {
+            nvec[i] = job->dt * job->nodes[i].fx / job->nodes[i].m;
+        } else {
+            nvec[i] = 0;
+        }
+    }
+    spmd_gaxpy(job->phi, nvec, pvec);
+    for (size_t i = 0; i < job->num_particles; i++) {
+        job->particles[i].x_t += pvec[i];
+        pvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        if (job->nodes[i].m != 0) {
+            nvec[i] = job->dt * job->nodes[i].fy / job->nodes[i].m;
+        } else {
+            nvec[i] = 0;
+        }
+    }
+    spmd_gaxpy(job->phi, nvec, pvec);
+    for (size_t i = 0; i < job->num_particles; i++) {
+        job->particles[i].y_t += pvec[i];
+        pvec[i] = 0;
+    }
+
+    free(pvec);
+    free(nvec);
+    return;
+#if 0
     for (size_t i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
 
@@ -1119,6 +1186,7 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
 
     }
     return;
+#endif
 }
 /*----------------------------------------------------------------------------*/
 
