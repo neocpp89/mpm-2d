@@ -52,10 +52,6 @@ typedef struct particle_s {
     double x_t;
     double y_t;
 
-    /* Acceleration */
-    double x_tt;
-    double y_tt;
-
     /* Body forces */
     double bx;
     double by;
@@ -123,9 +119,6 @@ typedef struct particle_s {
     /* matrix of corner positions c[corner#][x or y] */
     double corners[4][2];
 
-    /* matrix of corner positions in local coordinates in appropriate element */
-    double cornersl[4][2];
-
     /* shapefunctions for corner points sc[corner#][node#] */
     double sc[4][4];
 
@@ -142,12 +135,5 @@ typedef struct particle_s {
     size_t id;
 } particle_t;
 
-/*
-    Convert global coordinates to local coordinates of a square element with
-    size h by h and bottom left corner at (x_ref, y_ref).
-*/
-void global_to_local_coords(double *x_local, double *y_local, 
-    double x, double y, 
-    double x_ref, double y_ref, double hx, double hy);
 #endif
 

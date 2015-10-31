@@ -30,10 +30,6 @@ typedef struct node_s  {
     double x_t;
     double y_t;
 
-    /* Acceleration */
-    double x_tt;
-    double y_tt;
-
     /* Momentum */
     double mx_t;
     double my_t;
