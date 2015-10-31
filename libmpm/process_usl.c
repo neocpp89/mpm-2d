@@ -282,10 +282,101 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
     job->step_number = 0;
     job->step_start_time = job->t;
 
+    if (job->use_cpdi == 1) {
+    } else {
+        // 4 entries per particle (1 pt in element, 4 nodes per element).
+        const size_t nnz = NODES_PER_ELEMENT * job->num_particles;
+        const size_t rows = job->num_particles;
+        const size_t cols = job->num_nodes;
+        job->phi = spmd_create(nnz, rows, cols);
+
+        // derivative matrices have same structure
+        job->dphi_x = spmd_create(nnz, rows, cols);
+        job->dphi_y = spmd_create(nnz, rows, cols);
+    }
+
     return job;
 }
 /*----------------------------------------------------------------------------*/
 
+// XXX: Phi operates from NODES to PARTICLES
+// this is the TRANSPOSE of the usual definition
+// use spmd_gatpxy to go the other way...
+void setup_phi(job_t *job);
+void setup_dphi_x(job_t *job);
+void setup_dphi_y(job_t *job);
+
+void setup_phi(job_t *job)
+{
+    struct sparsematrix_double *sp = job->phi;
+    size_t n = 0;
+    for (size_t i = 0; i < job->num_particles; i++) {
+        sp->row_pointer[i] = n;
+
+        const int el = job->in_element[i];
+        if (el == -1) {
+            continue;
+        }
+
+        const int *nn = job->elements[el].nodes;
+        for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+            sp->vals[n+j] = job->particles[i].s[j];
+            sp->column_index[n+j] = nn[j];
+        }
+        n += NODES_PER_ELEMENT;
+    }
+    sp->nnz = n;
+    sp->row_pointer[sp->rows] = n;
+    return;
+}
+
+void setup_dphi_x(job_t *job)
+{
+    struct sparsematrix_double *sp = job->dphi_x;
+    size_t n = 0;
+    for (size_t i = 0; i < job->num_particles; i++) {
+        sp->row_pointer[i] = n;
+
+        const int el = job->in_element[i];
+        if (el == -1) {
+            continue;
+        }
+
+        const int *nn = job->elements[el].nodes;
+        for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+            sp->vals[n+j] = job->particles[i].grad_s[j][0];
+            sp->column_index[n+j] = nn[j];
+        }
+        n += NODES_PER_ELEMENT;
+    }
+    sp->nnz = n;
+    sp->row_pointer[sp->rows] = n;
+    return;
+}
+
+void setup_dphi_y(job_t *job)
+{
+    struct sparsematrix_double *sp = job->dphi_y;
+    size_t n = 0;
+    for (size_t i = 0; i < job->num_particles; i++) {
+        sp->row_pointer[i] = n;
+
+        const int el = job->in_element[i];
+        if (el == -1) {
+            continue;
+        }
+
+        const int *nn = job->elements[el].nodes;
+        for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+            sp->vals[n+j] = job->particles[i].grad_s[j][1];
+            sp->column_index[n+j] = nn[j];
+        }
+        n += NODES_PER_ELEMENT;
+    }
+    sp->nnz = n;
+    sp->row_pointer[sp->rows] = n;
+    return;
+}
 /*----------------------------------------------------------------------------*/
 void explicit_mpm_step_usl_threaded(void *_task)
 {
@@ -339,6 +430,13 @@ void explicit_mpm_step_usl_threaded(void *_task)
 
     rc = pthread_barrier_wait(job->serialize_barrier);
     if (rc == PTHREAD_BARRIER_SERIAL_THREAD) {
+        setup_phi(job);
+        setup_dphi_x(job);
+        setup_dphi_y(job);
+        // spmd_print(job->phi, 1);
+        // spmd_print(job->dphi_x, 1);
+        // spmd_print(job->dphi_y, 1);
+
         /* Increment time. (We do this first to avoid more barrier calls.) */
         job->t += job->dt;
 
@@ -723,6 +821,21 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
             x4, y4,
             hx, hy,
             xp, yp);
+
+        job->particles[i].s[0] = job->h1[i];
+        job->particles[i].s[1] = job->h2[i];
+        job->particles[i].s[2] = job->h3[i];
+        job->particles[i].s[3] = job->h4[i];
+
+        job->particles[i].grad_s[0][0] = job->b11[i];
+        job->particles[i].grad_s[1][0] = job->b12[i];
+        job->particles[i].grad_s[2][0] = job->b13[i];
+        job->particles[i].grad_s[3][0] = job->b14[i];
+
+        job->particles[i].grad_s[0][1] = job->b21[i];
+        job->particles[i].grad_s[1][1] = job->b22[i];
+        job->particles[i].grad_s[2][1] = job->b23[i];
+        job->particles[i].grad_s[3][1] = job->b24[i];
     }
 
     return;

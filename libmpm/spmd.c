@@ -12,6 +12,7 @@ struct sparsematrix_double *spmd_create(size_t nnz, size_t rows, size_t columns)
         return NULL;
     }
     sp->nnz = nnz;
+    sp->capacity = nnz;
     sp->rows = rows;
     sp->columns = columns;
     sp->vals = calloc(nnz, sizeof(double));
@@ -101,6 +102,7 @@ double spmd_slow_get(const struct sparsematrix_double *sp, size_t i, size_t j)
 
 void spmd_gaxpy(const struct sparsematrix_double *A, const double *x, double *y)
 {
+    // does y <- A * x + y
     if (A == NULL || x == NULL || y == NULL) {
         return;
     }
@@ -109,6 +111,23 @@ void spmd_gaxpy(const struct sparsematrix_double *A, const double *x, double *y)
         for (size_t p = A->row_pointer[i]; p < A->row_pointer[i+1]; p++) {
             size_t j = A->column_index[p];
             y[i] += A->vals[p] * x[j];
+        }
+    }
+
+    return;
+}
+
+void spmd_gatxpy(const struct sparsematrix_double *A, const double *x, double *y)
+{
+    // does y <- A^T * x + y
+    if (A == NULL || x == NULL || y == NULL) {
+        return;
+    }
+
+    for (size_t i = 0; i < A->rows; i++) {
+        for (size_t p = A->row_pointer[i]; p < A->row_pointer[i+1]; p++) {
+            size_t j = A->column_index[p];
+            y[j] += A->vals[p] * x[i];
         }
     }
 

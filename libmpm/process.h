@@ -10,6 +10,9 @@
 #include "particle.h"
 #include "node.h"
 #include "element.h"
+
+#include "spmd.h"
+
 #include <stdio.h>
 #include <pthread.h>
 
@@ -170,6 +173,10 @@ typedef struct job_s {
     double *b22;
     double *b23;
     double *b24;
+
+    struct sparsematrix_double *phi;
+    struct sparsematrix_double *dphi_x;
+    struct sparsematrix_double *dphi_y;
 
     /* maps node number to position in u_grid vector. */
     int *node_u_map;

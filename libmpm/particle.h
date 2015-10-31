@@ -45,6 +45,9 @@ typedef struct particle_s {
     /* Shapefunctions (follows same nodal numbering as element) */
     double s[4];
 
+    /* Gradient of Shapefunctions */
+    double grad_s[4][2];
+
     /* Mass */
     double m;
 
@@ -94,9 +97,6 @@ typedef struct particle_s {
 
     /* Material Type */
     int material;
-
-    /* Gradient of Shapefunctions */
-    double grad_s[4][2];
 
     /* which element is the particle in? */
     int element;
