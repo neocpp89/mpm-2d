@@ -834,50 +834,13 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
             const double x_body_force = job->particles[p_idx].bx * mass;
             const double y_body_force = job->particles[p_idx].by * mass;
 
-            /*
-            int positive_order = 1;
-            if (job->nodes[nn[0]].x < 0.495) {
-                positive_order = 0;
+            for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
+                job->nodes[nn[n]].m += s[n] * mass;
+                job->nodes[nn[n]].mx_t += s[n] * x_momentum;
+                job->nodes[nn[n]].my_t += s[n] * y_momentum;
+                job->nodes[nn[n]].fx += s[n] * x_body_force;
+                job->nodes[nn[n]].fy += s[n] * y_body_force;
             }
-            */
-
-            /*
-            if (positive_order == 1) {
-            */
-                for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
-                    job->nodes[nn[n]].m += s[n] * mass;
-                    job->nodes[nn[n]].mx_t += s[n] * x_momentum;
-                    job->nodes[nn[n]].my_t += s[n] * y_momentum;
-                    job->nodes[nn[n]].fx += s[n] * x_body_force;
-                    job->nodes[nn[n]].fy += s[n] * y_body_force;
-                }
-            /*
-            } else {
-                    job->nodes[nn[1]].m += s[1] * mass;
-                    job->nodes[nn[1]].mx_t += s[1] * x_momentum;
-                    job->nodes[nn[1]].my_t += s[1] * y_momentum;
-                    job->nodes[nn[1]].fx += s[1] * x_body_force;
-                    job->nodes[nn[1]].fy += s[1] * y_body_force;
-
-                    job->nodes[nn[0]].m += s[0] * mass;
-                    job->nodes[nn[0]].mx_t += s[0] * x_momentum;
-                    job->nodes[nn[0]].my_t += s[0] * y_momentum;
-                    job->nodes[nn[0]].fx += s[0] * x_body_force;
-                    job->nodes[nn[0]].fy += s[0] * y_body_force;
-
-                    job->nodes[nn[3]].m += s[3] * mass;
-                    job->nodes[nn[3]].mx_t += s[3] * x_momentum;
-                    job->nodes[nn[3]].my_t += s[3] * y_momentum;
-                    job->nodes[nn[3]].fx += s[3] * x_body_force;
-                    job->nodes[nn[3]].fy += s[3] * y_body_force;
-
-                    job->nodes[nn[2]].m += s[2] * mass;
-                    job->nodes[nn[2]].mx_t += s[2] * x_momentum;
-                    job->nodes[nn[2]].my_t += s[2] * y_momentum;
-                    job->nodes[nn[2]].fx += s[2] * x_body_force;
-                    job->nodes[nn[2]].fy += s[2] * y_body_force;
-            }
-            */
 
             ds[0] = job->b11[p_idx];
             ds[1] = job->b12[p_idx];
@@ -893,56 +856,20 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
             const double xy_fi = -volume * sxy;
             const double yy_fi = -volume * syy;
 
-            /*
-            if (positive_order) {
-            */
-                for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
-                    job->nodes[nn[n]].fx += ds[n] * xx_fi;
-                    job->nodes[nn[n]].fy += ds[n] * xy_fi;
-                }
-            /*
-            } else {
-                    job->nodes[nn[1]].fx += ds[1] * xx_fi;
-                    job->nodes[nn[1]].fy += ds[1] * xy_fi;
-
-                    job->nodes[nn[0]].fx += ds[0] * xx_fi;
-                    job->nodes[nn[0]].fy += ds[0] * xy_fi;
-
-                    job->nodes[nn[3]].fx += ds[3] * xx_fi;
-                    job->nodes[nn[3]].fy += ds[3] * xy_fi;
-
-                    job->nodes[nn[2]].fx += ds[2] * xx_fi;
-                    job->nodes[nn[2]].fy += ds[2] * xy_fi;
+            for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
+                job->nodes[nn[n]].fx += ds[n] * xx_fi;
+                job->nodes[nn[n]].fy += ds[n] * xy_fi;
             }
-            */
 
             ds[0] = job->b21[p_idx];
             ds[1] = job->b22[p_idx];
             ds[2] = job->b23[p_idx];
             ds[3] = job->b24[p_idx];
 
-            /*
-            if (positive_order) {
-            */
-                for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
-                    job->nodes[nn[n]].fx += ds[n] * xy_fi;
-                    job->nodes[nn[n]].fy += ds[n] * yy_fi;
-                }
-            /*
-            } else {
-                    job->nodes[nn[1]].fx += ds[1] * xy_fi;
-                    job->nodes[nn[1]].fy += ds[1] * yy_fi;
-
-                    job->nodes[nn[0]].fx += ds[0] * xy_fi;
-                    job->nodes[nn[0]].fy += ds[0] * yy_fi;
-
-                    job->nodes[nn[3]].fx += ds[3] * xy_fi;
-                    job->nodes[nn[3]].fy += ds[3] * yy_fi;
-
-                    job->nodes[nn[2]].fx += ds[2] * xy_fi;
-                    job->nodes[nn[2]].fy += ds[2] * yy_fi;
+            for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
+                job->nodes[nn[n]].fx += ds[n] * xy_fi;
+                job->nodes[nn[n]].fy += ds[n] * yy_fi;
             }
-            */
         }
 
         /*
