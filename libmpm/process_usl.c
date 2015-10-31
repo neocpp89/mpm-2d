@@ -18,6 +18,9 @@
 #include "process_usl.h"
 #include "material.h"
 #include "exitcodes.h"
+
+#include "spmd.h"
+
 #include <suitesparse/cs.h>
 
 #include <assert.h>
@@ -25,13 +28,7 @@
 #define TOL 5e-11
 
 #define ijton(i,j,N) ((j)*(N) + (i))
-#define N_TO_P(j,tok,i) SMEAR(j,tok,i,h)
-#define DX_N_TO_P(j,tok,c,i) (c) * SMEAR(j,tok,i,b1)
-#define DY_N_TO_P(j,tok,c,i) (c) * SMEAR(j,tok,i,b2)
 
-#define SMEAR SMEAR4
-#define ACCUMULATE ACCUMULATE4
-#define ACCUMULATE_WITH_MUL ACCUMULATE_WITH_MUL4
 #define WHICH_ELEMENT WHICH_ELEMENT4
 
 #define __E(j,p) j->in_element[p]
@@ -41,25 +38,6 @@
 /* XXX: ugly, fix soon */
 #define WHICH_ELEMENT4(xp,yp,N,Lx,Ly,hx,hy) \
     ((int)(((xp)<Lx && (xp)>=0.0 && (yp)<Ly && (yp)>=0.0)?((floor((xp)/(hx)) + floor((yp)/(hy))*((N)-1))):(-1)))
-
-#define ACCUMULATE4(acc_tok,j,tok,i,n,s) \
-    j->nodes[__N(j,i,0)].acc_tok += j->s ## 1[i] * j->particles[i].tok; \
-    j->nodes[__N(j,i,1)].acc_tok += j->s ## 2[i] * j->particles[i].tok; \
-    j->nodes[__N(j,i,2)].acc_tok += j->s ## 3[i] * j->particles[i].tok; \
-    j->nodes[__N(j,i,3)].acc_tok += j->s ## 4[i] * j->particles[i].tok;
-
-#define ACCUMULATE_WITH_MUL4(acc_tok,j,tok,i,n,s,c) \
-    j->nodes[__N(j,i,0)].acc_tok += j->s ## 1[i] * j->particles[i].tok * (c); \
-    j->nodes[__N(j,i,1)].acc_tok += j->s ## 2[i] * j->particles[i].tok * (c); \
-    j->nodes[__N(j,i,2)].acc_tok += j->s ## 3[i] * j->particles[i].tok * (c); \
-    j->nodes[__N(j,i,3)].acc_tok += j->s ## 4[i] * j->particles[i].tok * (c);
-
-#define SMEAR4(j,tok,i,s) ( \
-    j->s ## 1[i] * j->nodes[__N(j,i,0)].tok + \
-    j->s ## 2[i] * j->nodes[__N(j,i,1)].tok + \
-    j->s ## 3[i] * j->nodes[__N(j,i,2)].tok + \
-    j->s ## 4[i] * j->nodes[__N(j,i,3)].tok \
-)
 
 #define CHECK_ACTIVE(j,i) if (j->active[i] == 0) { continue; }
 
@@ -301,7 +279,7 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
 
 // XXX: Phi operates from NODES to PARTICLES
 // this is the TRANSPOSE of the usual definition
-// use spmd_gatpxy to go the other way...
+// use spmd_gatxpy to go the other way...
 void setup_phi(job_t *job);
 void setup_dphi_x(job_t *job);
 void setup_dphi_y(job_t *job);
@@ -920,6 +898,100 @@ void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
 /*----------------------------------------------------------------------------*/
 void map_to_grid_explicit_split(job_t *job, size_t thread_id)
 {
+    if (thread_id != 0) {
+        return;
+    }
+
+    // dumb, but needed until we switch to SoA.
+    double *pvec = calloc(job->num_particles, sizeof(double));
+    double *nvec = calloc(job->num_nodes, sizeof(double));
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        pvec[i] = job->particles[i].m;
+    }
+    spmd_gatxpy(job->phi, pvec, nvec);
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].m = nvec[i];
+        nvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        pvec[i] = job->particles[i].m * job->particles[i].x_t;
+    }
+    spmd_gatxpy(job->phi, pvec, nvec);
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].mx_t = nvec[i];
+        nvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        pvec[i] = job->particles[i].m * job->particles[i].y_t;
+    }
+    spmd_gatxpy(job->phi, pvec, nvec);
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].my_t = nvec[i];
+        nvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        pvec[i] = job->particles[i].m * job->particles[i].bx;
+    }
+    spmd_gatxpy(job->phi, pvec, nvec);
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].fx = nvec[i];
+        nvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        pvec[i] = job->particles[i].m * job->particles[i].by;
+    }
+    spmd_gatxpy(job->phi, pvec, nvec);
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].fy = nvec[i];
+        nvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        pvec[i] = -job->particles[i].v * job->particles[i].sxx;
+    }
+    spmd_gatxpy(job->dphi_x, pvec, nvec);
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].fx += nvec[i];
+        nvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        pvec[i] = -job->particles[i].v * job->particles[i].sxy;
+    }
+    spmd_gatxpy(job->dphi_x, pvec, nvec);
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].fy += nvec[i];
+        nvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        pvec[i] = -job->particles[i].v * job->particles[i].sxy;
+    }
+    spmd_gatxpy(job->dphi_y, pvec, nvec);
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].fx += nvec[i];
+        nvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        pvec[i] = -job->particles[i].v * job->particles[i].syy;
+    }
+    spmd_gatxpy(job->dphi_y, pvec, nvec);
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        job->nodes[i].fy += nvec[i];
+        nvec[i] = 0;
+    }
+
+    free(pvec);
+    free(nvec);
+    return;
+
+#if 0
     double s[NODES_PER_ELEMENT];
     double ds[NODES_PER_ELEMENT];
 
@@ -993,6 +1065,7 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
     }
 
     return;
+#endif
 }
 /*----------------------------------------------------------------------------*/
 
