@@ -15,8 +15,13 @@ struct sparsematrix_double *spmd_create(size_t nnz, size_t rows, size_t columns)
     sp->rows = rows;
     sp->columns = columns;
     sp->vals = calloc(nnz, sizeof(double));
+    if (sp->vals == NULL) {
+        free(sp);
+        return NULL;
+    }
     sp->column_index = calloc(nnz, sizeof(size_t));
     if (sp->column_index == NULL) {
+        free(sp->vals);
         free(sp);
         return NULL;
     }
@@ -24,6 +29,7 @@ struct sparsematrix_double *spmd_create(size_t nnz, size_t rows, size_t columns)
     sp->row_pointer = calloc(rows + 1, sizeof(size_t));
     if (sp->row_pointer == NULL) {
         free(sp->column_index);
+        free(sp->vals);
         free(sp);
         return NULL;
     }
@@ -40,6 +46,7 @@ void spmd_delete(struct sparsematrix_double *sp)
 
     free(sp->row_pointer);
     free(sp->column_index);
+    free(sp->vals);
     free(sp);
     return;
 }

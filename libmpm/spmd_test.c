@@ -32,5 +32,7 @@ int main(int argc, char **argv)
     }
     printf("\n");
 
+    spmd_delete(sp);
+
     return 0;
 }
