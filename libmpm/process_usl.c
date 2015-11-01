@@ -187,22 +187,6 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
     /* Allocate space for map of active particles. */
     job->active = (int *)malloc(job->num_particles * sizeof(int));
 
-    /* Allocate space for interpolation functions. */
-    job->h1 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h2 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h3 = (double *)malloc(job->num_particles * sizeof(double));
-    job->h4 = (double *)malloc(job->num_particles * sizeof(double));
-
-    job->b11 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b12 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b13 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b14 = (double *)malloc(job->num_particles * sizeof(double));
-
-    job->b21 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b22 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b23 = (double *)malloc(job->num_particles * sizeof(double));
-    job->b24 = (double *)malloc(job->num_particles * sizeof(double));
-
     /* max size of u_grid is NODAL_DOF * number of nodes. */
     job->vec_len = NODAL_DOF * job->num_nodes;
 
@@ -779,7 +763,22 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
         const double y4 = job->nodes[nn[3]].y;
         const double xp = job->particles[i].x;
         const double yp = job->particles[i].y;
-        tent(&(job->h1[i]), &(job->h2[i]), &(job->h3[i]), &(job->h4[i]),
+
+        double h1 = 0;
+        double h2 = 0;
+        double h3 = 0;
+        double h4 = 0;
+
+        double h1x = 0;
+        double h2x = 0;
+        double h3x = 0;
+        double h4x = 0;
+
+        double h1y = 0;
+        double h2y = 0;
+        double h3y = 0;
+        double h4y = 0;
+        tent(&h1, &h2, &h3, &h4,
             x1, y1,
             x2, y2,
             x3, y3,
@@ -787,8 +786,8 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
             hx, hy,
             xp, yp);
         grad_tent(
-            &(job->b11[i]), &(job->b12[i]), &(job->b13[i]), &(job->b14[i]),
-            &(job->b21[i]), &(job->b22[i]), &(job->b23[i]), &(job->b24[i]),
+            &h1x, &h2x, &h3x, &h4x,
+            &h1y, &h2y, &h3y, &h4y,
             x1, y1,
             x2, y2,
             x3, y3,
@@ -796,20 +795,20 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
             hx, hy,
             xp, yp);
 
-        job->particles[i].s[0] = job->h1[i];
-        job->particles[i].s[1] = job->h2[i];
-        job->particles[i].s[2] = job->h3[i];
-        job->particles[i].s[3] = job->h4[i];
+        job->particles[i].s[0] = h1;
+        job->particles[i].s[1] = h2;
+        job->particles[i].s[2] = h3;
+        job->particles[i].s[3] = h4;
 
-        job->particles[i].grad_s[0][0] = job->b11[i];
-        job->particles[i].grad_s[1][0] = job->b12[i];
-        job->particles[i].grad_s[2][0] = job->b13[i];
-        job->particles[i].grad_s[3][0] = job->b14[i];
+        job->particles[i].grad_s[0][0] = h1x;
+        job->particles[i].grad_s[1][0] = h2x;
+        job->particles[i].grad_s[2][0] = h3x;
+        job->particles[i].grad_s[3][0] = h4x;
 
-        job->particles[i].grad_s[0][1] = job->b21[i];
-        job->particles[i].grad_s[1][1] = job->b22[i];
-        job->particles[i].grad_s[2][1] = job->b23[i];
-        job->particles[i].grad_s[3][1] = job->b24[i];
+        job->particles[i].grad_s[0][1] = h1y;
+        job->particles[i].grad_s[1][1] = h2y;
+        job->particles[i].grad_s[2][1] = h3y;
+        job->particles[i].grad_s[3][1] = h4y;
     }
 
     return;
@@ -872,77 +871,6 @@ void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
     free(pvec);
     free(nvec);
     return;
-#if 0
-    for (size_t i = p_start; i < p_stop; i++) {
-        CHECK_ACTIVE(job, i);
-        job->particles[i].exx_t = 0;
-        job->particles[i].exy_t = 0;
-        job->particles[i].eyy_t = 0;
-        job->particles[i].wxy_t = 0;
-
-        if (job->use_cpdi) {
-            /* loop over corners */
-            for (size_t j = 0; j < 4; j++) {
-                const int ce = job->particles[i].corner_elements[j];
-                /* corner is outside of particle domain. should probably deal with this better... */
-                if (ce == -1) {
-                    continue;
-                }
-
-                const int *nn = job->elements[ce].nodes;
-                for (size_t k = 0; k < 4; k++) {
-                    /* actual volume of particle here (not averaging volume) */
-                    job->particles[i].exx_t += job->nodes[nn[k]].x_t * job->particles[i].grad_sc[j][k][S_XIDX];
-                    job->particles[i].exy_t += 0.5 * (job->nodes[nn[k]].x_t * job->particles[i].grad_sc[j][k][S_YIDX] + job->nodes[nn[k]].y_t * job->particles[i].grad_sc[j][k][S_XIDX]);
-                    job->particles[i].eyy_t += job->nodes[nn[k]].y_t * job->particles[i].grad_sc[j][k][S_YIDX];
-                    job->particles[i].wxy_t += 0.5 * (job->nodes[nn[k]].x_t * job->particles[i].grad_sc[j][k][S_YIDX] - job->nodes[nn[k]].y_t * job->particles[i].grad_sc[j][k][S_XIDX]);
-                }
-            }
-        } else {
-            /*
-                Original MPM strainrate update.
-            */
-            const int pe = job->in_element[i];
-            if (pe == -1) {
-                job->active[i] = 0;
-                continue;
-            }
-            const int *nn = job->elements[pe].nodes;
-
-            double dx_tdx = 0;
-            double dx_tdy = 0;
-            double dy_tdx = 0;
-            double dy_tdy = 0;
-
-            dx_tdx = job->nodes[nn[0]].x_t * job->b11[i];
-            dx_tdx += job->nodes[nn[1]].x_t * job->b12[i];
-            dx_tdx += job->nodes[nn[2]].x_t * job->b13[i];
-            dx_tdx += job->nodes[nn[3]].x_t * job->b14[i];
-
-            dy_tdx = job->nodes[nn[0]].y_t * job->b11[i];
-            dy_tdx += job->nodes[nn[1]].y_t * job->b12[i];
-            dy_tdx += job->nodes[nn[2]].y_t * job->b13[i];
-            dy_tdx += job->nodes[nn[3]].y_t * job->b14[i];
-
-            dx_tdy = job->nodes[nn[0]].x_t * job->b21[i];
-            dx_tdy += job->nodes[nn[1]].x_t * job->b22[i];
-            dx_tdy += job->nodes[nn[2]].x_t * job->b23[i];
-            dx_tdy += job->nodes[nn[3]].x_t * job->b24[i];
-
-            dy_tdy = job->nodes[nn[0]].y_t * job->b21[i];
-            dy_tdy += job->nodes[nn[1]].y_t * job->b22[i];
-            dy_tdy += job->nodes[nn[2]].y_t * job->b23[i];
-            dy_tdy += job->nodes[nn[3]].y_t * job->b24[i];
-
-            job->particles[i].exx_t = dx_tdx;
-            job->particles[i].eyy_t = dy_tdy;
-            job->particles[i].exy_t = 0.5 * (dx_tdy + dy_tdx);
-            job->particles[i].wxy_t = 0.5 * (dx_tdy - dy_tdx);
-        }
-    }
-
-    return;
-#endif
 }
 /*----------------------------------------------------------------------------*/
 
@@ -1042,81 +970,6 @@ void map_to_grid_explicit_split(job_t *job, size_t thread_id)
     free(nvec);
     return;
 
-#if 0
-    double s[NODES_PER_ELEMENT];
-    double ds[NODES_PER_ELEMENT];
-
-    for (size_t c = 0; c < job->num_colors; c++) {
-        const size_t tc_idx = thread_id * job->num_colors + c;
-        for (size_t i = 0; i < job->particle_by_element_color_lengths[tc_idx]; i++) {
-            const size_t p_idx = job->particle_by_element_color_lists[tc_idx][i];
-
-            /*
-                Note: We don't need to check if the particle is active since
-                the list assembly already checks for this condition.
-            */
-
-            const int p = job->in_element[p_idx];
-            const int *nn = job->elements[p].nodes;
-
-            s[0] = job->h1[p_idx];
-            s[1] = job->h2[p_idx];
-            s[2] = job->h3[p_idx];
-            s[3] = job->h4[p_idx];
-
-            const double mass = job->particles[p_idx].m;
-            const double x_momentum = job->particles[p_idx].x_t * mass;
-            const double y_momentum = job->particles[p_idx].y_t * mass;
-            const double x_body_force = job->particles[p_idx].bx * mass;
-            const double y_body_force = job->particles[p_idx].by * mass;
-
-            for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
-                job->nodes[nn[n]].m += s[n] * mass;
-                job->nodes[nn[n]].mx_t += s[n] * x_momentum;
-                job->nodes[nn[n]].my_t += s[n] * y_momentum;
-                job->nodes[nn[n]].fx += s[n] * x_body_force;
-                job->nodes[nn[n]].fy += s[n] * y_body_force;
-            }
-
-            ds[0] = job->b11[p_idx];
-            ds[1] = job->b12[p_idx];
-            ds[2] = job->b13[p_idx];
-            ds[3] = job->b14[p_idx];
-
-            const double volume = job->particles[p_idx].v;
-            const double sxx = job->particles[p_idx].sxx;
-            const double sxy = job->particles[p_idx].sxy;
-            const double syy = job->particles[p_idx].syy;
-
-            const double xx_fi = -volume * sxx;
-            const double xy_fi = -volume * sxy;
-            const double yy_fi = -volume * syy;
-
-            for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
-                job->nodes[nn[n]].fx += ds[n] * xx_fi;
-                job->nodes[nn[n]].fy += ds[n] * xy_fi;
-            }
-
-            ds[0] = job->b21[p_idx];
-            ds[1] = job->b22[p_idx];
-            ds[2] = job->b23[p_idx];
-            ds[3] = job->b24[p_idx];
-
-            for (size_t n = 0; n < NODES_PER_ELEMENT; n++) {
-                job->nodes[nn[n]].fx += ds[n] * xy_fi;
-                job->nodes[nn[n]].fy += ds[n] * yy_fi;
-            }
-        }
-
-        /*
-            Each color can be done simultaneously, but we have to sync between
-            colors.
-        */
-        pthread_barrier_wait(job->serialize_barrier);
-    }
-
-    return;
-#endif
 }
 /*----------------------------------------------------------------------------*/
 
@@ -1187,55 +1040,6 @@ void move_particles_explicit_usl_split(job_t *job, size_t p_start, size_t p_stop
     free(pvec);
     free(nvec);
     return;
-#if 0
-    for (size_t i = p_start; i < p_stop; i++) {
-        CHECK_ACTIVE(job, i);
-
-        double s[4];
-        s[0] = job->h1[i];
-        s[1] = job->h2[i];
-        s[2] = job->h3[i];
-        s[3] = job->h4[i];
-
-        const size_t el = job->in_element[i];
-
-        double dux = 0;
-        double duy = 0;
-        for (size_t j = 0; j < 4; j++) {
-            const size_t n = job->elements[el].nodes[j];
-            const double m = job->nodes[n].m;
-            // if (m < TOL) { continue; }
-            /*
-            dux += 0.5 * (((2.0 * s[j] * job->nodes[n].mx_t) / m) - job->dt * ((s[j] * job->nodes[n].fx) / m));
-            duy += 0.5 * (((2.0 * s[j] * job->nodes[n].my_t) / m) - job->dt * ((s[j] * job->nodes[n].fy) / m));
-            */
-            dux += ((s[j] * job->nodes[n].mx_t) / m);
-            duy += ((s[j] * job->nodes[n].my_t) / m);
-        }
-        dux *= job->dt;
-        duy *= job->dt;
-        job->particles[i].x += dux;
-        job->particles[i].y += duy;
-        job->particles[i].ux += dux;
-        job->particles[i].uy += duy;
-
-        double dx_t = 0;
-        double dy_t = 0;
-        for (size_t j = 0; j < 4; j++) {
-            const size_t n = job->elements[el].nodes[j];
-            const double m = job->nodes[n].m;
-            // if (m < TOL) { continue; }
-            dx_t += ((s[j] * job->nodes[n].fx) / m);
-            dy_t += ((s[j] * job->nodes[n].fy) / m);
-        }
-        dx_t *= job->dt;
-        dy_t *= job->dt;
-        job->particles[i].x_t += dx_t;
-        job->particles[i].y_t += dy_t;
-
-    }
-    return;
-#endif
 }
 /*----------------------------------------------------------------------------*/
 
@@ -1261,21 +1065,6 @@ void mpm_cleanup(job_t *job)
     
     free(job->in_element);
     free(job->active);
-
-    free(job->h1);
-    free(job->h2);
-    free(job->h3);
-    free(job->h4);
-
-    free(job->b11);
-    free(job->b12);
-    free(job->b13);
-    free(job->b14);
-
-    free(job->b21);
-    free(job->b22);
-    free(job->b23);
-    free(job->b24);
 
     free(job->u_dirichlet);
     free(job->u_dirichlet_mask);

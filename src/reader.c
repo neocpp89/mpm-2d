@@ -143,22 +143,6 @@ job_t *read_state(FILE *fd)
     /* Allocate space for tracking element->particle map. */
     job->in_element =  (int *)malloc(job->num_particles * sizeof(int));
 
-    /* Allocate space for interpolation functions. */
-    job->h1 = calloc(sizeof(double), job->num_particles);
-    job->h2 = calloc(sizeof(double), job->num_particles);
-    job->h3 = calloc(sizeof(double), job->num_particles);
-    job->h4 = calloc(sizeof(double), job->num_particles);
-
-    job->b11 = calloc(sizeof(double), job->num_particles);
-    job->b12 = calloc(sizeof(double), job->num_particles);
-    job->b13 = calloc(sizeof(double), job->num_particles);
-    job->b14 = calloc(sizeof(double), job->num_particles);
-
-    job->b21 = calloc(sizeof(double), job->num_particles);
-    job->b22 = calloc(sizeof(double), job->num_particles);
-    job->b23 = calloc(sizeof(double), job->num_particles);
-    job->b24 = calloc(sizeof(double), job->num_particles);
-
     for (size_t i = 0; i < job->num_particles; i++) {
         /* Position */
         r = fscanf(fd, "%lg %lg", &(job->particles[i].x), &(job->particles[i].y));

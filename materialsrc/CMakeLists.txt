@@ -4,7 +4,6 @@ set(LOCAL_MATERIALS
     dp_ri_mt.c
     g_local.c
     g_local_mu2.c
-    g_local_mu2_ext.c
     g_local_mu2_plane_strain.c
     g_local_mu2_reverse.c
     g_local_mu2_true_2d.c
@@ -12,11 +11,6 @@ set(LOCAL_MATERIALS
 )
 
 set(NONLOCAL_MATERIALS
-    g_nonlocal_avg.c
-    g_nonlocal_bicgstab.c
-    g_nonlocal.c
-    g_nonlocal_mu2.c
-    g_nonlocalxs71.c
 )
 
 foreach(matc ${LOCAL_MATERIALS})

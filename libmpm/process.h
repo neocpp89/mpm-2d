@@ -155,25 +155,6 @@ typedef struct job_s {
     int *in_element;
     int *active;
 
-    /*
-        Shape functions (for each particle). Get the node(s) to map it to with
-        in_element.
-    */
-    double *h1;
-    double *h2;
-    double *h3;
-    double *h4;
-
-    double *b11;
-    double *b12;
-    double *b13;
-    double *b14;
-
-    double *b21;
-    double *b22;
-    double *b23;
-    double *b24;
-
     struct sparsematrix_double *phi;
     struct sparsematrix_double *dphi_x;
     struct sparsematrix_double *dphi_y;
