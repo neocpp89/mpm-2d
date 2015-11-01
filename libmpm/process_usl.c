@@ -31,10 +31,6 @@
 
 #define WHICH_ELEMENT WHICH_ELEMENT4
 
-#define __E(j,p) j->in_element[p]
-#define __N(j,p,n) j->elements[__E(j,p)].nodes[n]
-#define __NE(j,e,n) j->elements[e].nodes[n]
-
 /* XXX: ugly, fix soon */
 #define WHICH_ELEMENT4(xp,yp,N,Lx,Ly,hx,hy) \
     ((int)(((xp)<Lx && (xp)>=0.0 && (yp)<Ly && (yp)>=0.0)?((floor((xp)/(hx)) + floor((yp)/(hy))*((N)-1))):(-1)))
@@ -823,7 +819,60 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
 /*----------------------------------------------------------------------------*/
 void calculate_strainrate_split(job_t *job, size_t p_start, size_t p_stop)
 {
-#if 1
+    if (p_start != 0) {
+        return;
+    }
+
+    double *pvec = calloc(job->num_particles, sizeof(double));
+    double *nvec = calloc(job->num_nodes, sizeof(double));
+
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        if (job->nodes[i].m != 0) {
+            nvec[i] = job->nodes[i].x_t;
+        } else {
+            nvec[i] = 0;
+        }
+    }
+    spmd_gaxpy(job->dphi_x, nvec, pvec);
+    for (size_t i = 0; i < job->num_particles; i++) {
+        job->particles[i].L[0]= pvec[i];
+        pvec[i] = 0;
+    }
+    spmd_gaxpy(job->dphi_y, nvec, pvec);
+    for (size_t i = 0; i < job->num_particles; i++) {
+        job->particles[i].L[1]= pvec[i];
+        pvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_nodes; i++) {
+        if (job->nodes[i].m != 0) {
+            nvec[i] = job->nodes[i].y_t;
+        } else {
+            nvec[i] = 0;
+        }
+    }
+    spmd_gaxpy(job->dphi_x, nvec, pvec);
+    for (size_t i = 0; i < job->num_particles; i++) {
+        job->particles[i].L[2] = pvec[i];
+        pvec[i] = 0;
+    }
+    spmd_gaxpy(job->dphi_y, nvec, pvec);
+    for (size_t i = 0; i < job->num_particles; i++) {
+        job->particles[i].L[3] = pvec[i];
+        pvec[i] = 0;
+    }
+
+    for (size_t i = 0; i < job->num_particles; i++) {
+        job->particles[i].exx_t = job->particles[i].L[0];
+        job->particles[i].exy_t = 0.5*(job->particles[i].L[1] + job->particles[i].L[2]);
+        job->particles[i].wxy_t = 0.5*(job->particles[i].L[1] - job->particles[i].L[2]);
+        job->particles[i].eyy_t = job->particles[i].L[3];
+    }
+
+    free(pvec);
+    free(nvec);
+    return;
+#if 0
     for (size_t i = p_start; i < p_stop; i++) {
         CHECK_ACTIVE(job, i);
         job->particles[i].exx_t = 0;
