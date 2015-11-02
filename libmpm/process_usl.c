@@ -1071,6 +1071,10 @@ void mpm_cleanup(job_t *job)
     free(job->node_number_override);
     free(job->color_indices);
 
+    spmd_delete(job->phi);
+    spmd_delete(job->dphi_x);
+    spmd_delete(job->dphi_y);
+
     return;
 }
 /*----------------------------------------------------------------------------*/

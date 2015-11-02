@@ -5,6 +5,7 @@
 
 void do_netlib_example();
 void do_rectangular_example();
+void do_repeated_index();
 
 void do_netlib_example()
 {
@@ -87,10 +88,51 @@ void do_rectangular_example()
     spmd_delete(sp);
 }
 
+void do_repeated_index()
+{
+    struct sparsematrix_double *sp = spmd_create(6, 2, 4);
+    const double vals[] = {4, -7, 1, 1, 2, 10};
+    const double column_index[] = {1, 2, 3, 0, 3, 3};
+    const double row_pointer[] = {0, 3};
+    for (size_t i = 0; i < sp->nnz; i++) {
+        sp->vals[i] = vals[i];
+        sp->column_index[i] = column_index[i];
+    }
+    for (size_t i = 0; i < sp->rows; i++) {
+        sp->row_pointer[i] = row_pointer[i];
+    }
+    spmd_print(sp, 1);
+
+    double result[] = {0, 0};
+    double x[] = {1, 1, 1, 1};
+    spmd_gaxpy(sp, x, result);
+    printf("x: ");
+    for (size_t i = 0; i < sp->rows; i++) {
+        printf("%4.4g ", x[i]);
+    }
+    printf("\n");
+    printf("result: ");
+    for (size_t i = 0; i < sp->rows; i++) {
+        printf("%4.4g ", result[i]);
+    }
+    printf("\n");
+
+    double tresult[] = {0, 0, 0, 0};
+    double tx[] = {1, 1};
+    spmd_gatxpy(sp, tx, tresult);
+    printf("tresult: ");
+    for (size_t i = 0; i < sp->columns; i++) {
+        printf("%4.4g ", tresult[i]);
+    }
+    printf("\n");
+
+    spmd_delete(sp);
+}
 int main(int argc, char **argv)
 {
     do_netlib_example();
     do_rectangular_example();
+    do_repeated_index();
 
     return 0;
 }

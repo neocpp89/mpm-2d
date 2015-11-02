@@ -91,13 +91,14 @@ double spmd_slow_get(const struct sparsematrix_double *sp, size_t i, size_t j)
         return 0xdeadbeef;
     }
 
+    double ret = 0;
     for (size_t p = sp->row_pointer[i]; p < sp->row_pointer[i+1]; p++) {
         if (sp->column_index[p] == j) {
-            return sp->vals[p];
+            ret += sp->vals[p];
         }
     }
 
-    return 0;
+    return ret;
 }
 
 void spmd_gaxpy(const struct sparsematrix_double *A, const double *x, double *y)
