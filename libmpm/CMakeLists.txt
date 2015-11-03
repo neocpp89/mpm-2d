@@ -1,6 +1,5 @@
 add_library(mpm
     element.c
-    interpolate.c
     loading.c
     material.c
     process_usl.c

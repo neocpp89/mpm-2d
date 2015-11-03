@@ -225,7 +225,7 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
     job->dt = 0.4 * h * sqrt(job->particles[0].m/(job->particles[0].v * EMOD));
 
     /* Don't use cpdi here. */
-    job->use_cpdi = 0;
+    job->use_cpdi = 1;
 
     /* swap this out later with a pointer from dlopen if needed. */
     job->material.num_fp64_props = 0;
@@ -241,6 +241,15 @@ job_t *mpm_init(int N, double hx, double hy, double Lx, double Ly, particle_t *p
     job->step_start_time = job->t;
 
     if (job->use_cpdi == 1) {
+        // 16 entries per particle (4 pt in element, 4 nodes per element).
+        const size_t nnz = NODES_PER_ELEMENT * NODES_PER_ELEMENT * job->num_particles;
+        const size_t rows = job->num_particles;
+        const size_t cols = job->num_nodes;
+        job->phi = spmd_create(nnz, rows, cols);
+
+        // derivative matrices have same structure
+        job->dphi_x = spmd_create(nnz, rows, cols);
+        job->dphi_y = spmd_create(nnz, rows, cols);
     } else {
         // 4 entries per particle (1 pt in element, 4 nodes per element).
         const size_t nnz = NODES_PER_ELEMENT * job->num_particles;
@@ -264,7 +273,128 @@ void setup_phi(job_t *job);
 void setup_dphi_x(job_t *job);
 void setup_dphi_y(job_t *job);
 
+void setup_phi_smpm(job_t *job);
+void setup_dphi_x_smpm(job_t *job);
+void setup_dphi_y_smpm(job_t *job);
+
+// volumetric cpdi
+void setup_phi_vcpdi(job_t *job);
+void setup_dphi_x_vcpdi(job_t *job);
+void setup_dphi_y_vcpdi(job_t *job);
+
 void setup_phi(job_t *job)
+{
+    if (job->use_cpdi == 0) {
+        setup_phi_smpm(job);
+    } else {
+        setup_phi_vcpdi(job);
+    }
+    return;
+}
+
+void setup_dphi_x(job_t *job)
+{
+    /*
+    if (job->use_cpdi == 0) {
+        setup_dphi_x_smpm(job);
+    } else {
+        setup_dphi_x_vcpdi(job);
+    }
+    */
+    setup_dphi_x_smpm(job);
+    return;
+}
+
+void setup_dphi_y(job_t *job)
+{
+    /*
+    if (job->use_cpdi == 0) {
+        setup_dphi_y_smpm(job);
+    } else {
+        setup_dphi_y_vcpdi(job);
+    }
+    */
+    setup_dphi_y_smpm(job);
+    return;
+}
+
+void setup_phi_vcpdi(job_t *job)
+{
+    struct sparsematrix_double *sp = job->phi;
+    size_t n = 0;
+    for (size_t i = 0; i < job->num_particles; i++) {
+        sp->row_pointer[i] = n;
+        for (size_t k = 0; k < NODES_PER_ELEMENT; k++) {
+            const int el = job->particles[i].corner_elements[k];
+            if (el == -1) {
+                continue;
+            }
+
+            const int *nn = job->elements[el].nodes;
+            for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+                sp->vals[n+j] = 0.25 * job->particles[i].sc[k][j];
+                sp->column_index[n+j] = nn[j];
+            }
+            n += NODES_PER_ELEMENT;
+        }
+    }
+    sp->nnz = n;
+    sp->row_pointer[sp->rows] = n;
+    spmd_print(sp, 0);
+    return;
+}
+
+void setup_dphi_x_vcpdi(job_t *job)
+{
+    struct sparsematrix_double *sp = job->dphi_x;
+    size_t n = 0;
+    for (size_t i = 0; i < job->num_particles; i++) {
+        sp->row_pointer[i] = n;
+        for (size_t k = 0; k < NODES_PER_ELEMENT; k++) {
+            const int el = job->particles[i].corner_elements[k];
+            if (el == -1) {
+                continue;
+            }
+
+            const int *nn = job->elements[el].nodes;
+            for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+                sp->vals[n+j] = job->particles[i].grad_sc[k][j][0];
+                sp->column_index[n+j] = nn[j];
+            }
+            n += NODES_PER_ELEMENT;
+        }
+    }
+    sp->nnz = n;
+    sp->row_pointer[sp->rows] = n;
+    return;
+}
+
+void setup_dphi_y_vcpdi(job_t *job)
+{
+    struct sparsematrix_double *sp = job->dphi_y;
+    size_t n = 0;
+    for (size_t i = 0; i < job->num_particles; i++) {
+        sp->row_pointer[i] = n;
+        for (size_t k = 0; k < NODES_PER_ELEMENT; k++) {
+            const int el = job->particles[i].corner_elements[k];
+            if (el == -1) {
+                continue;
+            }
+
+            const int *nn = job->elements[el].nodes;
+            for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+                sp->vals[n+j] = job->particles[i].grad_sc[k][j][1];
+                sp->column_index[n+j] = nn[j];
+            }
+            n += NODES_PER_ELEMENT;
+        }
+    }
+    sp->nnz = n;
+    sp->row_pointer[sp->rows] = n;
+    return;
+}
+
+void setup_phi_smpm(job_t *job)
 {
     struct sparsematrix_double *sp = job->phi;
     size_t n = 0;
@@ -288,7 +418,7 @@ void setup_phi(job_t *job)
     return;
 }
 
-void setup_dphi_x(job_t *job)
+void setup_dphi_x_smpm(job_t *job)
 {
     struct sparsematrix_double *sp = job->dphi_x;
     size_t n = 0;
@@ -312,7 +442,7 @@ void setup_dphi_x(job_t *job)
     return;
 }
 
-void setup_dphi_y(job_t *job)
+void setup_dphi_y_smpm(job_t *job)
 {
     struct sparsematrix_double *sp = job->dphi_y;
     size_t n = 0;
@@ -749,66 +879,158 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
     const double hx = job->hx;
     const double hy = job->hy;
 
-    for (size_t i = p_start; i < p_stop; i++) {
-        CHECK_ACTIVE(job, i);
-        int p = job->in_element[i];
-        const int *nn = job->elements[p].nodes;
-        const double x1 = job->nodes[nn[0]].x;
-        const double y1 = job->nodes[nn[0]].y;
-        const double x2 = job->nodes[nn[1]].x;
-        const double y2 = job->nodes[nn[1]].y;
-        const double x3 = job->nodes[nn[2]].x;
-        const double y3 = job->nodes[nn[2]].y;
-        const double x4 = job->nodes[nn[3]].x;
-        const double y4 = job->nodes[nn[3]].y;
-        const double xp = job->particles[i].x;
-        const double yp = job->particles[i].y;
+    // if (job->use_cpdi == 0) {
 
-        double h1 = 0;
-        double h2 = 0;
-        double h3 = 0;
-        double h4 = 0;
+        for (size_t i = p_start; i < p_stop; i++) {
+            CHECK_ACTIVE(job, i);
+            int p = job->in_element[i];
+            const int *nn = job->elements[p].nodes;
+            const double x1 = job->nodes[nn[0]].x;
+            const double y1 = job->nodes[nn[0]].y;
+            const double x2 = job->nodes[nn[1]].x;
+            const double y2 = job->nodes[nn[1]].y;
+            const double x3 = job->nodes[nn[2]].x;
+            const double y3 = job->nodes[nn[2]].y;
+            const double x4 = job->nodes[nn[3]].x;
+            const double y4 = job->nodes[nn[3]].y;
+            const double xp = job->particles[i].x;
+            const double yp = job->particles[i].y;
 
-        double h1x = 0;
-        double h2x = 0;
-        double h3x = 0;
-        double h4x = 0;
+            double h1 = 0;
+            double h2 = 0;
+            double h3 = 0;
+            double h4 = 0;
 
-        double h1y = 0;
-        double h2y = 0;
-        double h3y = 0;
-        double h4y = 0;
-        tent(&h1, &h2, &h3, &h4,
-            x1, y1,
-            x2, y2,
-            x3, y3,
-            x4, y4,
-            hx, hy,
-            xp, yp);
-        grad_tent(
-            &h1x, &h2x, &h3x, &h4x,
-            &h1y, &h2y, &h3y, &h4y,
-            x1, y1,
-            x2, y2,
-            x3, y3,
-            x4, y4,
-            hx, hy,
-            xp, yp);
+            double h1x = 0;
+            double h2x = 0;
+            double h3x = 0;
+            double h4x = 0;
 
-        job->particles[i].s[0] = h1;
-        job->particles[i].s[1] = h2;
-        job->particles[i].s[2] = h3;
-        job->particles[i].s[3] = h4;
+            double h1y = 0;
+            double h2y = 0;
+            double h3y = 0;
+            double h4y = 0;
+            tent(&h1, &h2, &h3, &h4,
+                x1, y1,
+                x2, y2,
+                x3, y3,
+                x4, y4,
+                hx, hy,
+                xp, yp);
+            grad_tent(
+                &h1x, &h2x, &h3x, &h4x,
+                &h1y, &h2y, &h3y, &h4y,
+                x1, y1,
+                x2, y2,
+                x3, y3,
+                x4, y4,
+                hx, hy,
+                xp, yp);
 
-        job->particles[i].grad_s[0][0] = h1x;
-        job->particles[i].grad_s[1][0] = h2x;
-        job->particles[i].grad_s[2][0] = h3x;
-        job->particles[i].grad_s[3][0] = h4x;
+            job->particles[i].s[0] = h1;
+            job->particles[i].s[1] = h2;
+            job->particles[i].s[2] = h3;
+            job->particles[i].s[3] = h4;
 
-        job->particles[i].grad_s[0][1] = h1y;
-        job->particles[i].grad_s[1][1] = h2y;
-        job->particles[i].grad_s[2][1] = h3y;
-        job->particles[i].grad_s[3][1] = h4y;
+            job->particles[i].grad_s[0][0] = h1x;
+            job->particles[i].grad_s[1][0] = h2x;
+            job->particles[i].grad_s[2][0] = h3x;
+            job->particles[i].grad_s[3][0] = h4x;
+
+            job->particles[i].grad_s[0][1] = h1y;
+            job->particles[i].grad_s[1][1] = h2y;
+            job->particles[i].grad_s[2][1] = h3y;
+            job->particles[i].grad_s[3][1] = h4y;
+        }
+
+    // } else {
+
+
+    if (job->use_cpdi == 1) {
+
+        for (size_t i = p_start; i < p_stop; i++) {
+            CHECK_ACTIVE(job, i);
+
+            const double a = 0.5 * sqrt(job->particles[i].v);
+
+            job->particles[i].corners[0][0] = job->particles[i].x - a;
+            job->particles[i].corners[1][0] = job->particles[i].x + a;
+            job->particles[i].corners[2][0] = job->particles[i].x + a;
+            job->particles[i].corners[3][0] = job->particles[i].x - a;
+
+            job->particles[i].corners[0][1] = job->particles[i].y - a;
+            job->particles[i].corners[1][1] = job->particles[i].y - a;
+            job->particles[i].corners[2][1] = job->particles[i].y + a;
+            job->particles[i].corners[3][1] = job->particles[i].y + a;
+
+            for (size_t k = 0; k < NODES_PER_ELEMENT; k++) {
+                const double xp = job->particles[i].corners[i][0];
+                const double yp = job->particles[i].corners[i][1];
+                const int p = WHICH_ELEMENT(
+                    xp, yp, job->N, job->Lx, job->Ly, job->hx, job->hy);
+                job->particles[i].corner_elements[k] = p;
+                if (p == -1) {
+                    continue;
+                }
+
+                const int *nn = job->elements[p].nodes;
+                const double x1 = job->nodes[nn[0]].x;
+                const double y1 = job->nodes[nn[0]].y;
+                const double x2 = job->nodes[nn[1]].x;
+                const double y2 = job->nodes[nn[1]].y;
+                const double x3 = job->nodes[nn[2]].x;
+                const double y3 = job->nodes[nn[2]].y;
+                const double x4 = job->nodes[nn[3]].x;
+                const double y4 = job->nodes[nn[3]].y;
+
+                double h1 = 0;
+                double h2 = 0;
+                double h3 = 0;
+                double h4 = 0;
+
+                double h1x = 0;
+                double h2x = 0;
+                double h3x = 0;
+                double h4x = 0;
+
+                double h1y = 0;
+                double h2y = 0;
+                double h3y = 0;
+                double h4y = 0;
+                tent(&h1, &h2, &h3, &h4,
+                    x1, y1,
+                    x2, y2,
+                    x3, y3,
+                    x4, y4,
+                    hx, hy,
+                    xp, yp);
+                grad_tent(
+                    &h1x, &h2x, &h3x, &h4x,
+                    &h1y, &h2y, &h3y, &h4y,
+                    x1, y1,
+                    x2, y2,
+                    x3, y3,
+                    x4, y4,
+                    hx, hy,
+                    xp, yp);
+
+                job->particles[i].sc[k][0] = h1;
+                job->particles[i].sc[k][1] = h2;
+                job->particles[i].sc[k][2] = h3;
+                job->particles[i].sc[k][3] = h4;
+
+                job->particles[i].grad_sc[k][0][0] = h1x;
+                job->particles[i].grad_sc[k][1][0] = h2x;
+                job->particles[i].grad_sc[k][2][0] = h3x;
+                job->particles[i].grad_sc[k][3][0] = h4x;
+
+                job->particles[i].grad_sc[k][0][1] = h1y;
+                job->particles[i].grad_sc[k][1][1] = h2y;
+                job->particles[i].grad_sc[k][2][1] = h3y;
+                job->particles[i].grad_sc[k][3][1] = h4y;
+            }
+        }
+
     }
 
     return;
