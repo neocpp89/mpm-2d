@@ -289,6 +289,8 @@ void setup_phi(job_t *job)
     } else {
         setup_phi_vcpdi(job);
     }
+
+    //setup_phi_smpm(job);
     return;
 }
 
@@ -340,7 +342,32 @@ void setup_phi_vcpdi(job_t *job)
     }
     sp->nnz = n;
     sp->row_pointer[sp->rows] = n;
-    spmd_print(sp, 0);
+
+    /*
+    double *ss =  calloc(sp->columns, sizeof(double));
+    double *yy =  calloc(sp->rows, sizeof(double));
+    for (size_t i = 0; i < sp->columns; i++) {
+        ss[i] = 1;
+    }
+    spmd_gaxpy(sp, ss, yy);
+    for (size_t i = 0; i < sp->rows; i++) {
+        printf("%g ", yy[i]);
+    }
+    printf("---\n");
+    */
+    /*
+    double *yy =  calloc(sp->columns, sizeof(double));
+    double *ss =  calloc(sp->rows, sizeof(double));
+    for (size_t i = 0; i < sp->rows; i++) {
+        ss[i] = 1;
+    }
+    spmd_gatxpy(sp, ss, yy);
+    for (size_t i = 0; i < sp->columns; i++) {
+        printf("%g ", yy[i]);
+    }
+    printf("---\n");
+    */
+    // spmd_print(sp, 0);
     return;
 }
 
@@ -964,8 +991,8 @@ void calculate_shapefunctions_split(job_t *job, size_t p_start, size_t p_stop)
             job->particles[i].corners[3][1] = job->particles[i].y + a;
 
             for (size_t k = 0; k < NODES_PER_ELEMENT; k++) {
-                const double xp = job->particles[i].corners[i][0];
-                const double yp = job->particles[i].corners[i][1];
+                const double xp = job->particles[i].corners[k][0];
+                const double yp = job->particles[i].corners[k][1];
                 const int p = WHICH_ELEMENT(
                     xp, yp, job->N, job->Lx, job->Ly, job->hx, job->hy);
                 job->particles[i].corner_elements[k] = p;
