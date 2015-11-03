@@ -479,15 +479,67 @@ void setup_dphi_y_vcpdi(job_t *job)
     size_t n = 0;
     for (size_t i = 0; i < job->num_particles; i++) {
         sp->row_pointer[i] = n;
+
+        /*
+        const double a = 0.5 * sqrt(job->particles[i].v);
+        const double inv_scale = 4 * a;
+        */
+        const double inv_scale = 2 * sqrt(job->particles[i].v);
+
+        if (job->active[i] == 0) {
+            continue;
+        }
+
+        // check if all the corners are in the domain
+        // if not, just use regular mpm.
+        int all_corners_okay = 1;
         for (size_t k = 0; k < NODES_PER_ELEMENT; k++) {
             const int el = job->particles[i].corner_elements[k];
+            if (el == -1) {
+                all_corners_okay = 0;
+            }
+        }
+        if (all_corners_okay) {
+            const int el0 = job->particles[i].corner_elements[0];
+            const int *nn0 = job->elements[el0].nodes;
+            for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+                sp->vals[n+j] = - job->particles[i].sc[0][j] / inv_scale;
+                sp->column_index[n+j] = nn0[j];
+            }
+            n += NODES_PER_ELEMENT;
+
+            const int el1 = job->particles[i].corner_elements[1];
+            const int *nn1 = job->elements[el1].nodes;
+            for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+                sp->vals[n+j] = - job->particles[i].sc[1][j] / inv_scale;
+                sp->column_index[n+j] = nn1[j];
+            }
+            n += NODES_PER_ELEMENT;
+
+            const int el2 = job->particles[i].corner_elements[2];
+            const int *nn2 = job->elements[el2].nodes;
+            for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+                sp->vals[n+j] = job->particles[i].sc[2][j] / inv_scale;
+                sp->column_index[n+j] = nn2[j];
+            }
+            n += NODES_PER_ELEMENT;
+
+            const int el3 = job->particles[i].corner_elements[3];
+            const int *nn3 = job->elements[el3].nodes;
+            for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+                sp->vals[n+j] = job->particles[i].sc[3][j] / inv_scale;
+                sp->column_index[n+j] = nn3[j];
+            }
+            n += NODES_PER_ELEMENT;
+        } else {
+            const int el = job->in_element[i];
             if (el == -1) {
                 continue;
             }
 
             const int *nn = job->elements[el].nodes;
             for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
-                sp->vals[n+j] = job->particles[i].grad_sc[k][j][1];
+                sp->vals[n+j] = job->particles[i].grad_s[j][1];
                 sp->column_index[n+j] = nn[j];
             }
             n += NODES_PER_ELEMENT;
