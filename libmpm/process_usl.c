@@ -326,15 +326,42 @@ void setup_phi_vcpdi(job_t *job)
     size_t n = 0;
     for (size_t i = 0; i < job->num_particles; i++) {
         sp->row_pointer[i] = n;
+        if (job->active[i] == 0) {
+            continue;
+        }
+
+        // check if all the corners are in the domain
+        // if not, just use regular mpm.
+        int all_corners_okay = 1;
         for (size_t k = 0; k < NODES_PER_ELEMENT; k++) {
             const int el = job->particles[i].corner_elements[k];
+            if (el == -1) {
+                all_corners_okay = 0;
+            }
+        }
+        if (all_corners_okay) {
+            for (size_t k = 0; k < NODES_PER_ELEMENT; k++) {
+                const int el = job->particles[i].corner_elements[k];
+                if (el == -1) {
+                    continue;
+                }
+
+                const int *nn = job->elements[el].nodes;
+                for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
+                    sp->vals[n+j] = 0.25 * job->particles[i].sc[k][j];
+                    sp->column_index[n+j] = nn[j];
+                }
+                n += NODES_PER_ELEMENT;
+            }
+        } else {
+            const int el = job->in_element[i];
             if (el == -1) {
                 continue;
             }
 
             const int *nn = job->elements[el].nodes;
             for (size_t j = 0; j < NODES_PER_ELEMENT; j++) {
-                sp->vals[n+j] = 0.25 * job->particles[i].sc[k][j];
+                sp->vals[n+j] = job->particles[i].s[j];
                 sp->column_index[n+j] = nn[j];
             }
             n += NODES_PER_ELEMENT;
